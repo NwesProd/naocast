@@ -195,7 +195,7 @@ export function PodcastDnaForm({ existing }: { existing?: ExistingDna }) {
         {showAdnFields && (
           <>
             <div>
-              <label className="block text-sm font-medium mb-1.5 text-ink">ADN du podcast</label>
+              <label className="block text-sm font-medium mb-1.5 text-ink">ADN du podcast (facultatif)</label>
               <p className="text-xs text-text-muted mb-2">
                 Quelques questions pour t&apos;aider à le décrire : c&apos;est quoi ? Ça s&apos;adresse à qui ? Pourquoi ce
                 podcast existe ? Quelle ligne éditoriale ? Y a-t-il des règles à respecter ?
