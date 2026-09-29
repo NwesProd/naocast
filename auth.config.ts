@@ -8,6 +8,10 @@ import type { NextAuthConfig } from "next-auth";
 export const authConfig = {
   pages: { signIn: "/login" },
   session: { strategy: "jwt" },
+  // Nécessaire derrière le proxy d'un hébergeur (Railway...) : NextAuth
+  // rejette par défaut les hôtes qu'il ne reconnaît pas explicitement, même
+  // quand NEXTAUTH_URL est correctement configuré.
+  trustHost: true,
   providers: [],
   callbacks: {
     async jwt({ token, user }) {
