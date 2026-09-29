@@ -3,12 +3,18 @@
 import "dotenv/config";
 import { defineConfig } from "prisma/config";
 
+// Le CLI Prisma (migrate, studio...) lit DIRECT_URL, une connexion directe
+// (non "pooled"), pas DATABASE_URL : recommandation Prisma pour Supabase, la
+// connexion "transaction pooler" (utilisée par l'app via l'adapter, cf.
+// lib/db.ts) ne supporte pas tout ce dont le CLI a besoin (verrous
+// consultatifs des migrations, etc.). En local (Postgres direct), les deux
+// variables peuvent pointer vers la même URL.
 export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: {
     path: "prisma/migrations",
   },
   datasource: {
-    url: process.env["DATABASE_URL"],
+    url: process.env["DIRECT_URL"] || process.env["DATABASE_URL"],
   },
 });
