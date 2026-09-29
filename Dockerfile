@@ -37,7 +37,8 @@ COPY prisma7.config.ts next.config.ts tsconfig.json ./
 COPY auth.ts auth.config.ts proxy.ts ./
 
 EXPOSE 3000
-# Commande par défaut : le service web. À appliquer explicitement à chaque
-# service Railway/Render (cf. instructions de déploiement) : web = migration
-# + démarrage (ci-dessous), worker = `npm run worker` seul.
-CMD ["sh", "-c", "npx prisma migrate deploy && npm run start"]
+# Commande par défaut : le service web. Les migrations (`prisma migrate
+# deploy`) passent par le "Pre-Deploy Command" de Railway plutôt que par ici,
+# cf. instructions de déploiement. Le service worker override cette commande
+# avec `npm run worker`.
+CMD ["npm", "run", "start"]
