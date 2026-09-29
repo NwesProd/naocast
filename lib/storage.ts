@@ -25,6 +25,13 @@ const s3 = bucket
         accessKeyId: process.env.STORAGE_ACCESS_KEY_ID!,
         secretAccessKey: process.env.STORAGE_SECRET_ACCESS_KEY!,
       },
+      // Le SDK v3 calcule par défaut un checksum CRC32 pour chaque requête, ce
+      // qui force un encodage "aws-chunked" nécessitant de connaître la
+      // longueur du flux à l'avance, un flux busboy (upload multipart) ne
+      // l'expose jamais, d'où un crash `x-amz-decoded-content-length`
+      // "undefined" constaté en conditions réelles sur R2. "WHEN_REQUIRED"
+      // désactive ce calcul par défaut, R2 n'en a pas besoin.
+      requestChecksumCalculation: "WHEN_REQUIRED",
     })
   : null;
 
