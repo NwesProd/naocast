@@ -1,0 +1,7 @@
+-- CreateEnum
+CREATE TYPE "ProfileType" AS ENUM ('PODCASTEUR', 'MONTEUR', 'AGENCE', 'AUTRE');
+
+-- AlterTable
+ALTER TABLE "User" DROP COLUMN "name";
+ALTER TABLE "User" ADD COLUMN "profileType" "ProfileType" NOT NULL DEFAULT 'AUTRE';
+ALTER TABLE "User" ALTER COLUMN "profileType" DROP DEFAULT;

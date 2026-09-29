@@ -1,0 +1,83 @@
+@import "tailwindcss";
+
+:root {
+  /* Couleurs de marque, design system Podko v2 "zones pastel" */
+  --color-primary: #ff6b35;
+  --color-primary-button: #e85a2a;
+  --color-accent-teal: #0f6b67;
+
+  /* Zones pastel : chaque section/panneau a SA couleur pleine dédiée
+     (jamais un gris neutre uniforme partout), avec son propre texte
+     assorti, ne jamais poser le texte encre générique dessus. */
+  --color-mint: #d9f0ed;
+  --color-mint-ink: #0f3d39;
+  --color-mint-muted: #12574f;
+
+  --color-sky: #dceefc;
+  --color-sky-ink: #0d3a5c;
+  --color-sky-muted: #1f5c85;
+
+  --color-peach: #ffefe3;
+  --color-peach-sidebar: #ffe7d6;
+  --color-peach-ink: #7a3a1d;
+  --color-peach-muted: #8a5a3d;
+
+  --color-butter: #fff3d6;
+  --color-butter-ink: #7a5a00;
+
+  /* Neutres : réservés au fond de page et aux surfaces neutres (boutons
+     secondaires, bordures), pas aux panneaux de section. */
+  --color-background: #ffffff;
+  --color-border: #eeeae4;
+  --color-text: #57524b;
+  --color-text-muted: #8a857d;
+  --color-ink: #1f2a2e;
+}
+
+@theme inline {
+  --color-primary: var(--color-primary);
+  --color-primary-button: var(--color-primary-button);
+  --color-accent-teal: var(--color-accent-teal);
+
+  --color-mint: var(--color-mint);
+  --color-mint-ink: var(--color-mint-ink);
+  --color-mint-muted: var(--color-mint-muted);
+  --color-sky: var(--color-sky);
+  --color-sky-ink: var(--color-sky-ink);
+  --color-sky-muted: var(--color-sky-muted);
+  --color-peach: var(--color-peach);
+  --color-peach-sidebar: var(--color-peach-sidebar);
+  --color-peach-ink: var(--color-peach-ink);
+  --color-peach-muted: var(--color-peach-muted);
+  --color-butter: var(--color-butter);
+  --color-butter-ink: var(--color-butter-ink);
+
+  --color-background: var(--color-background);
+  --color-border: var(--color-border);
+  --color-text: var(--color-text);
+  --color-text-muted: var(--color-text-muted);
+  --color-ink: var(--color-ink);
+
+  --font-display: var(--font-space-grotesk), system-ui, sans-serif;
+  --font-body: var(--font-plus-jakarta-sans), system-ui, sans-serif;
+
+  /* Radius Podko : coins toujours généreux, jamais carrés */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 24px;
+  --radius-pill: 999px;
+}
+
+/* Toujours fond blanc pur, pas de mode sombre auto (règle du design system) */
+body {
+  background: var(--color-background);
+  color: var(--color-text);
+  font-family: var(--font-body);
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  color: var(--color-ink);
+}

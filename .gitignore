@@ -1,0 +1,28 @@
+# dependencies
+node_modules
+
+# next.js
+.next
+out
+next-env.d.ts
+
+# env
+.env
+.env*.local
+
+# prisma (généré, régénéré par `prisma generate`)
+/app/generated/prisma
+
+# stockage local de dev + fichiers de travail du pipeline (rushs, rendus)
+.data
+
+# misc
+.DS_Store
+*.pem
+*.tsbuildinfo
+
+# skills bundlées par l'outil de dev (pas du code applicatif)
+.agents
+.claude/skills
+.windsurf
+skills-lock.json

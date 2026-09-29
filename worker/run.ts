@@ -1,0 +1,119 @@
+import "dotenv/config";
+import { prisma } from "@/lib/db";
+import { runJob } from "@/worker/pipeline";
+
+// Worker minimal : interroge la table ProcessingJob toutes les POLL_INTERVAL_MS
+// et exécute le prochain job PENDING le plus ancien, épisode par épisode, dans
+// l'ordre de `sequence`. Choix volontaire pour l'MVP : pas de file d'attente
+// externe (Redis/BullMQ), une table Postgres suffit à ce stade et évite une
+// dépendance d'infra de plus. À lancer via `npm run worker`.
+
+const POLL_INTERVAL_MS = 3000;
+
+// La connexion Postgres de ce process (longue durée, contrairement aux
+// requêtes web ponctuelles) peut occasionnellement se faire fermer côté
+// serveur entre deux requêtes (constaté en dev : erreur Prisma P1017
+// "Server has closed the connection", même sur une requête quasi
+// instantanée), une nouvelle tentative repart sur une connexion fraîche du
+// pool plutôt que de faire échouer à tort la mise à jour de statut d'un job.
+async function withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      await new Promise((r) => setTimeout(r, 300));
+    }
+  }
+  throw lastErr;
+}
+
+async function tick(): Promise<boolean> {
+  // Parcourt TOUS les jobs PENDING (pas juste le premier) : un épisode bloqué
+  // (ex. un job FAILED laissé en place, avec des PENDING derrière lui dans la
+  // séquence) ne doit pas empêcher de traiter les jobs des autres épisodes,
+  // sinon un seul épisode en échec suffit à geler le worker pour tout le monde.
+  const pendingJobs = await prisma.processingJob.findMany({
+    where: { status: "PENDING" },
+    orderBy: [{ episodeId: "asc" }, { sequence: "asc" }],
+  });
+
+  let job: (typeof pendingJobs)[number] | null = null;
+  for (const candidate of pendingJobs) {
+    const blockingJob = await prisma.processingJob.findFirst({
+      where: { episodeId: candidate.episodeId, sequence: { lt: candidate.sequence }, status: { not: "DONE" } },
+    });
+    if (!blockingJob) {
+      job = candidate;
+      break;
+    }
+  }
+  if (!job) return false;
+
+  await withRetry(() =>
+    prisma.processingJob.update({
+      where: { id: job.id },
+      data: { status: "RUNNING", startedAt: new Date() },
+    })
+  );
+  await withRetry(() => prisma.episode.update({ where: { id: job.episodeId }, data: { status: "PROCESSING" } }));
+
+  console.log(`[worker] ${job.type} - épisode ${job.episodeId}`);
+  try {
+    await runJob(job);
+    await withRetry(() =>
+      prisma.processingJob.update({
+        where: { id: job.id },
+        data: { status: "DONE", finishedAt: new Date() },
+      })
+    );
+    // Le job qui termine le pipeline varie selon la config (EXPORT_AUDIO le
+    // plus souvent, mais pas forcément), on marque l'épisode prêt ici, une
+    // fois qu'il ne reste plus aucun job non terminé, plutôt que de le faire
+    // dans un job précis dont le statut serait aussitôt écrasé par le
+    // passage à "PROCESSING" du job suivant.
+    const remaining = await withRetry(() =>
+      prisma.processingJob.count({
+        where: { episodeId: job.episodeId, status: { not: "DONE" } },
+      })
+    );
+    if (remaining === 0) {
+      // EXPORT_AUDIO n'est jamais inclus dans le pipeline automatique (cf.
+      // enqueueEpisodePipeline), il n'est créé que par la validation en
+      // relecture (cf. /validate), donc le voir terminer signifie que
+      // l'export final est prêt, pas que le pipeline de montage l'est.
+      const nextStatus = job.type === "EXPORT_AUDIO" ? "EXPORTED" : "READY_FOR_REVIEW";
+      await withRetry(() => prisma.episode.update({ where: { id: job.episodeId }, data: { status: nextStatus } }));
+    }
+  } catch (err) {
+    console.error(`[worker] échec ${job.type} - épisode ${job.episodeId}:`, err);
+    await withRetry(() =>
+      prisma.processingJob.update({
+        where: { id: job.id },
+        data: { status: "FAILED", finishedAt: new Date(), errorMessage: (err as Error).message },
+      })
+    );
+    await withRetry(() => prisma.episode.update({ where: { id: job.episodeId }, data: { status: "FAILED" } }));
+  }
+  return true;
+}
+
+async function loop() {
+  console.log("[worker] démarré, en écoute des jobs...");
+  for (;;) {
+    // Filet de sécurité : si tick() lève malgré les tentatives de withRetry
+    // (ex. les 3 essais de la mise à jour "FAILED" échouent tous), le worker
+    // ne doit pas planter silencieusement (promesse rejetée non gérée) et
+    // arrêter tout traitement pour tous les épisodes, il boucle et retente.
+    let didWork = false;
+    try {
+      didWork = await tick();
+    } catch (err) {
+      console.error("[worker] tick() a échoué, nouvelle tentative au prochain cycle:", err);
+    }
+    await new Promise((r) => setTimeout(r, didWork ? 250 : POLL_INTERVAL_MS));
+  }
+}
+
+loop();

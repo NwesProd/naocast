@@ -1,0 +1,468 @@
+// Schéma Prisma, Podtool (module post-production podcast)
+// Get a free hosted Postgres database in seconds: `npx create-db`, ou en local via `npx prisma dev`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum ProfileType {
+  PODCASTEUR
+  MONTEUR
+  AGENCE
+  AUTRE
+}
+
+model User {
+  id           String      @id @default(cuid())
+  email        String      @unique
+  passwordHash String
+  profileType  ProfileType
+  createdAt    DateTime    @default(now())
+
+  // Un seul podcast par compte au MVP (multi-podcasts hors scope)
+  podcast     Podcast?
+  resetTokens PasswordResetToken[]
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // On stocke le hash du token, jamais le token en clair (seul le lien envoyé
+  // par email contient la valeur en clair), une fuite de la base ne suffit
+  // pas à réinitialiser un mot de passe.
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model Podcast {
+  id       String  @id @default(cuid())
+  userId   String  @unique
+  user     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title    String
+  coverKey String? // clé de stockage (R2/B2) de la pochette
+
+  // Éléments fixes incrustés à chaque rendu (fichier original, qualité
+  // source, utilisé par le pipeline ffmpeg)
+  introKey String?
+  outroKey String?
+  logoKey  String?
+
+  // Version transcodée en H.264/AAC (MP4) du générique, générée à l'upload
+  // uniquement pour la prévisualisation dans le navigateur : le fichier
+  // original peut être dans un codec/conteneur que les navigateurs ne
+  // savent pas décoder (HEVC, ProRes...), alors que ffmpeg les lit tous.
+  // Absent si ffmpeg n'est pas disponible côté serveur au moment de l'upload.
+  introPreviewKey String?
+  outroPreviewKey String?
+
+  // Onglet "ADN" (Mon podcast) : positionnement du podcast en texte libre
+  // (guidé côté UI par des questions suggérées : c'est quoi, à qui, pourquoi,
+  // ligne éditoriale, règles) + documents de référence optionnels (bible
+  // existante...) fournis en plus à Claude pour générer la bible ci-dessous.
+  dna            String?
+  // [{ "key": "...", "filename": "...", "mimeType": "..." }, ...]
+  referenceFiles Json?
+  // Bible générée (API Claude) à partir de dna + referenceFiles, puis
+  // librement modifiable par l'utilisateur, le texte stocké ici est
+  // toujours la version affichée/éditée, qu'elle ait été retouchée ou non.
+  bible            String?
+  bibleGeneratedAt DateTime?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  episodes  Episode[]
+  guests    Guest[]
+}
+
+// Module "Invités" : un invité est rattaché au PODCAST (pas à un épisode
+// précis), un même invité peut revenir sur plusieurs épisodes, avec ses
+// infos (média, réseaux) déjà pré-remplies plutôt qu'à ressaisir à chaque
+// fois. Le rattachement à un épisode donné passe par EpisodeGuest.
+model Guest {
+  id        String   @id @default(cuid())
+  podcastId String
+  podcast   Podcast  @relation(fields: [podcastId], references: [id], onDelete: Cascade)
+  name      String
+  mediaName String? // "Nom du média / Entreprise"
+  // Liens réseaux sociaux : [{ "platform": "instagram", "url": "..." }, ...],
+  // format libre plutôt qu'une colonne par réseau, pour ajouter des
+  // plateformes sans migration.
+  socialLinks Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  episodeGuests EpisodeGuest[]
+
+  @@index([podcastId])
+}
+
+enum EpisodeStatus {
+  DRAFT // formulaire en cours
+  QUEUED // pipeline automatique en attente de traitement
+  PROCESSING // pipeline automatique en cours
+  READY_FOR_REVIEW // rendu dispo, en attente de validation utilisateur
+  EXPORTED // validé et exporté
+  HUMAN_EDITOR_REQUESTED // bascule vers montage humain payant
+  FAILED
+}
+
+enum CameraSetup {
+  PRE_EDITED // pré-montage déjà fait / caméra unique
+  MULTI_CAMERA // caméras séparées non synchronisées
+}
+
+enum LogoPosition {
+  TOP_LEFT
+  TOP_RIGHT
+  BOTTOM_LEFT
+  BOTTOM_RIGHT
+}
+
+// Étape "1. Monteur" du tunnel : qui monte l'épisode.
+// - PODKO / NEED_EDITOR / HAS_EDITOR_SEND continuent tous le même tunnel
+//   (import, découpes...) ; ne divergent qu'à la toute dernière étape
+//   ("Lancer"), cf. enqueueEpisodePipeline et /send-to-own-editor.
+// - HAS_EDITOR_IMPORT importe directement un épisode déjà monté ailleurs,
+//   sans passer par le tunnel.
+enum EditorChoice {
+  PODKO
+  NEED_EDITOR
+  HAS_EDITOR_SEND
+  HAS_EDITOR_IMPORT
+}
+
+// Étapes "Générique de début/fin" du tunnel : reprendre le générique de la
+// config podcast (par défaut) ou en utiliser un spécifique à cet épisode.
+enum IntroOutroSource {
+  PODCAST
+  EPISODE
+}
+
+// Générique spécifique à l'épisode (source EPISODE) : uniquement pertinent
+// quand un monteur humain est impliqué (NEED_EDITOR / HAS_EDITOR_SEND), qui
+// peut créer le générique sur-mesure plutôt que recevoir un fichier déjà prêt.
+enum GenericCreationMode {
+  IMPORT
+  CUSTOM
+}
+
+enum GenericCustomMode {
+  TEASER_COMPILATION // compiler les meilleurs extraits des rushs
+  OWN_IDEA // idée décrite en texte libre par le podcasteur
+}
+
+// Étape "Intro" du tunnel : quel teaser (s'il y en a un) diffuser avant le
+// générique de début. MODULE ne s'active que si introTeaserValidated est vrai
+// (un brouillon construit dans le module mais jamais validé n'est jamais
+// utilisé dans le rendu) ; IMPORT court-circuite le module avec un fichier
+// déjà prêt (cf. introTeaserImportKey).
+enum IntroTeaserChoice {
+  NONE
+  MODULE
+  IMPORT
+}
+
+model Episode {
+  id        String  @id @default(cuid())
+  podcastId String
+  podcast   Podcast @relation(fields: [podcastId], references: [id], onDelete: Cascade)
+
+  // Étape 0 du formulaire d'ajout d'épisode : informations de base. Seul le
+  // titre est obligatoire.
+  title         String?
+  season        Int?
+  episodeNumber Int?
+  releaseDate   DateTime?
+
+  status      EpisodeStatus @default(DRAFT)
+  cameraSetup CameraSetup?
+
+  // Étape "1. Monteur" du tunnel
+  editorChoice EditorChoice?
+
+  // Étape 4 du formulaire : autocut
+  autocutEnabled        Boolean @default(false)
+  autocutSilenceMs      Int? // seuil de silence à partir duquel couper (ms)
+
+  // Étape "Cut" : nombre de locuteurs connu à l'avance, transmis à pyannote.ai
+  // (paramètre numSpeakers) pour la reconnaissance des locuteurs, laissé vide,
+  // le modèle doit deviner ce nombre lui-même, ce qui se trompe régulièrement
+  // en conditions réelles (ex. 2 détectés au lieu de 4).
+  expectedSpeakerCount Int?
+
+  // Étapes "Générique de début/fin" : par défaut le générique de la config
+  // podcast est utilisé (source PODCAST, pas de clé propre à l'épisode) ; en
+  // choisissant EPISODE, introKey/outroKey (propres à cet épisode)
+  // remplacent celui de la config podcast pour ce seul épisode.
+  introSource IntroOutroSource @default(PODCAST)
+  introKey    String?
+  outroSource IntroOutroSource @default(PODCAST)
+  outroKey    String?
+
+  // Module "Intro" (étape 7 du tunnel, à part du générique de début) : teaser
+  // compilé à partir de passages du transcript choisis et ordonnés par
+  // l'utilisateur (cf. IntroSegment ci-dessous), diffusé AVANT le générique de
+  // début. introTeaserKey est le clip déjà assemblé (ffmpeg), régénéré à
+  // chaque changement de sélection/ordre, null tant qu'aucun teaser n'a
+  // encore été construit (l'étape est optionnelle). Un brouillon reconstruit
+  // n'est utilisé dans le rendu qu'une fois validé (introTeaserValidated),
+  // sinon on pourrait diffuser un teaser encore à moitié composé.
+  introTeaserKey       String?
+  introTeaserValidated Boolean           @default(false)
+  // Alternative à la construction dans le module : un fichier importé
+  // directement (court-circuite entièrement le module et sa validation).
+  introTeaserImportKey String?
+  introTeaserChoice    IntroTeaserChoice @default(NONE)
+
+  // Générique sur-mesure (source EPISODE + monteur humain impliqué) : soit un
+  // fichier importé (IMPORT, cf. introKey/outroKey ci-dessus), soit des
+  // indications textuelles pour le monteur (CUSTOM), qui compile lui-même les
+  // meilleurs extraits en teaser ou suit l'idée décrite en texte libre.
+  introCreationMode      GenericCreationMode?
+  introCustomMode        GenericCustomMode?
+  introCustomDescription String?
+  outroCreationMode      GenericCreationMode?
+  outroCustomMode        GenericCustomMode?
+  outroCustomDescription String?
+
+  // Étape "Logo" du formulaire : le logo permanent (config podcast) est
+  // toujours incrusté sur le corps de l'épisode ; ces réglages ne contrôlent
+  // que son affichage sur le générique de début/fin et sa position. Sa
+  // taille de rendu, elle, n'est pas un réglage utilisateur : elle est
+  // standardisée (cf. LOGO_HEIGHT_PX, lib/pipeline/ffmpeg.ts) pour ne jamais
+  // dépendre de la résolution du fichier uploadé.
+  // Permet de désactiver entièrement le logo pour cet épisode précis, même si
+  // le podcast en a un configuré (ex. épisode sponsorisé, invité exclusif...).
+  logoEnabled   Boolean      @default(true)
+  logoOnIntro   Boolean      @default(true)
+  logoOnOutro   Boolean      @default(true)
+  logoPosition  LogoPosition @default(BOTTOM_RIGHT)
+
+  // Bascule vers le service de montage humain (tarif existant, hors SaaS),
+  // NEED_EDITOR (monteur Podko) uniquement. Pour HAS_EDITOR_SEND (monteur
+  // personnel de l'utilisateur), cf. ownEditorEmail : aucun tarif Podko
+  // n'est impliqué, seul un email récapitulatif est envoyé.
+  humanEditorRequestedAt DateTime?
+  ownEditorEmail         String?
+
+  // Module "Invités" : message généré (API Claude) à envoyer aux invités de
+  // l'épisode, pas d'infos saisies en amont (date, lieu, brief...), le
+  // message est généré directement à partir du peu qu'on connaît déjà
+  // (podcast, épisode, invités) et laisse des [à compléter] pour le reste ;
+  // guestMessage garde aussi les modifications manuelles de l'utilisateur.
+  guestMessage            String?
+  guestMessageGeneratedAt DateTime?
+  // "Valider le casting" (module Invités) : la liste d'invités de l'épisode
+  // est jugée complète, affiche le tick dans la sidebar comme pour l'intro
+  // validée ou l'épisode exporté (cf. components/SidebarNav.tsx).
+  guestsCastingValidated Boolean @default(false)
+
+  // Module "Script" : idées d'angles/thèmes pour l'épisode, générées (API
+  // Claude) à partir de la bible du podcast, s'ils existent déjà des invités
+  // de l'épisode (cf. EpisodeGuest), et du brouillon ci-dessous s'il en
+  // contient. scriptDraft est le texte libre où l'utilisateur étoffe une
+  // idée choisie, écrit son script ou ses questions ; scriptValidated
+  // affiche le tick dans la sidebar une fois "Valider mon script" cliqué.
+  scriptAngleIdeas       Json?
+  scriptIdeasGeneratedAt DateTime?
+  scriptDraft            String?
+  scriptValidated        Boolean    @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  rushes            RushSource[]
+  transcriptSegments TranscriptSegment[]
+  cutMarkers        CutMarker[]
+  jobs              ProcessingJob[]
+  exports           ExportAsset[]
+  speakers          EpisodeSpeaker[]
+  episodeGuests     EpisodeGuest[]
+  introSegments     IntroSegment[]
+}
+
+// Un passage du transcript choisi pour le teaser du module "Intro", `order`
+// contrôle sa place dans la séquence finale, indépendamment de l'ordre
+// chronologique d'origine dans l'épisode (l'utilisateur peut réordonner
+// librement, cf. app/(app)/episodes/[id]/intro).
+model IntroSegment {
+  id        String   @id @default(cuid())
+  episodeId String
+  episode   Episode  @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  startMs   Int
+  endMs     Int
+  text      String
+  order     Int
+  createdAt DateTime @default(now())
+
+  // Sous-plages (en ms, mêmes coordonnées que startMs/endMs) retirées à
+  // l'intérieur du passage, mode "cut" appliqué phrase par phrase dans le
+  // module Intro (retirer quelques mots sans retirer toute la phrase).
+  // Format : [{ "startMs": number, "endMs": number }, ...].
+  removedRanges Json?
+
+  @@index([episodeId, order])
+}
+
+// Rattachement d'un invité (du pool du podcast, cf. Guest) à un épisode
+// précis, un même Guest peut avoir plusieurs EpisodeGuest (un par épisode où
+// il apparaît). `order` contrôle l'ordre d'affichage dans le module.
+model EpisodeGuest {
+  id        String   @id @default(cuid())
+  episodeId String
+  episode   Episode  @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  guestId   String
+  guest     Guest    @relation(fields: [guestId], references: [id], onDelete: Cascade)
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@unique([episodeId, guestId])
+  @@index([episodeId, order])
+  @@index([guestId])
+}
+
+enum RushSourceType {
+  SMASH
+  GOOGLE_DRIVE
+  DROPBOX
+  UPLOAD
+}
+
+enum RushStatus {
+  PENDING // référencé mais pas encore rapatrié
+  FETCHING
+  READY // rapatrié dans le stockage temporaire, prêt pour la suite du pipeline
+  FAILED
+}
+
+model RushSource {
+  id        String         @id @default(cuid())
+  episodeId String
+  episode   Episode        @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  type      RushSourceType
+  status    RushStatus     @default(PENDING)
+
+  // Pour Smash/Drive/Dropbox : référence externe (lien ou id de fichier) avant rapatriement
+  externalRef String?
+  // Une fois rapatrié : nom d'origine + clé de stockage temporaire (R2/B2)
+  originalFilename String?
+  storageKey       String?
+  durationSec      Float?
+  fileSizeBytes    BigInt?
+  // Choisi par l'utilisateur à l'étape "analyse du transfert" (fichiers à traiter)
+  selectedForEpisode Boolean @default(true)
+  // Aperçu H.264/AAC (90 premières secondes) généré à la demande au premier
+  // clic sur "Aperçu", mis en cache ici pour ne jamais le regénérer. Le
+  // fichier original (storageKey) reste utilisé tel quel par le pipeline.
+  previewKey String?
+
+  createdAt DateTime @default(now())
+}
+
+model TranscriptSegment {
+  id        String  @id @default(cuid())
+  episodeId String
+  episode   Episode @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+
+  startMs Int
+  endMs   Int
+  text    String
+  speaker String? // label brut renvoyé par pyannote.ai (ex. "SPEAKER_00"), cf. EpisodeSpeaker pour le nom affiché
+  // Horodatage de chaque mot de la phrase ([{text,startMs,endMs}, ...]), la
+  // phrase reste l'unité de stockage/regroupement à l'affichage, mais
+  // "Recouper un passage" permet de sélectionner un sous-ensemble de mots
+  // (glisser-cliquer, comme du texte), pas forcément la phrase entière.
+  words Json?
+}
+
+// Un label pyannote.ai (ex. "SPEAKER_00") par épisode, avec le nom que
+// l'utilisateur lui donne après coup (aucun moyen de le déduire
+// automatiquement, la diarization ne fait qu'identifier des voix distinctes).
+model EpisodeSpeaker {
+  id          String   @id @default(cuid())
+  episodeId   String
+  episode     Episode  @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  label       String
+  displayName String?
+  createdAt   DateTime @default(now())
+
+  @@unique([episodeId, label])
+}
+
+enum CutSource {
+  AUTOCUT
+  MANUAL
+}
+
+model CutMarker {
+  id        String    @id @default(cuid())
+  episodeId String
+  episode   Episode   @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  startMs   Int
+  endMs     Int
+  source    CutSource
+  createdAt DateTime  @default(now())
+}
+
+enum JobType {
+  FETCH_RUSHES
+  TRANSCRIBE
+  SYNC_MULTICAM
+  AUTOCUT
+  APPLY_MANUAL_CUTS
+  RENDER
+  EXPORT_AUDIO
+}
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  DONE
+  FAILED
+}
+
+model ProcessingJob {
+  id        String    @id @default(cuid())
+  episodeId String
+  episode   Episode   @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  type      JobType
+  status    JobStatus @default(PENDING)
+  // Ordre d'exécution dans le pipeline (permet de reprendre après échec)
+  sequence  Int
+  errorMessage String?
+  // Avancement (0-100) DANS le job en cours (ex. % de la vidéo déjà
+  // encodée), permet à la barre de progression de suivre en continu plutôt
+  // que par palier (un incrément par job terminé). Alimenté par ffmpeg
+  // (option -progress) quand le job concerné a une étape ffmpeg dominante,
+  // cf. lib/pipeline/ffmpeg.ts::runFfmpegWithProgress.
+  progressPercent Int?
+  startedAt    DateTime?
+  finishedAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([status, sequence])
+}
+
+enum ExportType {
+  VIDEO
+  AUDIO
+}
+
+model ExportAsset {
+  id        String     @id @default(cuid())
+  episodeId String
+  episode   Episode    @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  type      ExportType
+  storageKey String
+  createdAt DateTime   @default(now())
+}
