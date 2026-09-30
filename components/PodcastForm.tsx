@@ -119,6 +119,11 @@ function uploadWithProgress(
 
 export function PodcastForm({ existing }: { existing?: ExistingPodcast }) {
   const router = useRouter();
+  // Capturé une seule fois au montage (cf. PodcastDnaForm, même raisonnement) :
+  // reste vrai après le tout premier enregistrement, permettant de basculer
+  // vers le dashboard "Épisodes" une seule fois, la toute première fois que
+  // le graphisme est validé (fin du parcours de configuration du podcast).
+  const [isFirstSave] = useState(!existing?.cover && !existing?.intro && !existing?.outro && !existing?.logo);
   const [loading, setLoading] = useState(false);
   const [uploadPercent, setUploadPercent] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -158,6 +163,10 @@ export function PodcastForm({ existing }: { existing?: ExistingPodcast }) {
     setLoading(false);
     setUploadPercent(null);
     setSaved(true);
+    if (isFirstSave) {
+      router.push("/dashboard");
+      return;
+    }
     router.refresh();
   }
 
