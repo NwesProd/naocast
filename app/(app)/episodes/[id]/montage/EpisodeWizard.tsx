@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Button } from "@/components/Button";
 import { TranscriptCutEditor, type TranscriptSegment, type Speaker, type CutMarker } from "@/components/TranscriptCutEditor";
 import { EPISODE_UPDATED_EVENT } from "@/components/SidebarNav";
+import { pollJobUntilDone } from "@/lib/pollJob";
 
 const secondaryBtn = "text-sm rounded-[10px] bg-white border border-border text-ink px-3 py-1.5 hover:bg-[#FAFAF8] transition";
 const listCardClass = "divide-y rounded-md bg-white border border-border";
@@ -237,7 +238,10 @@ export function EpisodeWizard({
   // Génère (ou régénère) le transcript de l'épisode à partir d'un seul rush
   // choisi par l'utilisateur (cf. étape "Cut") : pas de fusion multi-fichiers,
   // pour éviter des locuteurs incohérents d'un fichier à l'autre en cas de
-  // rushs séparés (caméras non synchronisées).
+  // rushs séparés (caméras non synchronisées). Tourne en tâche de fond
+  // (job MANUAL_TRANSCRIBE, cf. worker/pipeline.ts) : la diarization peut
+  // prendre plusieurs minutes, bien trop long pour attendre la réponse HTTP
+  // directement (cause de timeouts observés en production).
   async function generateTranscript(rushId: string) {
     setGeneratingTranscript(true);
     setError(null);
@@ -248,9 +252,10 @@ export function EpisodeWizard({
         body: JSON.stringify({ rushId, expectedSpeakerCount }),
       });
       if (!res.ok) throw new Error("Échec de la génération du transcript.");
-      const data = await res.json();
-      setTranscript(data.transcriptSegments);
-      setSpeakers(data.speakers);
+      const { jobId } = await res.json();
+      const job = await pollJobUntilDone(episodeId, jobId);
+      if (job.status === "FAILED") throw new Error(job.errorMessage || "Échec de la génération du transcript.");
+      await refreshEpisode();
     } catch (e) {
       setError((e as Error).message);
     } finally {

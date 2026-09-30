@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/Button";
 import { TranscriptCutEditor, type TranscriptSegment, type Speaker, type CutMarker } from "@/components/TranscriptCutEditor";
 import { EPISODE_UPDATED_EVENT } from "@/components/SidebarNav";
+import { pollJobUntilDone } from "@/lib/pollJob";
 
 interface Job {
   id: string;
@@ -31,6 +32,7 @@ const JOB_LABELS: Record<string, string> = {
   APPLY_MANUAL_CUTS: "Découpes",
   RENDER: "Rendu vidéo",
   EXPORT_AUDIO: "Export audio",
+  MANUAL_TRANSCRIBE: "Transcript (avec locuteurs)",
 };
 
 const secondaryBtn = "text-sm font-semibold rounded-[10px] bg-white border border-border text-ink px-4 py-2 hover:bg-[#FAFAF8] transition";
@@ -140,6 +142,9 @@ export function ReviewClient({
         body: JSON.stringify({ rushId, expectedSpeakerCount }),
       });
       if (!res.ok) throw new Error("Échec de la régénération du transcript.");
+      const { jobId } = await res.json();
+      const job = await pollJobUntilDone(episodeId, jobId);
+      if (job.status === "FAILED") throw new Error(job.errorMessage || "Échec de la régénération du transcript.");
       router.refresh();
     } finally {
       setRegeneratingTranscript(false);

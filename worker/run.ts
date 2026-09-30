@@ -51,13 +51,22 @@ async function tick(): Promise<boolean> {
   }
   if (!job) return false;
 
+  // MANUAL_TRANSCRIBE tourne "à côté" du pipeline principal (déclenché depuis
+  // le tunnel de montage ou la relecture, sur un seul rush, indépendamment de
+  // l'avancement du reste) : il ne doit jamais faire basculer le statut de
+  // l'épisode (PROCESSING/READY_FOR_REVIEW/FAILED), qui refléterait alors à
+  // tort l'état du pipeline automatique aux yeux de la sidebar/relecture.
+  const affectsEpisodeStatus = job.type !== "MANUAL_TRANSCRIBE";
+
   await withRetry(() =>
     prisma.processingJob.update({
       where: { id: job.id },
       data: { status: "RUNNING", startedAt: new Date() },
     })
   );
-  await withRetry(() => prisma.episode.update({ where: { id: job.episodeId }, data: { status: "PROCESSING" } }));
+  if (affectsEpisodeStatus) {
+    await withRetry(() => prisma.episode.update({ where: { id: job.episodeId }, data: { status: "PROCESSING" } }));
+  }
 
   console.log(`[worker] ${job.type} - épisode ${job.episodeId}`);
   try {
@@ -68,23 +77,25 @@ async function tick(): Promise<boolean> {
         data: { status: "DONE", finishedAt: new Date() },
       })
     );
-    // Le job qui termine le pipeline varie selon la config (EXPORT_AUDIO le
-    // plus souvent, mais pas forcément), on marque l'épisode prêt ici, une
-    // fois qu'il ne reste plus aucun job non terminé, plutôt que de le faire
-    // dans un job précis dont le statut serait aussitôt écrasé par le
-    // passage à "PROCESSING" du job suivant.
-    const remaining = await withRetry(() =>
-      prisma.processingJob.count({
-        where: { episodeId: job.episodeId, status: { not: "DONE" } },
-      })
-    );
-    if (remaining === 0) {
-      // EXPORT_AUDIO n'est jamais inclus dans le pipeline automatique (cf.
-      // enqueueEpisodePipeline), il n'est créé que par la validation en
-      // relecture (cf. /validate), donc le voir terminer signifie que
-      // l'export final est prêt, pas que le pipeline de montage l'est.
-      const nextStatus = job.type === "EXPORT_AUDIO" ? "EXPORTED" : "READY_FOR_REVIEW";
-      await withRetry(() => prisma.episode.update({ where: { id: job.episodeId }, data: { status: nextStatus } }));
+    if (affectsEpisodeStatus) {
+      // Le job qui termine le pipeline varie selon la config (EXPORT_AUDIO le
+      // plus souvent, mais pas forcément), on marque l'épisode prêt ici, une
+      // fois qu'il ne reste plus aucun job non terminé, plutôt que de le faire
+      // dans un job précis dont le statut serait aussitôt écrasé par le
+      // passage à "PROCESSING" du job suivant.
+      const remaining = await withRetry(() =>
+        prisma.processingJob.count({
+          where: { episodeId: job.episodeId, status: { not: "DONE" }, type: { not: "MANUAL_TRANSCRIBE" } },
+        })
+      );
+      if (remaining === 0) {
+        // EXPORT_AUDIO n'est jamais inclus dans le pipeline automatique (cf.
+        // enqueueEpisodePipeline), il n'est créé que par la validation en
+        // relecture (cf. /validate), donc le voir terminer signifie que
+        // l'export final est prêt, pas que le pipeline de montage l'est.
+        const nextStatus = job.type === "EXPORT_AUDIO" ? "EXPORTED" : "READY_FOR_REVIEW";
+        await withRetry(() => prisma.episode.update({ where: { id: job.episodeId }, data: { status: nextStatus } }));
+      }
     }
   } catch (err) {
     console.error(`[worker] échec ${job.type} - épisode ${job.episodeId}:`, err);
@@ -94,7 +105,9 @@ async function tick(): Promise<boolean> {
         data: { status: "FAILED", finishedAt: new Date(), errorMessage: (err as Error).message },
       })
     );
-    await withRetry(() => prisma.episode.update({ where: { id: job.episodeId }, data: { status: "FAILED" } }));
+    if (affectsEpisodeStatus) {
+      await withRetry(() => prisma.episode.update({ where: { id: job.episodeId }, data: { status: "FAILED" } }));
+    }
   }
   return true;
 }

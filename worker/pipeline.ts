@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { fetchRush } from "@/lib/pipeline/ingest";
 import { buildBody, runTranscription, runAutocut, renderVideo, runExportAudio, finalVideoPathFor } from "@/lib/pipeline/render";
+import { runManualTranscribe } from "@/lib/pipeline/manualTranscript";
 import type { ProcessingJob } from "@/app/generated/prisma/client";
 
 // Rapporte l'avancement (0-1) d'une étape ffmpeg dans ProcessingJob.progressPercent,
@@ -75,6 +76,12 @@ export async function runJob(job: ProcessingJob): Promise<void> {
       // Non implémenté par conception, cf. lib/pipeline/multicam.ts.
       // Les épisodes multicam ne créent jamais ce job (voir enqueue.ts).
       throw new Error("SYNC_MULTICAM ne devrait jamais être enqueued (multicam non implémenté).");
+    }
+    case "MANUAL_TRANSCRIBE": {
+      const episode = await prisma.episode.findUniqueOrThrow({ where: { id: episodeId } });
+      if (!episode.transcriptRushId) throw new Error("Aucun rush choisi pour la transcription.");
+      await runManualTranscribe(episodeId, episode.transcriptRushId, episode.expectedSpeakerCount);
+      break;
     }
   }
 }

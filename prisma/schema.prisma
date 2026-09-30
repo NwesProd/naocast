@@ -223,6 +223,11 @@ model Episode {
   // le modèle doit deviner ce nombre lui-même, ce qui se trompe régulièrement
   // en conditions réelles (ex. 2 détectés au lieu de 4).
   expectedSpeakerCount Int?
+  // Rush utilisé pour le job MANUAL_TRANSCRIBE en cours/le plus récent (cf.
+  // app/api/episodes/[id]/transcript) : le job tournant en tâche de fond
+  // (worker), il a besoin de retrouver ce choix fait à la création de la
+  // requête plutôt que de le recevoir en paramètre direct.
+  transcriptRushId String?
 
   // Étapes "Générique de début/fin" : par défaut le générique de la config
   // podcast est utilisé (source PODCAST, pas de clé propre à l'épisode) ; en
@@ -446,6 +451,14 @@ enum JobType {
   APPLY_MANUAL_CUTS
   RENDER
   EXPORT_AUDIO
+  // Transcript + reconnaissance des locuteurs déclenchés manuellement à
+  // l'étape "Cut" (ou "Régénérer" en relecture), sur UN SEUL rush choisi par
+  // l'utilisateur (cf. app/api/episodes/[id]/transcript). Distinct de
+  // TRANSCRIBE (pipeline automatique, sans diarization, sur le corps déjà
+  // concaténé) : passe par la diarization pyannote.ai, dont le job peut
+  // prendre plusieurs minutes (polling), bien trop long pour rester dans le
+  // cycle requête/réponse HTTP (cause de 502 Railway sur les épisodes longs).
+  MANUAL_TRANSCRIBE
 }
 
 enum JobStatus {
