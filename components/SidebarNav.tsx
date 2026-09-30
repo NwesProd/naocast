@@ -105,7 +105,7 @@ function PlanUsageCard({ usage }: { usage: SidebarUsage }) {
           href="/billing"
           className="block text-center rounded-pill bg-primary-button text-white text-xs font-semibold py-1.5 hover:opacity-90 transition"
         >
-          {usage.plan === "FREE" || usage.plan === "BASIC" ? "Devenir Pro" : "Gérer mon abonnement"}
+          Mon abonnement
         </Link>
       )}
     </div>
