@@ -80,8 +80,20 @@ function uploadWithProgress(url: string, form: FormData, onProgress: (bytesSent:
       if (e.lengthComputable) onProgress(e.loaded);
     };
     xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) resolve();
-      else reject(new Error(`Échec de l'upload (code ${xhr.status}).`));
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve();
+        return;
+      }
+      // Remonte le message du serveur quand il y en a un (ex. limite de
+      // forfait, épisode déjà exporté) plutôt qu'un code HTTP brut peu
+      // exploitable pour l'utilisateur.
+      let serverMessage: string | undefined;
+      try {
+        serverMessage = JSON.parse(xhr.responseText)?.error;
+      } catch {
+        // réponse non-JSON (ex. page d'erreur du proxy Railway sur un 413/502) : tant pis, on garde le code.
+      }
+      reject(new Error(serverMessage || `Échec de l'upload (code ${xhr.status}).`));
     };
     xhr.onerror = () => reject(new Error("Échec de l'upload (erreur réseau)."));
     xhr.send(form);
@@ -269,8 +281,8 @@ export function EpisodeWizard({
             // figer une fausse valeur.
             if (pct >= 100) setUploadPhase("processing");
           });
-        } catch {
-          throw new Error("Échec de l'upload de " + file.name);
+        } catch (err) {
+          throw new Error(`Échec de l'upload de ${file.name} : ${(err as Error).message}`);
         }
         bytesSentBeforeCurrent += file.size;
       }
