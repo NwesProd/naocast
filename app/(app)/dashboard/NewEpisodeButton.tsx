@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/Button";
+import { EPISODE_UPDATED_EVENT } from "@/components/SidebarNav";
 
 export function NewEpisodeButton() {
   const router = useRouter();
@@ -27,6 +28,10 @@ export function NewEpisodeButton() {
       return;
     }
     const episode = await res.json();
+    // La sidebar (layout persistant, cf. PlanUsageCard) a son propre fetch
+    // déclenché par cet événement, sans quoi son compteur resterait affiché
+    // à sa valeur d'avant cette création (constaté en conditions réelles).
+    window.dispatchEvent(new Event(EPISODE_UPDATED_EVENT));
     router.push(`/episodes/${episode.id}/new`);
   }
 

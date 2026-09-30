@@ -74,8 +74,32 @@ function CrownIcon() {
 
 // Aperçu du forfait en bas de sidebar (cf. maquette fournie) : nom du
 // forfait, quota d'épisodes consommé (masqué si illimité), et accès rapide
-// à /billing pour upgrader.
-function PlanUsageCard({ usage }: { usage: SidebarUsage }) {
+// à /billing pour upgrader. La prop `usage` (calculée côté serveur dans le
+// layout) ne sert que de valeur initiale : le layout étant un segment
+// persistant entre navigations côté client (Next.js ne le re-rend pas tout
+// seul à chaque changement de page), sans ce fetch dédié, créer/supprimer un
+// épisode depuis une autre page laisserait ce compteur affiché ici à sa
+// valeur d'avant l'action (constaté en conditions réelles : recréer un
+// épisode juste après en avoir supprimé un ne remettait pas le compteur à
+// jour). EPISODE_UPDATED_EVENT est déjà émis après ces actions ailleurs.
+function PlanUsageCard({ usage: initialUsage }: { usage: SidebarUsage }) {
+  const [usage, setUsage] = useState(initialUsage);
+
+  useEffect(() => {
+    function reload() {
+      fetch("/api/usage")
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data) setUsage(data);
+        })
+        .catch(() => {
+          // best-effort : une erreur transitoire garde juste l'affichage précédent.
+        });
+    }
+    window.addEventListener(EPISODE_UPDATED_EVENT, reload);
+    return () => window.removeEventListener(EPISODE_UPDATED_EVENT, reload);
+  }, []);
+
   const unlimited = usage.limit === null;
   const percent = unlimited ? 0 : Math.min(100, Math.round((usage.used / Math.max(usage.limit!, 1)) * 100));
 
