@@ -27,8 +27,18 @@ interface ExistingDna {
 // Onglet "ADN" (Mon podcast) : titre + positionnement en texte libre (guidé
 // par des questions suggérées) + documents de référence, à partir desquels
 // Claude génère une bible du podcast, modifiable ensuite à la main.
-export function PodcastDnaForm({ existing }: { existing?: ExistingDna }) {
+export function PodcastDnaForm({
+  existing,
+  onFirstSave,
+}: {
+  existing?: ExistingDna;
+  onFirstSave?: () => void;
+}) {
   const router = useRouter();
+  // Capturé une seule fois au montage : reste vrai après le tout premier
+  // enregistrement (le prop `existing` ne se met à jour qu'au prochain rendu
+  // serveur), permettant de basculer vers l'onglet Graphisme une seule fois.
+  const [isFirstSave] = useState(!existing);
   const [title, setTitle] = useState(existing?.title || "");
   const [dna, setDna] = useState(existing?.dna || "");
   const [referenceFiles, setReferenceFiles] = useState<ReferenceFile[]>(existing?.referenceFiles || []);
@@ -48,6 +58,8 @@ export function PodcastDnaForm({ existing }: { existing?: ExistingDna }) {
   const [generating, setGenerating] = useState(false);
   const [savingBible, setSavingBible] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const bibleProgress = useSimulatedProgress(generating);
 
@@ -69,6 +81,7 @@ export function PodcastDnaForm({ existing }: { existing?: ExistingDna }) {
     try {
       await saveDna(e.currentTarget);
       setSaved(true);
+      if (isFirstSave) onFirstSave?.();
       router.refresh();
     } catch (err) {
       setError((err as Error).message);
@@ -98,6 +111,21 @@ export function PodcastDnaForm({ existing }: { existing?: ExistingDna }) {
       setError((err as Error).message);
     } finally {
       setSavingTitle(false);
+    }
+  }
+
+  async function deletePodcast() {
+    setDeleting(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/podcast", { method: "DELETE" });
+      if (!res.ok) throw new Error();
+      router.push("/");
+      router.refresh();
+    } catch {
+      setError("Échec de la suppression du podcast.");
+      setDeleting(false);
+      setConfirmingDelete(false);
     }
   }
 
@@ -189,6 +217,15 @@ export function PodcastDnaForm({ existing }: { existing?: ExistingDna }) {
               {savingTitle ? "Enregistrement..." : "Enregistrer"}
             </button>
             {savedTitle && <span className="text-xs text-[#0F6B67]">Enregistré.</span>}
+            {!isFirstSave && (
+              <button
+                type="button"
+                onClick={() => setConfirmingDelete(true)}
+                className="ml-auto text-xs font-semibold rounded-pill bg-[#8A2E1F] text-white px-3 py-1.5 hover:bg-[#732619] transition"
+              >
+                Supprimer le podcast
+              </button>
+            )}
           </div>
         </div>
 
@@ -313,6 +350,29 @@ export function PodcastDnaForm({ existing }: { existing?: ExistingDna }) {
       <Button type="submit" form="podcast-dna-form" disabled={saving} variant="secondary" className="w-full max-w-md">
         {saving ? "Enregistrement..." : "Enregistrer"}
       </Button>
+
+      {confirmingDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-xl max-w-sm w-full p-6 space-y-4">
+            <p className="text-sm text-ink">
+              Êtes-vous sûr de vouloir supprimer votre podcast ? Les données seront définitivement supprimées.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setConfirmingDelete(false)} disabled={deleting} className={pillBtn}>
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={deletePodcast}
+                disabled={deleting}
+                className="text-xs font-semibold rounded-pill bg-[#8A2E1F] text-white px-3 py-1.5 hover:bg-[#732619] transition disabled:opacity-50"
+              >
+                {deleting ? "Suppression..." : "Supprimer"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

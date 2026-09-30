@@ -1,15 +1,19 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState, cloneElement, isValidElement, type ReactNode, type ReactElement } from "react";
 
 interface Tab {
   key: string;
   label: string;
   content: ReactNode;
+  // Si renseigné, `content` reçoit une prop `onFirstSave` qui bascule vers
+  // l'onglet désigné ici (cf. PodcastDnaForm : premier enregistrement de
+  // l'ADN -> bascule automatique sur "Graphisme").
+  switchToOnFirstSave?: string;
 }
 
-// "Mon podcast" : ADN (positionnement, bible) / Graphisme (pochette, logo,
-// génériques), deux préoccupations distinctes, chacune avec son propre
+// "Mon podcast" : Paramètres (positionnement, bible) / Graphisme (pochette,
+// logo, génériques), deux préoccupations distinctes, chacune avec son propre
 // formulaire et son propre enregistrement plutôt qu'un unique gros formulaire.
 export function PodcastTabs({ tabs }: { tabs: Tab[] }) {
   const [active, setActive] = useState(tabs[0].key);
@@ -34,7 +38,11 @@ export function PodcastTabs({ tabs }: { tabs: Tab[] }) {
       </div>
       {tabs.map((tab) => (
         <div key={tab.key} className={active === tab.key ? "" : "hidden"}>
-          {tab.content}
+          {tab.switchToOnFirstSave && isValidElement(tab.content)
+            ? cloneElement(tab.content as ReactElement<{ onFirstSave?: () => void }>, {
+                onFirstSave: () => setActive(tab.switchToOnFirstSave!),
+              })
+            : tab.content}
         </div>
       ))}
     </div>

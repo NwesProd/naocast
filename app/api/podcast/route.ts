@@ -133,3 +133,12 @@ export async function POST(req: Request) {
     await rm(tmpDir, { recursive: true, force: true });
   }
 }
+
+// Suppression définitive du podcast (ADN, bible, graphisme). Les fichiers
+// déjà stockés (R2/B2) ne sont pas nettoyés ici : best-effort, pas
+// bloquant pour l'utilisateur, à traiter séparément si besoin.
+export async function DELETE() {
+  const userId = await requireUserId();
+  await prisma.podcast.deleteMany({ where: { userId } });
+  return NextResponse.json({ ok: true });
+}

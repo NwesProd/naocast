@@ -73,11 +73,16 @@ export default async function PodcastPage() {
     <main className="p-8 max-w-4xl w-full">
       <h1 className="text-2xl font-bold mb-1">Mon podcast</h1>
       <p className="text-sm text-text-muted mb-6">
-        Ces éléments sont réutilisés automatiquement sur chaque épisode monté.
+        Ces éléments sont réutilisés automatiquement sur chaque épisode.
       </p>
       <PodcastTabs
         tabs={[
-          { key: "adn", label: "ADN", content: <PodcastDnaForm existing={existingDna} /> },
+          {
+            key: "adn",
+            label: "Paramètres",
+            content: <PodcastDnaForm existing={existingDna} />,
+            switchToOnFirstSave: "graphisme",
+          },
           { key: "graphisme", label: "Graphisme", content: <PodcastForm existing={existingGraphisme} /> },
         ]}
       />
