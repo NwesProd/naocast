@@ -1,10 +1,11 @@
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { Upload } from "@aws-sdk/lib-storage";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { mkdir, readFile, writeFile, unlink, stat } from "fs/promises";
+import { mkdir, readFile, writeFile, unlink, stat, rename } from "fs/promises";
 import { createReadStream, createWriteStream, existsSync } from "fs";
 import { pipeline } from "stream/promises";
 import { Readable } from "stream";
+import { randomUUID } from "crypto";
 import path from "path";
 
 // Abstraction de stockage objet : Cloudflare R2 / Backblaze B2 (compatibles S3) en
@@ -145,7 +146,23 @@ export async function getLocalWorkingPath(key: string, workDir: string): Promise
   if (!existsSync(dest)) {
     await mkdir(path.dirname(dest), { recursive: true });
     const res = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
-    await pipeline(toNodeStream(res.Body!.transformToWebStream()), createWriteStream(dest));
+    // Téléchargé sous un nom temporaire puis renommé une fois COMPLET : sans
+    // ça, un process interrompu en plein téléchargement (redéploiement,
+    // crash, OOM...) laisse un fichier tronqué exactement au chemin attendu
+    // (`dest`), et `existsSync(dest)` ci-dessus le fait alors passer pour
+    // valide indéfiniment aux tentatives suivantes (constaté en conditions
+    // réelles : "moov atom not found" sur un rush, ffprobe/ffmpeg échouant
+    // en boucle sur le même fichier corrompu sans jamais le retélécharger).
+    // Un renommage (même système de fichiers) est atomique : `dest` n'existe
+    // qu'une fois le contenu entièrement écrit, jamais dans un état partiel.
+    const tmpDest = `${dest}.download-${randomUUID()}`;
+    try {
+      await pipeline(toNodeStream(res.Body!.transformToWebStream()), createWriteStream(tmpDest));
+      await rename(tmpDest, dest);
+    } catch (err) {
+      await unlink(tmpDest).catch(() => {});
+      throw err;
+    }
   }
   return dest;
 }
