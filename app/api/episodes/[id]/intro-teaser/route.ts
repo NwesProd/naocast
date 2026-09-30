@@ -102,7 +102,13 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     async start(controller) {
       const send = (data: unknown) => controller.enqueue(encoder.encode(JSON.stringify(data) + "\n"));
       try {
-        const bodyPath = await buildBody(episodeId);
+        // Quand body.mp4 n'existe pas encore (premier module ouvert après un
+        // redéploiement, qui vide le disque de travail éphémère), buildBody
+        // réencode l'intégralité du/des rush(s) sélectionné(s) : sans lui
+        // transmettre onProgress, cette phase pouvait durer plusieurs minutes
+        // sans que la barre de progression ne bouge (bloquée à 0%), avant
+        // même que l'extraction du teaser lui-même ne démarre.
+        const bodyPath = await buildBody(episodeId, (fraction) => send({ progress: fraction }));
         const dir = workDirFor(episodeId);
         const teaserPath = path.join(dir, "intro-teaser.mp4");
 

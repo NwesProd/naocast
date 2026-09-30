@@ -33,8 +33,13 @@ export async function runFfmpeg(args: string[]): Promise<void> {
       maxBuffer: 1024 * 1024 * 64,
     });
   } catch (err) {
-    const stderr = (err as { stderr?: string }).stderr;
-    throw new Error(`ffmpeg a échoué: ${stderr || (err as Error).message}`);
+    const { stderr, signal, code } = err as { stderr?: string; signal?: string | null; code?: number | null };
+    // Un process tué par le système (OOM killer notamment, cf. `signal:
+    // "SIGKILL"`) ne laisse aucune sortie stderr : sans ce cas, le message
+    // ne montrait que le générique "Command failed: ffmpeg ...", impossible
+    // à distinguer d'une vraie erreur ffmpeg silencieuse.
+    const detail = stderr || (signal ? `tué par le système (signal ${signal}, probablement à court de mémoire)` : null) || `code de sortie ${code}`;
+    throw new Error(`ffmpeg a échoué: ${detail}`);
   }
 }
 
