@@ -89,9 +89,16 @@ export async function runFfmpegWithProgress(
       stderr += chunk.toString();
     });
     proc.on("error", reject);
-    proc.on("close", (code) => {
+    proc.on("close", (code, signal) => {
       if (code === 0) resolve();
-      else reject(new Error(`ffmpeg a échoué: ${stderr || `code de sortie ${code}`}`));
+      else {
+        // Un process tué par un signal (OOM killer notamment) a `code: null`
+        // et ne laisse en général aucune sortie stderr : sans lire `signal`
+        // (2e argument de l'évènement "close", ignoré jusqu'ici), le message
+        // ne montrait qu'un peu utile "code de sortie null".
+        const detail = stderr || (signal ? `tué par le système (signal ${signal}, probablement à court de mémoire)` : `code de sortie ${code}`);
+        reject(new Error(`ffmpeg a échoué: ${detail}`));
+      }
     });
   });
 }
