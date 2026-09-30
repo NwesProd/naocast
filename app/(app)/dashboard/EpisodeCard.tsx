@@ -81,6 +81,8 @@ export function EpisodeCard({
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const locked = status === "EXPORTED";
 
   const zone = ZONE_CLASSES[status] || DEFAULT_ZONE;
   const sn = [season != null ? `S${season}` : null, episodeNumber != null ? `E${episodeNumber}` : null]
@@ -103,7 +105,14 @@ export function EpisodeCard({
 
   async function handleDelete() {
     setDeleting(true);
-    await fetch(`/api/episodes/${id}`, { method: "DELETE" });
+    setDeleteError(null);
+    const res = await fetch(`/api/episodes/${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({ error: undefined }));
+      setDeleteError(data.error || "Échec de la suppression.");
+      setDeleting(false);
+      return;
+    }
     // La sidebar garde son propre état (épisode sélectionné, persisté en
     // localStorage) indépendamment de cette liste, un simple router.refresh()
     // ne le met pas à jour. Si l'épisode supprimé était le sélectionné, ce
@@ -140,10 +149,14 @@ export function EpisodeCard({
           type="button"
           onClick={(e) => {
             e.preventDefault();
+            if (locked) return;
             setConfirming(true);
           }}
-          title="Supprimer l'épisode"
-          className="rounded-full bg-white/70 hover:bg-white p-1.5 text-[#8A2E1F] transition"
+          disabled={locked}
+          title={locked ? "Épisode validé : ne peut plus être supprimé" : "Supprimer l'épisode"}
+          className={`rounded-full bg-white/70 p-1.5 transition ${
+            locked ? "text-[#8A2E1F]/30 cursor-not-allowed" : "hover:bg-white text-[#8A2E1F]"
+          }`}
         >
           <TrashIcon />
         </button>
@@ -160,6 +173,7 @@ export function EpisodeCard({
               « {title || fallbackLabel} » sera définitivement supprimé, avec ses rushs, découpes et rendus. Cette
               action est irréversible.
             </p>
+            {deleteError && <p className="text-sm text-[#8A2E1F]">{deleteError}</p>}
             <div className="flex justify-end gap-2 pt-1">
               <button
                 type="button"

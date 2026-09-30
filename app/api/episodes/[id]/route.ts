@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { requireUserId, requireOwnedEpisode, AuthError } from "@/lib/authz";
 import { jsonResponse } from "@/lib/json";
 import { getFullEpisode } from "@/lib/episode";
+import { deleteEpisodeStorage } from "@/lib/pipeline/cleanup";
 import { z } from "zod";
 
 // requireUserId/requireOwnedEpisode lèvent au lieu de répondre directement
@@ -84,13 +85,25 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   let userId: string;
+  let episode;
   try {
     userId = await requireUserId();
-    await requireOwnedEpisode(userId, id);
+    episode = await requireOwnedEpisode(userId, id);
   } catch (err) {
     return errorResponse(err);
   }
 
+  // Un épisode exporté est définitivement figé (cf. /restart-tunnel) : le
+  // supprimer permettrait de contourner la limite du forfait gratuit (1
+  // épisode) en recommençant indéfiniment avec un nouvel épisode "vierge".
+  if (episode.status === "EXPORTED") {
+    return NextResponse.json({ error: "Cet épisode a été validé et ne peut plus être supprimé." }, { status: 403 });
+  }
+
+  // Avant la cascade Prisma (qui efface les lignes mais jamais les fichiers
+  // qu'elles référencent) : supprime les objets R2/B2 propres à cet épisode,
+  // sans quoi ils resteraient orphelins (et facturés) indéfiniment.
+  await deleteEpisodeStorage(id);
   await prisma.episode.delete({ where: { id } });
   return NextResponse.json({ ok: true });
 }
