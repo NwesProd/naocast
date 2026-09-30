@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { auth, signOut } from "@/auth";
 import { prisma } from "@/lib/db";
 import { getSignedDownloadUrl } from "@/lib/storage";
@@ -21,10 +20,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex min-h-screen">
-      <aside className="w-56 shrink-0 bg-peach-sidebar flex flex-col h-screen sticky top-0 overflow-hidden">
-        <Link href="/dashboard" className="px-5 py-5 font-display font-bold text-lg tracking-tight text-ink shrink-0">
-          naocast.
-        </Link>
+      <aside className="w-56 shrink-0 bg-peach-sidebar flex flex-col h-screen sticky top-0 overflow-hidden pt-4">
         <SidebarNav
           podcastHeader={podcastHeader}
           plan={user?.plan ?? "FREE"}
