@@ -1,7 +1,18 @@
 import Stripe from "stripe";
 import type { Plan } from "@/app/generated/prisma/client";
 
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "");
+// Instancié paresseusement (au premier accès à `stripe.xxx`), jamais au
+// chargement du module : Railway ne fournit les variables d'environnement
+// qu'à l'exécution, pas pendant `npm run build` (Dockerfile), un
+// `new Stripe("")` immédiat (clé absente à ce stade) plante le build avec
+// "Neither apiKey nor config.authenticator provided".
+let _stripe: Stripe | null = null;
+export const stripe: Stripe = new Proxy({} as Stripe, {
+  get(_target, prop, receiver) {
+    if (!_stripe) _stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "");
+    return Reflect.get(_stripe, prop, receiver);
+  },
+});
 
 export type BillingInterval = "month" | "year";
 
