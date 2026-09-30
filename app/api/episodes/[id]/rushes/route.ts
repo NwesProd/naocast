@@ -2,13 +2,13 @@ import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { prisma } from "@/lib/db";
 import { jsonResponse } from "@/lib/json";
-import { putLocalFile } from "@/lib/storage";
+import { putObjectStreamUnknownLength } from "@/lib/storage";
 import { parseMultipart } from "@/lib/parseMultipart";
 import { requireUserId, requireOwnedEpisode } from "@/lib/authz";
 import { getDurationSec } from "@/lib/pipeline/ffmpeg";
 import { mkdtemp, rm, stat } from "fs/promises";
 import { createWriteStream } from "fs";
-import { pipeline } from "stream/promises";
+import { finished } from "stream/promises";
 import { tmpdir } from "os";
 import path from "path";
 import { z } from "zod";
@@ -40,6 +40,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const tmpDir = await mkdtemp(path.join(tmpdir(), "podtool-rush-"));
     let originalFilename: string | null = null;
     let tmpPath: string | null = null;
+    let storageKey: string | null = null;
 
     try {
       await parseMultipart(req, async (file) => {
@@ -49,16 +50,24 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         }
         originalFilename = file.filename;
         tmpPath = path.join(tmpDir, file.filename);
-        await pipeline(file.stream, createWriteStream(tmpPath));
+        storageKey = `rushes/${episodeId}/${randomUUID()}-${file.filename}`;
+
+        // Écriture locale (nécessaire à ffprobe juste après) ET envoi à R2 en
+        // parallèle sur le même flux entrant, plutôt que l'un après l'autre :
+        // pour un rush de plusieurs centaines de Mo, ça évite de faire durer
+        // la requête le temps de DEUX passages séquentiels sur le fichier
+        // (écrire sur disque, puis le relire pour l'envoyer), cause probable
+        // des 502 Railway observés sur des uploads lents.
+        const tmpWriteStream = createWriteStream(tmpPath);
+        file.stream.pipe(tmpWriteStream);
+        await Promise.all([finished(tmpWriteStream), putObjectStreamUnknownLength(storageKey, file.stream, file.mimeType)]);
       });
 
-      if (!tmpPath || !originalFilename) {
+      if (!tmpPath || !originalFilename || !storageKey) {
         return NextResponse.json({ error: "Fichier manquant." }, { status: 400 });
       }
 
       const { size: fileSizeBytes } = await stat(tmpPath);
-      const storageKey = `rushes/${episodeId}/${randomUUID()}-${originalFilename}`;
-      await putLocalFile(storageKey, tmpPath);
 
       // Durée (via ffmpeg) quand disponible sur la machine ; en son absence le
       // rush reste utilisable, seule sa durée ne s'affiche pas. Transcription

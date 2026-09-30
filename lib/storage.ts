@@ -1,4 +1,5 @@
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { Upload } from "@aws-sdk/lib-storage";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { mkdir, readFile, writeFile, unlink, stat } from "fs/promises";
 import { createReadStream, createWriteStream, existsSync } from "fs";
@@ -72,6 +73,34 @@ export async function putObjectStream(
         ContentLength: contentLength,
       })
     );
+    return;
+  }
+  const p = localPath(key);
+  await mkdir(path.dirname(p), { recursive: true });
+  await pipeline(toNodeStream(body), createWriteStream(p));
+}
+
+// Upload en streaming d'un flux dont la taille n'est PAS connue à l'avance
+// (ex. flux busboy consommé en parallèle de son écriture sur disque, cf.
+// app/api/episodes/[id]/rushes/route.ts) : passe par un upload multipart S3
+// (`@aws-sdk/lib-storage`), qui bufferise seulement par petits blocs (~5-10
+// Mo) au lieu d'exiger la longueur totale comme `putObjectStream`. Pour un
+// gros rush vidéo, évite surtout de devoir écrire sur disque PUIS relire ce
+// même fichier pour l'envoyer à R2 (deux passages séquentiels sur un fichier
+// de plusieurs centaines de Mo, cause probable des 502 observés en
+// production sur des uploads lents) : ici l'écriture locale (pour ffprobe) et
+// l'envoi à R2 se font en parallèle, sur le même flux entrant.
+export async function putObjectStreamUnknownLength(
+  key: string,
+  body: ReadableStream | Readable,
+  contentType?: string
+): Promise<void> {
+  if (s3 && bucket) {
+    const upload = new Upload({
+      client: s3,
+      params: { Bucket: bucket, Key: key, Body: toNodeStream(body), ContentType: contentType },
+    });
+    await upload.done();
     return;
   }
   const p = localPath(key);
