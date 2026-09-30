@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { Prisma } from "@/app/generated/prisma/client";
-import { putObjectStream } from "@/lib/storage";
+import { putObject } from "@/lib/storage";
 import { parseMultipart } from "@/lib/parseMultipart";
 import { requireUserId, AuthError } from "@/lib/authz";
 import { jsonResponse } from "@/lib/json";
@@ -41,8 +41,15 @@ export async function POST(req: Request) {
       file.stream.resume();
       return;
     }
+    // Documents de référence (bible existante, notes...) : de petits fichiers
+    // (.pdf/.txt/.md), bufferisés en mémoire pour l'upload plutôt qu'en
+    // streaming, un flux busboy n'expose jamais sa longueur à l'avance, or
+    // R2 refuse l'upload "chunked" sans longueur connue (contrairement à un
+    // Buffer, dont la taille est explicite).
+    const chunks: Buffer[] = [];
+    for await (const chunk of file.stream) chunks.push(chunk as Buffer);
     const key = `podcast/reference/${randomUUID()}-${file.filename}`;
-    await putObjectStream(key, file.stream, file.mimeType);
+    await putObject(key, Buffer.concat(chunks), file.mimeType);
     newFiles.push({ key, filename: file.filename, mimeType: file.mimeType });
   });
 
