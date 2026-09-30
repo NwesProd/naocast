@@ -286,115 +286,122 @@ export function SidebarNav({
   ];
 
   return (
-    <nav className="flex-1 px-3 flex flex-col">
-    <div className="space-y-1">
-      {podcastHeader && (
-        <>
-          <Link
-            href="/podcast/dashboard"
-            className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold truncate ${
-              pathname === "/podcast/dashboard" ? "bg-primary-button text-white" : "text-peach-ink hover:bg-white/40"
-            }`}
-            title={podcastHeader.title}
-          >
-            {podcastHeader.coverUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element -- fichier utilisateur servi dynamiquement (local ou signé), pas un asset buildé
-              <img
-                src={podcastHeader.coverUrl}
-                alt=""
-                className="h-6 w-6 rounded object-cover shrink-0"
-              />
-            ) : (
-              <span className="h-6 w-6 rounded bg-peach-ink/20 text-[11px] font-bold flex items-center justify-center shrink-0">
-                {podcastHeader.title.slice(0, 1).toUpperCase()}
-              </span>
-            )}
-            <span className="truncate">{podcastHeader.title}</span>
-          </Link>
-          <hr className="my-2 border-peach-muted/20" />
-        </>
-      )}
+    <nav className="flex-1 min-h-0 px-3 flex flex-col">
+      {/* Fixe en haut : podcast + Mon podcast/Épisodes, jamais affecté par le défilement des modules. */}
+      <div className="shrink-0 space-y-1">
+        {podcastHeader && (
+          <>
+            <Link
+              href="/podcast/dashboard"
+              className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold truncate ${
+                pathname === "/podcast/dashboard" ? "bg-primary-button text-white" : "text-peach-ink hover:bg-white/40"
+              }`}
+              title={podcastHeader.title}
+            >
+              {podcastHeader.coverUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element -- fichier utilisateur servi dynamiquement (local ou signé), pas un asset buildé
+                <img
+                  src={podcastHeader.coverUrl}
+                  alt=""
+                  className="h-6 w-6 rounded object-cover shrink-0"
+                />
+              ) : (
+                <span className="h-6 w-6 rounded bg-peach-ink/20 text-[11px] font-bold flex items-center justify-center shrink-0">
+                  {podcastHeader.title.slice(0, 1).toUpperCase()}
+                </span>
+              )}
+              <span className="truncate">{podcastHeader.title}</span>
+            </Link>
+            <hr className="my-2 border-peach-muted/20" />
+          </>
+        )}
 
-      {LINKS.map((link) => {
-        const active =
-          pathname === link.href || (link.href === "/dashboard" && pathname.startsWith("/episodes") && !insideMontage);
-        return (
-          <Link
-            key={link.href}
-            href={link.href}
-            className={`block rounded-md px-3 py-2 text-sm font-medium ${
-              active ? "bg-primary-button text-white" : "text-peach-muted hover:text-peach-ink"
-            }`}
-          >
-            {link.label}
-          </Link>
-        );
-      })}
+        {LINKS.map((link) => {
+          const active =
+            pathname === link.href || (link.href === "/dashboard" && pathname.startsWith("/episodes") && !insideMontage);
+          return (
+            <Link
+              key={link.href}
+              href={link.href}
+              className={`block rounded-md px-3 py-2 text-sm font-medium ${
+                active ? "bg-primary-button text-white" : "text-peach-muted hover:text-peach-ink"
+              }`}
+            >
+              {link.label}
+            </Link>
+          );
+        })}
 
-      <hr className="my-2 border-peach-muted/20" />
+        <hr className="my-2 border-peach-muted/20" />
+      </div>
 
-      {episode && (
-        <div className="px-3 py-1.5 text-sm text-peach-muted truncate cursor-default" title={episode.title || "Sans titre"}>
-          {label ? `${label} · ${episode.title || "Sans titre"}` : episode.title || "Sans titre"}
-        </div>
-      )}
+      {/* Défilant : liste des modules, peut dépasser la hauteur disponible
+          (beaucoup de modules à terme) sans pousser le haut/bas hors écran. */}
+      <div className="flex-1 min-h-0 overflow-y-auto space-y-1">
+        {episode && (
+          <div className="px-3 py-1.5 text-sm text-peach-muted truncate cursor-default" title={episode.title || "Sans titre"}>
+            {label ? `${label} · ${episode.title || "Sans titre"}` : episode.title || "Sans titre"}
+          </div>
+        )}
 
-      {!episode && (
-        <p className="px-3 py-1.5 text-xs text-peach-muted">
-          Sélectionne un épisode pour débloquer les modules
-        </p>
-      )}
+        {!episode && (
+          <p className="px-3 py-1.5 text-xs text-peach-muted">
+            Sélectionne un épisode pour débloquer les modules
+          </p>
+        )}
 
-      {MODULE_GROUPS.map((group) => (
-        <div key={group.label} className="pt-2">
-          <p className="px-3 pb-1 text-[10px] font-bold uppercase tracking-wide text-peach-muted/70">{group.label}</p>
-          {group.modules.map((mod) => {
-            const moduleKey = MODULE_KEY_BY_LABEL[mod.label];
-            const planLocked = !!moduleKey && !hasModuleAccess(plan, moduleKey);
+        {MODULE_GROUPS.map((group) => (
+          <div key={group.label} className="pt-2">
+            <p className="px-3 pb-1 text-[10px] font-bold uppercase tracking-wide text-peach-muted/70">{group.label}</p>
+            {group.modules.map((mod) => {
+              const moduleKey = MODULE_KEY_BY_LABEL[mod.label];
+              const planLocked = !!moduleKey && !hasModuleAccess(plan, moduleKey);
 
-            if (mod.href && !planLocked) {
+              if (mod.href && !planLocked) {
+                return (
+                  <Link
+                    key={mod.label}
+                    href={mod.href}
+                    className={`flex items-center justify-between gap-2 rounded-md px-3 py-2 text-sm font-medium ${
+                      (mod.label === "Montage" ? insideMontage : pathname.startsWith(mod.href))
+                        ? "bg-primary-button text-white"
+                        : "text-peach-muted hover:text-peach-ink"
+                    }`}
+                  >
+                    <span>{mod.label}</span>
+                    {mod.done && <CheckIcon />}
+                  </Link>
+                );
+              }
+
               return (
-                <Link
+                <div
                   key={mod.label}
-                  href={mod.href}
-                  className={`flex items-center justify-between gap-2 rounded-md px-3 py-2 text-sm font-medium ${
-                    (mod.label === "Montage" ? insideMontage : pathname.startsWith(mod.href))
-                      ? "bg-primary-button text-white"
-                      : "text-peach-muted hover:text-peach-ink"
-                  }`}
+                  className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-peach-muted/50 cursor-not-allowed"
+                  title={
+                    planLocked
+                      ? "Réservé à naocast infinity et naocast lifetime"
+                      : mod.label === "Montage" ||
+                          mod.label === "Intro" ||
+                          mod.label === "Transcript" ||
+                          mod.label === "Invités" ||
+                          mod.label === "Script"
+                        ? "Sélectionnez un épisode pour y accéder"
+                        : "Bientôt disponible"
+                  }
                 >
-                  <span>{mod.label}</span>
-                  {mod.done && <CheckIcon />}
-                </Link>
+                  <LockIcon />
+                  {mod.label}
+                </div>
               );
-            }
+            })}
+          </div>
+        ))}
+      </div>
 
-            return (
-              <div
-                key={mod.label}
-                className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-peach-muted/50 cursor-not-allowed"
-                title={
-                  planLocked
-                    ? "Réservé à naocast infinity et naocast lifetime"
-                    : mod.label === "Montage" ||
-                        mod.label === "Intro" ||
-                        mod.label === "Transcript" ||
-                        mod.label === "Invités" ||
-                        mod.label === "Script"
-                      ? "Sélectionnez un épisode pour y accéder"
-                      : "Bientôt disponible"
-                }
-              >
-                <LockIcon />
-                {mod.label}
-              </div>
-            );
-          })}
-        </div>
-      ))}
-    </div>
-
-      <div className="mt-auto pt-3 pb-1 space-y-2">
+      {/* Fixe en bas : forfait + Paramètres, juste au-dessus de Déconnexion
+          (rendue par le layout parent, hors de ce composant). */}
+      <div className="shrink-0 pt-3 pb-1 space-y-2">
         <hr className="border-peach-muted/20" />
         <PlanUsageCard usage={usage} />
         <Link

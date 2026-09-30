@@ -21,8 +21,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex min-h-screen">
-      <aside className="w-56 shrink-0 bg-peach-sidebar flex flex-col">
-        <Link href="/dashboard" className="px-5 py-5 font-display font-bold text-lg tracking-tight text-ink">
+      <aside className="w-56 shrink-0 bg-peach-sidebar flex flex-col h-screen sticky top-0 overflow-hidden">
+        <Link href="/dashboard" className="px-5 py-5 font-display font-bold text-lg tracking-tight text-ink shrink-0">
           naocast.
         </Link>
         <SidebarNav
@@ -36,14 +36,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               "use server";
               await signOut({ redirectTo: "/login" });
             }}
-            className="px-3 pb-5"
+            className="px-3 pb-5 shrink-0"
           >
             <button className="w-full text-left rounded-md px-3 py-2 text-sm text-peach-muted hover:text-peach-ink">
               Déconnexion
             </button>
           </form>
         )}
-        <p className="px-3 pb-4 text-[11px] text-peach-muted/60">From Naoned with 🧡</p>
+        <p className="px-3 pb-4 text-[11px] text-peach-muted/60 shrink-0">From Naoned with 🧡</p>
       </aside>
       <div className="flex-1 bg-background">{children}</div>
     </div>
