@@ -9,7 +9,6 @@ import type { Plan } from "@/app/generated/prisma/client";
 const LINKS = [
   { href: "/podcast", label: "Mon podcast" },
   { href: "/dashboard", label: "Épisodes" },
-  { href: "/billing", label: "Abonnement" },
 ];
 
 // Modules dont l'accès dépend du forfait (cf. lib/plan.ts) parmi ceux
@@ -60,6 +59,59 @@ function CheckIcon() {
   );
 }
 
+function CrownIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="shrink-0 text-primary-button">
+      <path
+        d="M4 8l3.5 3L12 5l4.5 6L20 8l-1.5 10h-13L4 8z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+// Aperçu du forfait en bas de sidebar (cf. maquette fournie) : nom du
+// forfait, quota d'épisodes consommé (masqué si illimité), et accès rapide
+// à /billing pour upgrader.
+function PlanUsageCard({ usage }: { usage: SidebarUsage }) {
+  const unlimited = usage.limit === null;
+  const percent = unlimited ? 0 : Math.min(100, Math.round((usage.used / Math.max(usage.limit!, 1)) * 100));
+
+  return (
+    <div className="rounded-xl border border-peach-muted/20 bg-white/60 p-3 space-y-2">
+      <div className="flex items-center gap-1.5 text-xs font-semibold text-peach-ink">
+        <CrownIcon />
+        {usage.planLabel}
+      </div>
+      {unlimited ? (
+        <p className="text-[11px] text-peach-muted">Épisodes illimités</p>
+      ) : (
+        <>
+          <p className="text-[11px] text-peach-muted">
+            {usage.used}/{usage.limit} épisode{usage.limit! > 1 ? "s" : ""} {usage.periodLabel}
+          </p>
+          <div className="h-1.5 w-full rounded-pill bg-peach-muted/20 overflow-hidden">
+            <div
+              className={`h-full rounded-pill ${percent >= 100 ? "bg-[#8A2E1F]" : "bg-primary-button"}`}
+              style={{ width: `${Math.max(percent, 6)}%` }}
+            />
+          </div>
+        </>
+      )}
+      {usage.plan !== "LIFETIME" && (
+        <Link
+          href="/billing"
+          className="block text-center rounded-pill bg-primary-button text-white text-xs font-semibold py-1.5 hover:opacity-90 transition"
+        >
+          {usage.plan === "FREE" || usage.plan === "BASIC" ? "Devenir Pro" : "Gérer mon abonnement"}
+        </Link>
+      )}
+    </div>
+  );
+}
+
 interface SelectedEpisode {
   title: string | null;
   season: number | null;
@@ -77,7 +129,23 @@ interface PodcastHeader {
   coverUrl: string | null;
 }
 
-export function SidebarNav({ podcastHeader, plan }: { podcastHeader: PodcastHeader | null; plan: Plan }) {
+export interface SidebarUsage {
+  plan: Plan;
+  planLabel: string;
+  used: number;
+  limit: number | null;
+  periodLabel: string;
+}
+
+export function SidebarNav({
+  podcastHeader,
+  plan,
+  usage,
+}: {
+  podcastHeader: PodcastHeader | null;
+  plan: Plan;
+  usage: SidebarUsage;
+}) {
   const pathname = usePathname();
   const urlEpisodeId = pathname.match(/^\/episodes\/([^/]+)/)?.[1] || null;
   const [candidateId, setCandidateId] = useState<string | null>(null);
@@ -218,7 +286,8 @@ export function SidebarNav({ podcastHeader, plan }: { podcastHeader: PodcastHead
   ];
 
   return (
-    <nav className="flex-1 px-3 space-y-1">
+    <nav className="flex-1 px-3 flex flex-col">
+    <div className="space-y-1">
       {podcastHeader && (
         <>
           <Link
@@ -323,6 +392,20 @@ export function SidebarNav({ podcastHeader, plan }: { podcastHeader: PodcastHead
           })}
         </div>
       ))}
+    </div>
+
+      <div className="mt-auto pt-3 pb-1 space-y-2">
+        <hr className="border-peach-muted/20" />
+        <PlanUsageCard usage={usage} />
+        <Link
+          href="/account"
+          className={`block rounded-md px-3 py-2 text-sm font-medium ${
+            pathname === "/account" ? "bg-primary-button text-white" : "text-peach-muted hover:text-peach-ink"
+          }`}
+        >
+          Paramètres
+        </Link>
+      </div>
     </nav>
   );
 }

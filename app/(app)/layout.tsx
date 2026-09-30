@@ -2,6 +2,7 @@ import Link from "next/link";
 import { auth, signOut } from "@/auth";
 import { prisma } from "@/lib/db";
 import { getSignedDownloadUrl } from "@/lib/storage";
+import { getEpisodeUsage } from "@/lib/entitlements";
 import { SidebarNav } from "@/components/SidebarNav";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -13,6 +14,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const user = session?.user
     ? await prisma.user.findUnique({ where: { id: session.user.id }, select: { plan: true } })
     : null;
+  const usage = session?.user ? await getEpisodeUsage(session.user.id) : null;
   const podcastHeader = podcast
     ? { title: podcast.title, coverUrl: podcast.coverKey ? await getSignedDownloadUrl(podcast.coverKey) : null }
     : null;
@@ -23,7 +25,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <Link href="/dashboard" className="px-5 py-5 font-display font-bold text-lg tracking-tight text-ink">
           naocast.
         </Link>
-        <SidebarNav podcastHeader={podcastHeader} plan={user?.plan ?? "FREE"} />
+        <SidebarNav
+          podcastHeader={podcastHeader}
+          plan={user?.plan ?? "FREE"}
+          usage={usage ?? { plan: "FREE", planLabel: "naocast free", used: 0, limit: 1, periodLabel: "au total" }}
+        />
         {session?.user && (
           <form
             action={async () => {

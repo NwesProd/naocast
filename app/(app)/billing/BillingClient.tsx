@@ -31,22 +31,15 @@ const PLAN_CARDS: PlanCard[] = [
     yearlyCheckoutKey: "BASIC_YEAR",
     note: "10 épisodes/mois · 1 podcast · ou 228€ TTC/an",
   },
-  {
-    key: "INFINITY",
-    name: "naocast infinity",
-    modules: "Tous les modules",
-    priceLabel: "89€ TTC / mois",
-    monthlyCheckoutKey: "INFINITY_MONTH",
-    yearlyCheckoutKey: "INFINITY_YEAR",
-    note: "Illimité · multi-podcast · ou 890€ TTC/an",
-  },
+  // naocast infinity masqué pour le moment (offre pas encore mise en avant),
+  // le forfait existe toujours côté quotas/Stripe, seule la carte est cachée.
   {
     key: "LIFETIME",
     name: "naocast lifetime",
     modules: "Tous les modules",
     priceLabel: "328€ TTC une fois",
     lifetimeCheckoutKey: "LIFETIME",
-    note: "Illimité · multi-podcast · offre limitée à 50 utilisateurs",
+    note: "Épisodes illimités · multi-podcast",
   },
 ];
 
@@ -129,7 +122,7 @@ export function BillingClient({
 
       {error && <p className="text-sm text-[#8A2E1F]">{error}</p>}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {PLAN_CARDS.map((card) => {
           const current = usage.plan === card.key;
           return (
