@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { putObjectStream, putLocalFile } from "@/lib/storage";
+import { putObject, putLocalFile } from "@/lib/storage";
 import { parseMultipart } from "@/lib/parseMultipart";
 import { requireUserId, AuthError } from "@/lib/authz";
 import { transcodeForWebPreview } from "@/lib/pipeline/ffmpeg";
@@ -68,7 +68,12 @@ export async function POST(req: Request) {
       const key = `${prefix}/${randomUUID()}-${file.filename}`;
 
       if (!TRANSCODE_PREVIEW_FIELDS.has(file.fieldName)) {
-        await putObjectStream(key, file.stream, file.mimeType);
+        // Pochette/logo : petites images, bufferisées en mémoire pour
+        // l'upload. Un flux busboy n'expose jamais sa longueur à l'avance,
+        // or R2 refuse l'upload "chunked" sans longueur connue.
+        const chunks: Buffer[] = [];
+        for await (const chunk of file.stream) chunks.push(chunk as Buffer);
+        await putObject(key, Buffer.concat(chunks), file.mimeType);
         keys[file.fieldName] = key;
         return;
       }

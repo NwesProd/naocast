@@ -34,6 +34,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             </button>
           </form>
         )}
+        <p className="px-3 pb-4 text-[11px] text-peach-muted/60">From Naoned with 🧡</p>
       </aside>
       <div className="flex-1 bg-background">{children}</div>
     </div>

@@ -1,6 +1,6 @@
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { mkdir, readFile, writeFile, unlink } from "fs/promises";
+import { mkdir, readFile, writeFile, unlink, stat } from "fs/promises";
 import { createReadStream, createWriteStream, existsSync } from "fs";
 import { pipeline } from "stream/promises";
 import { Readable } from "stream";
@@ -52,15 +52,25 @@ function toNodeStream(body: ReadableStream | Readable): Readable {
 }
 
 // Écrit un fichier (upload direct, rendu ffmpeg, etc.) en streaming, sans le
-// charger entièrement en mémoire.
+// charger entièrement en mémoire. `contentLength`, quand connu (fichier déjà
+// sur disque, cf. `putLocalFile`), est transmis à S3/R2 : sans lui, le SDK
+// ne peut pas signer la requête en "chunked" (non supporté par R2), et
+// l'upload reste bloqué indéfiniment côté client.
 export async function putObjectStream(
   key: string,
   body: ReadableStream | Readable,
-  contentType?: string
+  contentType?: string,
+  contentLength?: number
 ): Promise<void> {
   if (s3 && bucket) {
     await s3.send(
-      new PutObjectCommand({ Bucket: bucket, Key: key, Body: toNodeStream(body), ContentType: contentType })
+      new PutObjectCommand({
+        Bucket: bucket,
+        Key: key,
+        Body: toNodeStream(body),
+        ContentType: contentType,
+        ContentLength: contentLength,
+      })
     );
     return;
   }
@@ -70,9 +80,11 @@ export async function putObjectStream(
 }
 
 // Copie un fichier déjà sur disque (résultat ffmpeg, fichier rapatrié
-// d'une source externe) vers le stockage, en streaming.
+// d'une source externe) vers le stockage, en streaming. Sa taille, connue à
+// l'avance (contrairement à un flux d'upload busboy), est transmise à S3/R2.
 export async function putLocalFile(key: string, filePath: string, contentType?: string): Promise<void> {
-  await putObjectStream(key, createReadStream(filePath), contentType);
+  const { size } = await stat(filePath);
+  await putObjectStream(key, createReadStream(filePath), contentType, size);
 }
 
 // Pour les tout petits fichiers (config JSON, etc.) où un Buffer en mémoire
