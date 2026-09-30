@@ -1,6 +1,9 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
+import { getUserPlan } from "@/lib/entitlements";
+import { hasModuleAccess } from "@/lib/plan";
+import { PlanLockedNotice } from "@/components/PlanLockedNotice";
 import { ScriptModuleClient } from "./ScriptModuleClient";
 
 // Module "Script" (catégorie Prod) : idées d'angles/thèmes pour l'épisode,
@@ -19,6 +22,15 @@ export default async function ScriptPage({ params }: { params: Promise<{ id: str
   });
   if (!episode || episode.podcast.userId !== session.user.id) redirect("/dashboard");
   if (!episode.title) redirect(`/episodes/${id}/new`);
+
+  const plan = await getUserPlan(session.user.id);
+  if (!hasModuleAccess(plan, "script")) {
+    return (
+      <main className="p-8 max-w-4xl w-full">
+        <PlanLockedNotice moduleLabel="Script" />
+      </main>
+    );
+  }
 
   return (
     <main className="p-8 max-w-4xl w-full">

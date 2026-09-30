@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireUserId, requireOwnedEpisode } from "@/lib/authz";
 import { jsonResponse } from "@/lib/json";
+import { assertModuleAccess, ModuleLockedError } from "@/lib/entitlements";
 import { z } from "zod";
 
 // Rattache un invité déjà existant du pool (cf. /api/podcast/guests) à cet
@@ -13,6 +14,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const userId = await requireUserId();
   const { id: episodeId } = await params;
   const episode = await requireOwnedEpisode(userId, episodeId);
+  try {
+    await assertModuleAccess(userId, "invites");
+  } catch (err) {
+    if (err instanceof ModuleLockedError) return NextResponse.json({ error: err.message }, { status: 403 });
+    throw err;
+  }
 
   const parsed = bodySchema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: "Requête invalide." }, { status: 400 });

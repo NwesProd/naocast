@@ -17,6 +17,18 @@ enum ProfileType {
   AUTRE
 }
 
+// naocast free : Intro/Montage/Transcript, 1 épisode au total.
+// naocast basic : Intro/Montage/Transcript, 10 épisodes/mois, 1 podcast.
+// naocast infinity : tous les modules, illimité, multi-podcast (abonnement).
+// naocast lifetime : tous les modules, illimité, multi-podcast (paiement
+// unique, offre limitée à 50 utilisateurs).
+enum Plan {
+  FREE
+  BASIC
+  INFINITY
+  LIFETIME
+}
+
 model User {
   id           String      @id @default(cuid())
   email        String      @unique
@@ -27,6 +39,18 @@ model User {
   // Un seul podcast par compte au MVP (multi-podcasts hors scope)
   podcast     Podcast?
   resetTokens PasswordResetToken[]
+
+  // Abonnement (cf. lib/plan.ts pour les quotas/modules associés à chaque
+  // plan). `stripeSubscriptionId` est absent pour FREE et LIFETIME (achat
+  // unique, pas d'abonnement récurrent côté Stripe).
+  plan                 Plan      @default(FREE)
+  stripeCustomerId     String?   @unique
+  stripeSubscriptionId String?   @unique
+  stripePriceId        String?
+  // Statut brut renvoyé par Stripe (active, past_due, canceled...), utilisé
+  // pour distinguer un abonnement suspendu (impayé) d'un downgrade explicite.
+  subscriptionStatus   String?
+  currentPeriodEnd     DateTime?
 }
 
 model PasswordResetToken {

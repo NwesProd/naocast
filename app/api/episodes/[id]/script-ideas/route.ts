@@ -5,6 +5,7 @@ import { requireUserId, requireOwnedEpisode } from "@/lib/authz";
 import { jsonResponse } from "@/lib/json";
 import { episodeLabel } from "@/lib/episode";
 import { generateScriptIdeas } from "@/lib/pipeline/scriptIdeas";
+import { assertModuleAccess, ModuleLockedError } from "@/lib/entitlements";
 import { z } from "zod";
 
 const bodySchema = z.object({ draftNotes: z.string().optional() });
@@ -17,6 +18,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const userId = await requireUserId();
   const { id: episodeId } = await params;
   const episode = await requireOwnedEpisode(userId, episodeId);
+  try {
+    await assertModuleAccess(userId, "script");
+  } catch (err) {
+    if (err instanceof ModuleLockedError) return NextResponse.json({ error: err.message }, { status: 403 });
+    throw err;
+  }
 
   const parsed = bodySchema.safeParse(await req.json().catch(() => ({})));
   const draftNotes = parsed.success ? parsed.data.draftNotes : undefined;

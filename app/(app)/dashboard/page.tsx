@@ -1,8 +1,10 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
+import { getEpisodeUsage } from "@/lib/entitlements";
 import { NewEpisodeButton } from "./NewEpisodeButton";
 import { EpisodeCard } from "./EpisodeCard";
+import { PlanUsageBanner } from "./PlanUsageBanner";
 
 export default async function DashboardPage() {
   const session = await auth();
@@ -10,6 +12,8 @@ export default async function DashboardPage() {
 
   const podcast = await prisma.podcast.findUnique({ where: { userId: session.user.id } });
   if (!podcast) redirect("/podcast");
+
+  const usage = await getEpisodeUsage(session.user.id);
 
   // Le plus gros SxEx en premier (S2 avant S1, E5 avant E3 au sein d'une même
   // saison), les épisodes sans saison/numéro renseignés (brouillon tout
@@ -34,6 +38,8 @@ export default async function DashboardPage() {
         </div>
         <NewEpisodeButton />
       </div>
+
+      <PlanUsageBanner usage={usage} />
 
       {episodes.length === 0 ? (
         <p className="text-text-muted text-sm">Aucun épisode pour le moment.</p>

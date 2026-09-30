@@ -25,7 +25,14 @@ import { z } from "zod";
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const userId = await requireUserId();
   const { id: episodeId } = await params;
-  await requireOwnedEpisode(userId, episodeId);
+  const episode = await requireOwnedEpisode(userId, episodeId);
+
+  // Épisode déjà exporté : figé, cf. /restart-tunnel pour le raisonnement
+  // (empêche de réutiliser indéfiniment le même épisode avec des rushs
+  // différents pour contourner la limite du forfait gratuit).
+  if (episode.status === "EXPORTED") {
+    return NextResponse.json({ error: "Cet épisode a déjà été exporté et ne peut plus être modifié." }, { status: 403 });
+  }
 
   const contentType = req.headers.get("content-type") || "";
 

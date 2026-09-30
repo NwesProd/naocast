@@ -4,6 +4,7 @@ import { requireUserId, requireOwnedEpisode } from "@/lib/authz";
 import { jsonResponse } from "@/lib/json";
 import { episodeLabel } from "@/lib/episode";
 import { generateGuestMessage } from "@/lib/pipeline/guestMessage";
+import { assertModuleAccess, ModuleLockedError } from "@/lib/entitlements";
 import { z } from "zod";
 
 // Enregistre une modification manuelle du message (copier/éditer), la
@@ -33,6 +34,12 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   const userId = await requireUserId();
   const { id: episodeId } = await params;
   await requireOwnedEpisode(userId, episodeId);
+  try {
+    await assertModuleAccess(userId, "invites");
+  } catch (err) {
+    if (err instanceof ModuleLockedError) return NextResponse.json({ error: err.message }, { status: 403 });
+    throw err;
+  }
 
   const episode = await prisma.episode.findUnique({
     where: { id: episodeId },

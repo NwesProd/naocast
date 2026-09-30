@@ -3,11 +3,25 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { hasModuleAccess, type ModuleKey } from "@/lib/plan";
+import type { Plan } from "@/app/generated/prisma/client";
 
 const LINKS = [
   { href: "/podcast", label: "Mon podcast" },
   { href: "/dashboard", label: "Épisodes" },
+  { href: "/billing", label: "Abonnement" },
 ];
+
+// Modules dont l'accès dépend du forfait (cf. lib/plan.ts) parmi ceux
+// réellement construits, les autres ("Bientôt disponible") ne sont pas
+// concernés tant qu'ils n'existent pas.
+const MODULE_KEY_BY_LABEL: Record<string, ModuleKey> = {
+  Script: "script",
+  Invités: "invites",
+  Intro: "intro",
+  Montage: "montage",
+  Transcript: "transcript",
+};
 
 // Persisté en localStorage : la sélection doit survivre à la navigation vers
 // "Mon podcast" ou "Épisodes" (sinon l'onglet "Montage" se reverrouillerait
@@ -63,7 +77,7 @@ interface PodcastHeader {
   coverUrl: string | null;
 }
 
-export function SidebarNav({ podcastHeader }: { podcastHeader: PodcastHeader | null }) {
+export function SidebarNav({ podcastHeader, plan }: { podcastHeader: PodcastHeader | null; plan: Plan }) {
   const pathname = usePathname();
   const urlEpisodeId = pathname.match(/^\/episodes\/([^/]+)/)?.[1] || null;
   const [candidateId, setCandidateId] = useState<string | null>(null);
@@ -265,39 +279,48 @@ export function SidebarNav({ podcastHeader }: { podcastHeader: PodcastHeader | n
       {MODULE_GROUPS.map((group) => (
         <div key={group.label} className="pt-2">
           <p className="px-3 pb-1 text-[10px] font-bold uppercase tracking-wide text-peach-muted/70">{group.label}</p>
-          {group.modules.map((mod) =>
-            mod.href ? (
-              <Link
-                key={mod.label}
-                href={mod.href}
-                className={`flex items-center justify-between gap-2 rounded-md px-3 py-2 text-sm font-medium ${
-                  (mod.label === "Montage" ? insideMontage : pathname.startsWith(mod.href))
-                    ? "bg-primary-button text-white"
-                    : "text-peach-muted hover:text-peach-ink"
-                }`}
-              >
-                <span>{mod.label}</span>
-                {mod.done && <CheckIcon />}
-              </Link>
-            ) : (
+          {group.modules.map((mod) => {
+            const moduleKey = MODULE_KEY_BY_LABEL[mod.label];
+            const planLocked = !!moduleKey && !hasModuleAccess(plan, moduleKey);
+
+            if (mod.href && !planLocked) {
+              return (
+                <Link
+                  key={mod.label}
+                  href={mod.href}
+                  className={`flex items-center justify-between gap-2 rounded-md px-3 py-2 text-sm font-medium ${
+                    (mod.label === "Montage" ? insideMontage : pathname.startsWith(mod.href))
+                      ? "bg-primary-button text-white"
+                      : "text-peach-muted hover:text-peach-ink"
+                  }`}
+                >
+                  <span>{mod.label}</span>
+                  {mod.done && <CheckIcon />}
+                </Link>
+              );
+            }
+
+            return (
               <div
                 key={mod.label}
                 className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-peach-muted/50 cursor-not-allowed"
                 title={
-                  mod.label === "Montage" ||
-                  mod.label === "Intro" ||
-                  mod.label === "Transcript" ||
-                  mod.label === "Invités" ||
-                  mod.label === "Script"
-                    ? "Sélectionnez un épisode pour y accéder"
-                    : "Bientôt disponible"
+                  planLocked
+                    ? "Réservé à naocast infinity et naocast lifetime"
+                    : mod.label === "Montage" ||
+                        mod.label === "Intro" ||
+                        mod.label === "Transcript" ||
+                        mod.label === "Invités" ||
+                        mod.label === "Script"
+                      ? "Sélectionnez un épisode pour y accéder"
+                      : "Bientôt disponible"
                 }
               >
                 <LockIcon />
                 {mod.label}
               </div>
-            )
-          )}
+            );
+          })}
         </div>
       ))}
     </nav>

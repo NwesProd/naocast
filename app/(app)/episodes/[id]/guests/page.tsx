@@ -1,6 +1,9 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
+import { getUserPlan } from "@/lib/entitlements";
+import { hasModuleAccess } from "@/lib/plan";
+import { PlanLockedNotice } from "@/components/PlanLockedNotice";
 import { GuestsModuleClient } from "./GuestsModuleClient";
 
 // Module "Invités" (catégorie Prod) : gérer les invités de l'épisode (issus
@@ -20,6 +23,15 @@ export default async function GuestsPage({ params }: { params: Promise<{ id: str
   });
   if (!episode || episode.podcast.userId !== session.user.id) redirect("/dashboard");
   if (!episode.title) redirect(`/episodes/${id}/new`);
+
+  const plan = await getUserPlan(session.user.id);
+  if (!hasModuleAccess(plan, "invites")) {
+    return (
+      <main className="p-8 max-w-5xl w-full">
+        <PlanLockedNotice moduleLabel="Invités" />
+      </main>
+    );
+  }
 
   return (
     <main className="p-8 max-w-5xl w-full">

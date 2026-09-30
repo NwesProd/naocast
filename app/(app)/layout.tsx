@@ -10,6 +10,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const podcast = session?.user
     ? await prisma.podcast.findUnique({ where: { userId: session.user.id }, select: { title: true, coverKey: true } })
     : null;
+  const user = session?.user
+    ? await prisma.user.findUnique({ where: { id: session.user.id }, select: { plan: true } })
+    : null;
   const podcastHeader = podcast
     ? { title: podcast.title, coverUrl: podcast.coverKey ? await getSignedDownloadUrl(podcast.coverKey) : null }
     : null;
@@ -20,7 +23,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <Link href="/dashboard" className="px-5 py-5 font-display font-bold text-lg tracking-tight text-ink">
           naocast.
         </Link>
-        <SidebarNav podcastHeader={podcastHeader} />
+        <SidebarNav podcastHeader={podcastHeader} plan={user?.plan ?? "FREE"} />
         {session?.user && (
           <form
             action={async () => {

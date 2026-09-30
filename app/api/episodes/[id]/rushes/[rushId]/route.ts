@@ -37,7 +37,11 @@ export async function DELETE(
 ) {
   const userId = await requireUserId();
   const { id: episodeId, rushId } = await params;
-  await requireOwnedEpisode(userId, episodeId);
+  const episode = await requireOwnedEpisode(userId, episodeId);
+
+  if (episode.status === "EXPORTED") {
+    return NextResponse.json({ error: "Cet épisode a déjà été exporté et ne peut plus être modifié." }, { status: 403 });
+  }
 
   const rush = await prisma.rushSource.findFirst({ where: { id: rushId, episodeId } });
   if (!rush) return NextResponse.json({ error: "Rush introuvable." }, { status: 404 });
