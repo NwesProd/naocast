@@ -22,20 +22,16 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
   const videoExport = sortedExports.find((e) => e.type === "VIDEO");
   const audioExport = sortedExports.find((e) => e.type === "AUDIO");
 
-  // Cache-bust avec un paramètre `v` : storageKey étant fixe, l'URL serait
-  // sinon identique d'un rendu à l'autre et le <video> pouvait réafficher une
-  // version mise en cache (donc pas encore recoupée) malgré un fichier bien
-  // à jour côté serveur, constaté en conditions réelles après "Relancer le
-  // rendu". `&`/`?` selon que l'URL signée a déjà des paramètres (mode S3).
-  function withCacheBust(url: string, version: number): string {
-    return `${url}${url.includes("?") ? "&" : "?"}v=${version}`;
-  }
-  const videoUrl = videoExport
-    ? withCacheBust(await getSignedDownloadUrl(videoExport.storageKey), videoExport.createdAt.getTime())
-    : null;
-  const audioUrl = audioExport
-    ? withCacheBust(await getSignedDownloadUrl(audioExport.storageKey), audioExport.createdAt.getTime())
-    : null;
+  // Pas de paramètre de cache-busting ajouté après coup à l'URL signée :
+  // une URL signée R2/S3 porte sa signature sur l'intégralité de sa query
+  // string, tout ajout la rend invalide (lecture bloquée côté navigateur,
+  // "0:00" sans jamais démarrer). storageKey étant fixe, c'était pour éviter
+  // qu'un <video> réaffiche une version mise en cache après "Relancer le
+  // rendu" : inutile en pratique, la signature elle-même (horodatage +
+  // hash) change à chaque appel de getSignedDownloadUrl, donc l'URL complète
+  // change déjà d'un rendu à l'autre.
+  const videoUrl = videoExport ? await getSignedDownloadUrl(videoExport.storageKey) : null;
+  const audioUrl = audioExport ? await getSignedDownloadUrl(audioExport.storageKey) : null;
 
   // Nom de fichier au téléchargement : "S1E4 Titre de l'épisode - video.mp4"
   // plutôt que le nom technique en base (ex. "final.mp4", identique pour tous

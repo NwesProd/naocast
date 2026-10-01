@@ -26,9 +26,11 @@ export default async function IntroPage({ params }: { params: Promise<{ id: stri
   if (!episode || episode.podcast.userId !== session.user.id) redirect("/dashboard");
   if (!episode.title) redirect(`/episodes/${id}/new`);
 
-  const teaserUrl = episode.introTeaserKey
-    ? `${await getSignedDownloadUrl(episode.introTeaserKey)}${episode.introTeaserKey.includes("?") ? "&" : "?"}v=${episode.updatedAt.getTime()}`
-    : null;
+  // Pas de paramètre ajouté après coup à l'URL signée (cassait sa signature
+  // R2/S3, cf. app/api/episodes/[id]/intro-teaser/route.ts) : inutile de
+  // toute façon, la signature change déjà à chaque appel de
+  // getSignedDownloadUrl.
+  const teaserUrl = episode.introTeaserKey ? await getSignedDownloadUrl(episode.introTeaserKey) : null;
 
   return (
     <main className="p-8 max-w-5xl w-full">

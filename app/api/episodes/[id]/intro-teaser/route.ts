@@ -130,8 +130,16 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
           data: { introTeaserKey: storageKey, introTeaserValidated: false },
         });
 
+        // Ne jamais ajouter de paramètre après coup à une URL signée R2/S3 :
+        // la signature AWS SigV4 porte sur l'intégralité de la query string
+        // au moment de la signature, tout ajout la rend invalide (R2 refuse
+        // alors la lecture, vidéo bloquée à "0:00" côté navigateur). Un
+        // paramètre de cache-busting est de toute façon inutile ici : la
+        // signature (date + hash) change déjà à chaque génération, donc
+        // l'URL complète change aussi, le navigateur ne peut pas servir une
+        // version en cache de l'ancien teaser sous cette URL.
         const url = await getSignedDownloadUrl(storageKey);
-        send({ done: true, episode, url: `${url}${url.includes("?") ? "&" : "?"}v=${Date.now()}` });
+        send({ done: true, episode, url });
       } catch (err) {
         send({ error: (err as Error).message || "Échec de la génération de l'intro." });
       } finally {
