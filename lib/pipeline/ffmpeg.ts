@@ -17,6 +17,15 @@ const execFileAsync = promisify(execFile);
 const FALLBACK_DIRS = ["/opt/homebrew/bin", "/usr/local/bin"];
 const resolvedBinary = new Map<string, string>();
 
+// Preset le plus léger en mémoire/CPU (au prix d'un fichier un peu plus
+// volumineux à qualité égale) et thread unique : ces encodages tournent sur
+// un conteneur à mémoire limitée (Railway), un preset plus poussé ou
+// plusieurs threads font x264 allouer davantage de buffers de lookahead/
+// analyse en parallèle, jusqu'à faire tuer le process par le système (OOM)
+// sur un épisode un peu long ou en haute résolution (constaté en conditions
+// réelles : le process reçoit SIGKILL, "ffmpeg a échoué: tué par le système").
+const X264_ENCODE_ARGS = ["-c:v", "libx264", "-preset", "ultrafast", "-threads", "1"];
+
 function resolveBinary(name: "ffmpeg" | "ffprobe"): string {
   const cached = resolvedBinary.get(name);
   if (cached) return cached;
@@ -225,7 +234,7 @@ export async function concatWithIntroOutro(
     // erreur ffmpeg cryptique ("Could not find tag for codec... not
     // currently supported in container") plutôt que de simplement
     // transcoder, comme le fait déjà la branche multi-segments ci-dessous.
-    const args = ["-i", segments[0], "-c:v", "libx264", "-preset", "veryfast", outputPath];
+    const args = ["-i", segments[0], ...X264_ENCODE_ARGS, outputPath];
     if (onProgress) {
       await runFfmpegWithProgress(args, await getDurationSec(segments[0]), onProgress);
     } else {
@@ -244,10 +253,7 @@ export async function concatWithIntroOutro(
     "[outv]",
     "-map",
     "[outa]",
-    "-c:v",
-    "libx264",
-    "-preset",
-    "veryfast",
+    ...X264_ENCODE_ARGS,
     outputPath,
   ];
 
@@ -400,15 +406,7 @@ export async function renderEpisodeVideo(
     `[${outV}]`,
     "-map",
     `[${mainA}]`,
-    // Preset x264 plus rapide (au prix d'un fichier un peu plus lourd à
-    // qualité égale) : aucune étape de ce pipeline n'a d'accélération
-    // matérielle disponible de façon garantie (VideoToolbox est spécifique
-    // macOS), donc c'est le seul levier de vitesse portable, en local comme
-    // en production.
-    "-c:v",
-    "libx264",
-    "-preset",
-    "veryfast",
+    ...X264_ENCODE_ARGS,
     outputPath,
   ];
 
@@ -461,10 +459,7 @@ export async function assembleClipsInOrder(
     `[${outV}]`,
     "-map",
     `[${outA}]`,
-    "-c:v",
-    "libx264",
-    "-preset",
-    "veryfast",
+    ...X264_ENCODE_ARGS,
     outputPath,
   ];
 
@@ -534,6 +529,6 @@ export async function transcodeForWebPreview(inputPath: string, outputPath: stri
   try {
     await runFfmpeg(previewArgs(inputPath, outputPath, ["-c:v", "h264_videotoolbox", "-b:v", "2M"], maxDurationSec));
   } catch {
-    await runFfmpeg(previewArgs(inputPath, outputPath, ["-c:v", "libx264", "-preset", "veryfast", "-crf", "23"], maxDurationSec));
+    await runFfmpeg(previewArgs(inputPath, outputPath, [...X264_ENCODE_ARGS, "-crf", "23"], maxDurationSec));
   }
 }
