@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { groupBySpeaker } from "@/lib/transcriptGrouping";
 
 export interface TranscriptWord {
   text: string;
@@ -198,22 +199,27 @@ export function TranscriptCutEditor({
     <div className="space-y-2">
       <p className="text-sm text-mint-muted">
         Cliquez-glissez sur les mots à supprimer (ils passent en rouge). Cliquez sur un passage déjà marqué pour
-        l&apos;annuler. Cliquez sur le nom d&apos;un locuteur pour marquer toute sa phrase.
+        l&apos;annuler. Cliquez sur le nom d&apos;un locuteur pour marquer toute sa prise de parole.
       </p>
       <div className="max-h-[32rem] overflow-y-auto rounded-md bg-white border border-border p-4 text-base leading-loose select-none">
-        {transcript.map((seg) => {
-          const speakerName = speakerDisplay(seg.speaker);
-          const words = seg.words && seg.words.length > 0 ? seg.words : [{ text: seg.text, startMs: seg.startMs, endMs: seg.endMs }];
+        {groupBySpeaker(transcript).map((turn) => {
+          const speakerName = speakerDisplay(turn.speaker);
+          // Tous les mots de la prise de parole, dans l'ordre : les phrases
+          // consécutives d'un même locuteur forment un seul paragraphe, mais
+          // chaque mot garde son index global (même ordre que `flatWords`).
+          const words = turn.segments.flatMap((seg) =>
+            seg.words && seg.words.length > 0 ? seg.words : [{ text: seg.text, startMs: seg.startMs, endMs: seg.endMs }]
+          );
           const segStartIdx = globalIndex;
           const segEndIdx = segStartIdx + words.length - 1;
           return (
-            <p key={seg.id} className="mb-2">
-              <span className="text-text-muted mr-2 text-sm">{formatTime(seg.startMs)}</span>
+            <p key={turn.segments[0].id} className="mb-3">
+              <span className="text-text-muted mr-2 text-sm">{formatTime(turn.startMs)}</span>
               {speakerName && (
                 <span
                   onClick={() => finalizeSelection(segStartIdx, segEndIdx)}
                   className="mr-2 text-sm font-semibold text-[#0F6B67] cursor-pointer hover:underline"
-                  title="Sélectionner toute la phrase pour la couper"
+                  title="Sélectionner toute sa prise de parole pour la couper"
                 >
                   {speakerName} :
                 </span>

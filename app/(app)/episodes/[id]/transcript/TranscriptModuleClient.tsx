@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { useSimulatedProgress } from "@/lib/useSimulatedProgress";
+import { pollJobUntilDone } from "@/lib/pollJob";
+import { groupBySpeaker } from "@/lib/transcriptGrouping";
 
 interface Rush {
   id: string;
@@ -76,15 +78,18 @@ export function TranscriptModuleClient({
     return speakers[idx].displayName || `Locuteur ${idx + 1}`;
   }
 
-  // Même format pour la copie et le téléchargement : une ligne par phrase,
-  // horodatage + locuteur (si connu) + texte, comme affiché à l'écran.
+  // Même format pour la copie et le téléchargement, comme affiché à l'écran :
+  // un paragraphe par prise de parole (les phrases consécutives d'un même
+  // locuteur sont regroupées, son nom n'apparaît qu'une fois), façon
+  // dialogue, séparées par une ligne vide.
   function buildFullText(): string {
-    return transcript
-      .map((s) => {
-        const speakerName = speakerDisplay(s.speaker);
-        return `${formatTime(s.startMs)}${speakerName ? ` ${speakerName} :` : ""} ${s.text}`;
+    return groupBySpeaker(transcript)
+      .map((turn) => {
+        const speakerName = speakerDisplay(turn.speaker);
+        const text = turn.segments.map((s) => s.text).join(" ");
+        return `${formatTime(turn.startMs)}${speakerName ? ` ${speakerName} :` : ""} ${text}`;
       })
-      .join("\n");
+      .join("\n\n");
   }
 
   async function copyTranscript() {
@@ -121,7 +126,15 @@ export function TranscriptModuleClient({
         body: JSON.stringify({ rushId, expectedSpeakerCount }),
       });
       if (!res.ok) throw new Error("Échec de la génération du transcript.");
-      const data = await res.json();
+      // L'endpoint répond immédiatement avec un jobId (traitement en tâche de
+      // fond, cf. app/api/episodes/[id]/transcript) : on attend la fin du job
+      // puis on recharge l'épisode, il ne renvoie plus le transcript lui-même.
+      const { jobId } = await res.json();
+      const job = await pollJobUntilDone(episodeId, jobId);
+      if (job.status === "FAILED") throw new Error(job.errorMessage || "Échec de la génération du transcript.");
+      const episodeRes = await fetch(`/api/episodes/${episodeId}`);
+      if (!episodeRes.ok) throw new Error("Échec du rechargement du transcript.");
+      const data = await episodeRes.json();
       setTranscript(data.transcriptSegments);
       setSpeakers(data.speakers);
     } catch (e) {
@@ -243,13 +256,13 @@ export function TranscriptModuleClient({
 
           <div className="rounded-xl bg-mint p-4">
             <div className="max-h-[36rem] overflow-y-auto space-y-2 text-sm leading-relaxed">
-              {transcript.map((sentence) => {
-                const speakerName = speakerDisplay(sentence.speaker);
+              {groupBySpeaker(transcript).map((turn) => {
+                const speakerName = speakerDisplay(turn.speaker);
                 return (
-                  <p key={sentence.id}>
-                    <span className="text-xs text-text-muted mr-2">{formatTime(sentence.startMs)}</span>
+                  <p key={turn.segments[0].id}>
+                    <span className="text-xs text-text-muted mr-2">{formatTime(turn.startMs)}</span>
                     {speakerName && <span className="mr-2 font-semibold text-[#0F6B67]">{speakerName} :</span>}
-                    {sentence.text}
+                    {turn.segments.map((s) => s.text).join(" ")}
                   </p>
                 );
               })}
