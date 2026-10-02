@@ -30,38 +30,22 @@ export async function cleanupExportedEpisodeFiles(episodeId: string): Promise<vo
 
 // "Recommencer le montage à zéro" (avant validation) : le tunnel repart du
 // début, l'utilisateur réimporte ses rushs. On supprime donc les rushs
-// (fichiers, aperçus, lignes), tout ce qui en dérive (transcript, locuteurs,
-// passages d'intro et teaser construit dessus, découpes, jobs) et les rendus
-// précédents. Restent : les informations de l'épisode, les invités, le script,
-// les génériques choisis et une intro importée à la main, indépendants des rushs.
+// (fichiers, aperçus, lignes), les découpes, les jobs et les rendus précédents.
+// Restent : le transcript (phrases et locuteurs, long à produire), l'intro
+// (passages choisis, teaser compilé et sa validation), les informations de
+// l'épisode, les invités, le script et les génériques choisis.
 export async function resetEpisodeToScratch(episodeId: string): Promise<void> {
-  const episode = await prisma.episode.findUnique({ where: { id: episodeId }, select: { introTeaserChoice: true } });
-
   await deleteObjectsByPrefix(`rushes/${episodeId}/`);
-  // Rendus précédents (exports vidéo/audio) et teaser compilé depuis le transcript.
-  await Promise.all(
-    ["final.mp4", "audio.mp3", "intro-teaser.mp4"].map((name) => deleteObject(`episodes/${episodeId}/${name}`).catch(() => {}))
-  );
+  // Rendus précédents (exports vidéo et audio).
+  await Promise.all(["final.mp4", "audio.mp3"].map((name) => deleteObject(`episodes/${episodeId}/${name}`).catch(() => {})));
 
   await prisma.$transaction([
     prisma.rushSource.deleteMany({ where: { episodeId } }),
-    prisma.transcriptSegment.deleteMany({ where: { episodeId } }),
-    prisma.episodeSpeaker.deleteMany({ where: { episodeId } }),
-    prisma.introSegment.deleteMany({ where: { episodeId } }),
     prisma.cutMarker.deleteMany({ where: { episodeId } }),
     prisma.processingJob.deleteMany({ where: { episodeId } }),
     prisma.exportAsset.deleteMany({ where: { episodeId } }),
-    prisma.episode.update({
-      where: { id: episodeId },
-      data: {
-        status: "DRAFT",
-        transcriptRushId: null,
-        introTeaserKey: null,
-        introTeaserValidated: false,
-        // Une intro importée à la main (IMPORT) n'a aucun lien avec les rushs.
-        introTeaserChoice: episode?.introTeaserChoice === "MODULE" ? "NONE" : episode?.introTeaserChoice,
-      },
-    }),
+    // Le rush du transcript n'existe plus : la référence est vidée, les phrases restent.
+    prisma.episode.update({ where: { id: episodeId }, data: { status: "DRAFT", transcriptRushId: null } }),
   ]);
 }
 

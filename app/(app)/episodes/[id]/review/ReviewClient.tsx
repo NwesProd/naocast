@@ -176,8 +176,9 @@ export function ReviewClient({
 
   // Repasse par le tunnel de montage depuis le début (étapes Cut/Rythme/
   // Générique/Logo...), contrairement à "Relancer le processus" qui ne fait
-  // que réexécuter le même pipeline automatique. Efface rushs, transcript,
-  // découpes, jobs et rendus (cf. /restart-tunnel) : il faut réimporter les rushs.
+  // que réexécuter le même pipeline automatique. Efface rushs, découpes,
+  // jobs et rendus (cf. /restart-tunnel) : il faut réimporter les rushs, le
+  // transcript et l'intro validée sont conservés.
   async function restartTunnel() {
     setRestarting(true);
     try {
@@ -503,8 +504,8 @@ function RestartConfirmModal({
       <div className="bg-white rounded-xl p-5 max-w-sm w-full space-y-3" onClick={(e) => e.stopPropagation()}>
         <h2 className="font-semibold text-ink">Recommencer le montage à zéro ?</h2>
         <p className="text-sm text-text-muted">
-          Les rushs importés, le transcript, les découpes et le rendu actuels seront définitivement supprimés, et le
-          tunnel de montage rouvrira depuis le début : vous devrez réimporter vos rushs.
+          Les rushs importés, les découpes et le rendu actuels seront définitivement supprimés, et le tunnel de
+          montage rouvrira depuis le début : vous devrez réimporter vos rushs. Le transcript et l&apos;intro validée sont conservés.
         </p>
         <div className="flex justify-end gap-2 pt-1">
           <button
