@@ -56,6 +56,19 @@ export const PLAN_MULTI_PODCAST: Record<Plan, boolean> = {
 
 export const LIFETIME_SEATS_LIMIT = 50;
 
-export function hasModuleAccess(plan: Plan, module: ModuleKey): boolean {
-  return PLAN_MODULES[plan].includes(module);
+// Modules réellement construits, avec leur libellé : ce sont les seuls qu'on
+// peut activer à la main pour un utilisateur (les autres de ModuleKey n'existent
+// pas encore dans l'app).
+export const BUILT_MODULES: { key: ModuleKey; label: string }[] = [
+  { key: "script", label: "Script" },
+  { key: "invites", label: "Invités" },
+  { key: "intro", label: "Intro" },
+  { key: "montage", label: "Montage" },
+  { key: "transcript", label: "Transcript" },
+];
+
+// `extraModules` : modules activés à la main pour cet utilisateur, en plus de
+// son forfait (colonne User.extraModules).
+export function hasModuleAccess(plan: Plan, module: ModuleKey, extraModules: readonly string[] = []): boolean {
+  return PLAN_MODULES[plan].includes(module) || extraModules.includes(module);
 }

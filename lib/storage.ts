@@ -1,7 +1,7 @@
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, ListObjectsV2Command } from "@aws-sdk/client-s3";
 import { Upload } from "@aws-sdk/lib-storage";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { mkdir, readFile, writeFile, unlink, stat, rename } from "fs/promises";
+import { mkdir, readFile, writeFile, unlink, stat, rename, readdir } from "fs/promises";
 import { createReadStream, createWriteStream, existsSync } from "fs";
 import { pipeline } from "stream/promises";
 import { Readable } from "stream";
@@ -174,6 +174,37 @@ export async function deleteObject(key: string): Promise<void> {
   }
   const p = localPath(key);
   if (existsSync(p)) await unlink(p);
+}
+
+// Liste tous les objets stockés (clé + poids), pour les statistiques de
+// stockage du back office. Paginé côté S3/R2 (1000 objets par appel) ; en
+// stockage local (dev), parcourt le dossier .data/storage.
+export async function listAllObjects(): Promise<{ key: string; size: number }[]> {
+  const result: { key: string; size: number }[] = [];
+
+  if (s3 && bucket) {
+    let token: string | undefined;
+    do {
+      const page = await s3.send(new ListObjectsV2Command({ Bucket: bucket, ContinuationToken: token }));
+      for (const obj of page.Contents ?? []) {
+        if (obj.Key) result.push({ key: obj.Key, size: obj.Size ?? 0 });
+      }
+      token = page.IsTruncated ? page.NextContinuationToken : undefined;
+    } while (token);
+    return result;
+  }
+
+  async function walk(dir: string, prefix: string) {
+    const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name);
+      const key = prefix ? `${prefix}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) await walk(full, key);
+      else result.push({ key, size: (await stat(full)).size });
+    }
+  }
+  await walk(localRoot, "");
+  return result;
 }
 
 export async function getSignedDownloadUrl(key: string, expiresInSec = 3600): Promise<string> {

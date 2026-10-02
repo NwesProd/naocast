@@ -40,6 +40,19 @@ export function formatDateTime(date: Date): string {
   return date.toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
+// Poids de fichiers : 1 Go = 1024 Mo, un chiffre après la virgule au-delà du Ko.
+export function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} o`;
+  const units = ["Ko", "Mo", "Go", "To"];
+  let value = bytes / 1024;
+  let i = 0;
+  while (value >= 1024 && i < units.length - 1) {
+    value /= 1024;
+    i++;
+  }
+  return `${value.toLocaleString("fr-FR", { maximumFractionDigits: 1 })} ${units[i]}`;
+}
+
 export function formatEuro(amount: number): string {
   return amount.toLocaleString("fr-FR", { style: "currency", currency: "EUR" });
 }

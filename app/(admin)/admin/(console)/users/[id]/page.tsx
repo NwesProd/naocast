@@ -2,8 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireAdminPage } from "@/lib/admin";
 import { prisma } from "@/lib/db";
-import { PlanPill, StatusPill, formatDate, formatDateTime } from "../../ui";
+import { PLAN_MODULES, BUILT_MODULES } from "@/lib/plan";
+import { getStorageReport, type UserStorage } from "@/lib/storageStats";
+import { PlanPill, StatusPill, formatBytes, formatDate, formatDateTime } from "../../ui";
 import { EmailLogTable } from "../../EmailLogTable";
+import { ModulesCard } from "./ModulesCard";
 import { UserActions } from "./UserActions";
 
 export default async function AdminUserPage({ params }: { params: Promise<{ id: string }> }) {
@@ -27,6 +30,13 @@ export default async function AdminUserPage({ params }: { params: Promise<{ id: 
     orderBy: { createdAt: "desc" },
     take: 20,
   });
+
+  let storage: UserStorage | null = null;
+  try {
+    storage = (await getStorageReport()).byUser.get(id) ?? { bytes: 0, files: 0, rushes: 0, episodes: 0, podcast: 0 };
+  } catch {
+    storage = null;
+  }
 
   const hasActiveSubscription = !!user.stripeSubscriptionId && ["active", "trialing", "past_due"].includes(user.subscriptionStatus ?? "");
 
@@ -87,6 +97,37 @@ export default async function AdminUserPage({ params }: { params: Promise<{ id: 
                 )}
               </dd>
             </dl>
+          </div>
+        </div>
+      </section>
+
+      <section className="admin-section">
+        <div className="admin-grid cols-2">
+          <ModulesCard
+            userId={user.id}
+            initialExtra={user.extraModules}
+            modules={BUILT_MODULES.map((m) => ({ key: m.key, label: m.label, includedInPlan: PLAN_MODULES[user.plan].includes(m.key) }))}
+          />
+          <div className="admin-card">
+            <h2 className="admin-section-title">stockage</h2>
+            {storage ? (
+              <>
+                <div className="admin-figure">{formatBytes(storage.bytes)}</div>
+                <div className="admin-card-detail">
+                  {storage.files} fichier{storage.files > 1 ? "s" : ""}
+                </div>
+                <dl className="admin-kv" style={{ marginTop: 16 }}>
+                  <dt>Rushs</dt>
+                  <dd>{formatBytes(storage.rushes)}</dd>
+                  <dt>Épisodes</dt>
+                  <dd>{formatBytes(storage.episodes)}</dd>
+                  <dt>Fichiers du podcast</dt>
+                  <dd>{formatBytes(storage.podcast)}</dd>
+                </dl>
+              </>
+            ) : (
+              <p className="admin-message error">Stockage indisponible pour le moment.</p>
+            )}
           </div>
         </div>
       </section>

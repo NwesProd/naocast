@@ -70,8 +70,8 @@ export async function assertCanCreateEpisode(userId: string): Promise<void> {
 // Appelé par les modules réservés (Script, Invités...) : lève si le forfait
 // de l'utilisateur ne les inclut pas.
 export async function assertModuleAccess(userId: string, module: ModuleKey): Promise<void> {
-  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { plan: true } });
-  if (!hasModuleAccess(user.plan, module)) {
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { plan: true, extraModules: true } });
+  if (!hasModuleAccess(user.plan, module, user.extraModules)) {
     throw new ModuleLockedError(`Ce module est réservé à naocast infinity et naocast lifetime.`);
   }
 }
@@ -79,4 +79,10 @@ export async function assertModuleAccess(userId: string, module: ModuleKey): Pro
 export async function getUserPlan(userId: string): Promise<Plan> {
   const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { plan: true } });
   return user.plan;
+}
+
+// Forfait + modules activés à la main : à utiliser avec hasModuleAccess pour
+// décider d'afficher ou de verrouiller un module.
+export async function getUserAccess(userId: string): Promise<{ plan: Plan; extraModules: string[] }> {
+  return prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { plan: true, extraModules: true } });
 }

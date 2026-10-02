@@ -56,6 +56,11 @@ model User {
   // transactionnels (bienvenue, mot de passe, magic link) partent toujours.
   marketingOptOut Boolean @default(false)
 
+  // Modules activés à la main pour cet utilisateur (testeur, geste commercial),
+  // en plus de ceux de son forfait : cf. lib/plan.ts (hasModuleAccess) et
+  // l'onglet Utilisateurs du back office.
+  extraModules String[] @default([])
+
   loginTokens LoginToken[]
 }
 

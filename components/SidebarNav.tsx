@@ -164,10 +164,13 @@ export interface SidebarUsage {
 export function SidebarNav({
   podcastHeader,
   plan,
+  extraModules,
   usage,
 }: {
   podcastHeader: PodcastHeader | null;
   plan: Plan;
+  // Modules activés à la main par l'admin pour ce compte (hors forfait).
+  extraModules: string[];
   usage: SidebarUsage;
 }) {
   const pathname = usePathname();
@@ -379,7 +382,7 @@ export function SidebarNav({
             <p className="px-3 pb-1 text-[10px] font-bold uppercase tracking-wide text-peach-muted/70">{group.label}</p>
             {group.modules.map((mod) => {
               const moduleKey = MODULE_KEY_BY_LABEL[mod.label];
-              const planLocked = !!moduleKey && !hasModuleAccess(plan, moduleKey);
+              const planLocked = !!moduleKey && !hasModuleAccess(plan, moduleKey, extraModules);
 
               if (mod.href && !planLocked) {
                 return (

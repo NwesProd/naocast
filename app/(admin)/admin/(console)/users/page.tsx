@@ -3,7 +3,8 @@ import { requireAdminPage } from "@/lib/admin";
 import { prisma } from "@/lib/db";
 import { isTestEmail, realUserWhere } from "@/lib/adminStats";
 import { PLAN_LABELS } from "@/lib/plan";
-import { Pill, PlanPill, formatDate } from "../ui";
+import { Pill, PlanPill, formatBytes, formatDate } from "../ui";
+import { getStorageReport, type StorageReport } from "@/lib/storageStats";
 import type { Plan, Prisma } from "@/app/generated/prisma/client";
 
 const PAGE_SIZE = 25;
@@ -44,6 +45,15 @@ export default async function AdminUsersPage({
       podcast: { select: { title: true, _count: { select: { episodes: true } } } },
     },
   });
+
+  // Poids des fichiers par utilisateur : si le bucket est injoignable, la
+  // colonne affiche "?" plutôt que de casser la liste.
+  let storage: StorageReport | null = null;
+  try {
+    storage = await getStorageReport();
+  } catch {
+    storage = null;
+  }
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   function pageHref(p: number) {
@@ -104,13 +114,14 @@ export default async function AdminUsersPage({
               <th>Profil</th>
               <th>Podcast</th>
               <th className="num">Épisodes</th>
+              <th className="num">Stockage</th>
               <th>Inscrit le</th>
             </tr>
           </thead>
           <tbody>
             {users.length === 0 && (
               <tr>
-                <td colSpan={6} className="admin-empty">
+                <td colSpan={7} className="admin-empty">
                   Aucun utilisateur trouvé.
                 </td>
               </tr>
@@ -133,6 +144,7 @@ export default async function AdminUsersPage({
                 <td>{u.profileType.toLowerCase()}</td>
                 <td>{u.podcast?.title ?? "Pas encore configuré"}</td>
                 <td className="num">{u.podcast?._count.episodes ?? 0}</td>
+                <td className="num">{storage ? formatBytes(storage.byUser.get(u.id)?.bytes ?? 0) : "?"}</td>
                 <td>{formatDate(u.createdAt)}</td>
               </tr>
             ))}

@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { requireAdminPage } from "@/lib/admin";
 import { getDashboardStats } from "@/lib/adminStats";
+import { getStorageSummary, type StorageSummary } from "@/lib/storageStats";
 import { PLAN_LABELS } from "@/lib/plan";
-import { DailyBars, PlanPill, formatDate, formatEuro, statusLabel } from "./ui";
+import { DailyBars, PlanPill, formatBytes, formatDate, formatEuro, statusLabel } from "./ui";
 import type { Plan } from "@/app/generated/prisma/client";
 
 const PLAN_ORDER: Plan[] = ["FREE", "BASIC", "INFINITY", "LIFETIME"];
@@ -11,6 +12,16 @@ const STATUS_ORDER = ["DRAFT", "QUEUED", "PROCESSING", "READY_FOR_REVIEW", "EXPO
 export default async function AdminDashboardPage() {
   await requireAdminPage();
   const stats = await getDashboardStats();
+
+  // Le stockage interroge le bucket : un échec (droits, réseau) ne doit pas
+  // empêcher d'afficher le reste du dashboard.
+  let storage: StorageSummary | null = null;
+  let storageError: string | null = null;
+  try {
+    storage = await getStorageSummary();
+  } catch (err) {
+    storageError = (err as Error).message;
+  }
 
   return (
     <>
@@ -43,6 +54,53 @@ export default async function AdminDashboardPage() {
             <div className="admin-card-detail">
               {stats.payingSubscribers} abonné{stats.payingSubscribers > 1 ? "s" : ""} payant{stats.payingSubscribers > 1 ? "s" : ""} par mois, {stats.lifetimeCount} lifetime ({formatEuro(stats.lifetimeRevenueEur)} encaissés)
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="admin-section">
+        <div className="admin-grid cols-2">
+          <div className="admin-card">
+            <h2 className="admin-section-title">stockage</h2>
+            {storage ? (
+              <>
+                <div className="admin-figure">{formatBytes(storage.realBytes)}</div>
+                <div className="admin-card-detail">
+                  {storage.realFiles} fichier{storage.realFiles > 1 ? "s" : ""} des utilisateurs, dont {formatBytes(storage.byCategory.rushes)} de rushs,{" "}
+                  {formatBytes(storage.byCategory.episodes)} d&apos;épisodes et {formatBytes(storage.byCategory.podcast)} de fichiers de podcast.
+                </div>
+                <div className="admin-card-detail">
+                  Dans le bucket au total : {formatBytes(storage.totalBytes)}
+                  {storage.testBytes > 0 && `, dont ${formatBytes(storage.testBytes)} de comptes de test`}
+                  {storage.orphanFiles > 0 &&
+                    `, et ${formatBytes(storage.orphanBytes)} non rattachés à un compte (${storage.orphanFiles} fichier${storage.orphanFiles > 1 ? "s" : ""})`}
+                  .
+                </div>
+              </>
+            ) : (
+              <p className="admin-message error">Stockage indisponible : {storageError}</p>
+            )}
+          </div>
+          <div className="admin-card">
+            <h2 className="admin-section-title">plus gros consommateurs</h2>
+            {storage && storage.top.length > 0 ? (
+              <table className="admin-table" style={{ width: "100%" }}>
+                <tbody>
+                  {storage.top.map((u) => (
+                    <tr key={u.id}>
+                      <td style={{ paddingLeft: 0 }}>
+                        <Link href={`/admin/users/${u.id}`} className="admin-link">
+                          {u.email}
+                        </Link>
+                      </td>
+                      <td className="num" style={{ paddingRight: 0 }}>{formatBytes(u.bytes)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <p className="admin-card-detail">Aucun fichier stocké pour le moment.</p>
+            )}
           </div>
         </div>
       </section>

@@ -11,7 +11,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     ? await prisma.podcast.findUnique({ where: { userId: session.user.id }, select: { title: true, coverKey: true } })
     : null;
   const user = session?.user
-    ? await prisma.user.findUnique({ where: { id: session.user.id }, select: { plan: true } })
+    ? await prisma.user.findUnique({ where: { id: session.user.id }, select: { plan: true, extraModules: true } })
     : null;
   const usage = session?.user ? await getEpisodeUsage(session.user.id) : null;
   const podcastHeader = podcast
@@ -24,6 +24,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <SidebarNav
           podcastHeader={podcastHeader}
           plan={user?.plan ?? "FREE"}
+          extraModules={user?.extraModules ?? []}
           usage={usage ?? { plan: "FREE", planLabel: "naocast free", used: 0, limit: 1, periodLabel: "au total" }}
         />
         {session?.user && (
