@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { prisma } from "@/lib/db";
 import { jsonResponse } from "@/lib/json";
-import { putObjectStreamUnknownLength } from "@/lib/storage";
+import { putObjectStreamUnknownLength, deleteObject } from "@/lib/storage";
 import { parseMultipart } from "@/lib/parseMultipart";
 import { requireUserId, requireOwnedEpisode } from "@/lib/authz";
 import { getDurationSec } from "@/lib/pipeline/ffmpeg";
@@ -99,6 +99,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         },
       });
       return jsonResponse(rush);
+    } catch (err) {
+      // Upload ou enregistrement échoué : un fichier déjà (en partie) arrivé
+      // sur le stockage n'a aucune ligne en base, il resterait orphelin et facturé.
+      if (storageKey) await deleteObject(storageKey).catch(() => {});
+      throw err;
     } finally {
       await rm(tmpDir, { recursive: true, force: true });
     }

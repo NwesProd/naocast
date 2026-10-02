@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { putObject, putLocalFile } from "@/lib/storage";
+import { putObject, putLocalFile, deleteObject } from "@/lib/storage";
+import { deleteEpisodeStorage, deletePodcastFiles } from "@/lib/pipeline/cleanup";
 import { parseMultipart } from "@/lib/parseMultipart";
 import { requireUserId, AuthError } from "@/lib/authz";
 import { transcodeForWebPreview } from "@/lib/pipeline/ffmpeg";
@@ -115,8 +116,8 @@ export async function POST(req: Request) {
       introKey?: string;
       outroKey?: string;
       logoKey?: string;
-      introPreviewKey?: string;
-      outroPreviewKey?: string;
+      introPreviewKey?: string | null;
+      outroPreviewKey?: string | null;
     } = {};
 
     if (title) data.title = title;
@@ -126,6 +127,10 @@ export async function POST(req: Request) {
     if (keys.logo) data.logoKey = keys.logo;
     if (previewKeys.intro) data.introPreviewKey = previewKeys.intro;
     if (previewKeys.outro) data.outroPreviewKey = previewKeys.outro;
+    // Nouveau générique sans aperçu (transcodage indisponible) : l'ancien
+    // aperçu montrerait l'ancien générique, on le retire plutôt que de le garder.
+    if (keys.intro && !previewKeys.intro) data.introPreviewKey = null;
+    if (keys.outro && !previewKeys.outro) data.outroPreviewKey = null;
 
     const podcast = await prisma.podcast.upsert({
       where: { userId },
@@ -133,17 +138,32 @@ export async function POST(req: Request) {
       create: { userId, title, ...data },
     });
 
+    // Les fichiers remplacés (ancienne pochette, ancien logo, anciens
+    // génériques et leurs aperçus) ne servent plus à rien : on les supprime du
+    // stockage plutôt que de les y laisser, facturés, indéfiniment.
+    if (existingPodcast) {
+      const replaced = (["coverKey", "logoKey", "introKey", "outroKey", "introPreviewKey", "outroPreviewKey"] as const)
+        .filter((field) => field in data && existingPodcast[field] && existingPodcast[field] !== data[field])
+        .map((field) => existingPodcast[field]!);
+      await Promise.all(replaced.map((key) => deleteObject(key).catch(() => {})));
+    }
+
     return NextResponse.json(podcast);
   } finally {
     await rm(tmpDir, { recursive: true, force: true });
   }
 }
 
-// Suppression définitive du podcast (ADN, bible, graphisme). Les fichiers
-// déjà stockés (R2/B2) ne sont pas nettoyés ici : best-effort, pas
-// bloquant pour l'utilisateur, à traiter séparément si besoin.
+// Suppression définitive du podcast (ADN, bible, graphisme) : la cascade
+// Prisma efface aussi ses épisodes, mais jamais les fichiers stockés (R2/B2)
+// qu'ils référencent, supprimés ici d'abord pour ne rien laisser d'orphelin.
 export async function DELETE() {
   const userId = await requireUserId();
+  const podcast = await prisma.podcast.findUnique({ where: { userId }, include: { episodes: { select: { id: true } } } });
+  if (podcast) {
+    for (const episode of podcast.episodes) await deleteEpisodeStorage(episode.id);
+    await deletePodcastFiles(podcast);
+  }
   await prisma.podcast.deleteMany({ where: { userId } });
   return NextResponse.json({ ok: true });
 }

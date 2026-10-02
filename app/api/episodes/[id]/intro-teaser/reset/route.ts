@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { requireUserId, requireOwnedEpisode } from "@/lib/authz";
 import { jsonResponse } from "@/lib/json";
+import { deleteObject } from "@/lib/storage";
 
 // Module "Intro" : "Recommencer à zéro", retire tous les passages choisis et
 // le teaser déjà construit, pour repartir d'une sélection vide. N'affecte pas
@@ -27,6 +28,9 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
       },
     }),
   ]);
+
+  // Le teaser compilé n'est plus référencé : on le supprime du stockage.
+  if (current.introTeaserKey) await deleteObject(current.introTeaserKey).catch(() => {});
 
   const episode = await prisma.episode.findUniqueOrThrow({ where: { id: episodeId } });
   return jsonResponse(episode);

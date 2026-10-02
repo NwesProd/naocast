@@ -176,16 +176,17 @@ export async function deleteObject(key: string): Promise<void> {
   if (existsSync(p)) await unlink(p);
 }
 
-// Liste tous les objets stockés (clé + poids), pour les statistiques de
-// stockage du back office. Paginé côté S3/R2 (1000 objets par appel) ; en
-// stockage local (dev), parcourt le dossier .data/storage.
-export async function listAllObjects(): Promise<{ key: string; size: number }[]> {
+// Liste les objets stockés (clé + poids), tous ou sous un préfixe : sert aux
+// statistiques de stockage du back office et au balayage des fichiers d'un
+// épisode. Paginé côté S3/R2 (1000 objets par appel) ; en stockage local
+// (dev), parcourt le dossier .data/storage.
+export async function listAllObjects(prefix = ""): Promise<{ key: string; size: number }[]> {
   const result: { key: string; size: number }[] = [];
 
   if (s3 && bucket) {
     let token: string | undefined;
     do {
-      const page = await s3.send(new ListObjectsV2Command({ Bucket: bucket, ContinuationToken: token }));
+      const page = await s3.send(new ListObjectsV2Command({ Bucket: bucket, Prefix: prefix || undefined, ContinuationToken: token }));
       for (const obj of page.Contents ?? []) {
         if (obj.Key) result.push({ key: obj.Key, size: obj.Size ?? 0 });
       }
@@ -204,7 +205,21 @@ export async function listAllObjects(): Promise<{ key: string; size: number }[]>
     }
   }
   await walk(localRoot, "");
-  return result;
+  return prefix ? result.filter((o) => o.key.startsWith(prefix)) : result;
+}
+
+// Supprime tous les objets sous un préfixe (ex. "rushes/{épisode}/"), sauf
+// ceux de `keep`. Plus sûr que de ne supprimer que les clés connues en base :
+// rattrape aussi les fichiers qu'aucune ligne ne référence (upload interrompu,
+// fichier remplacé...). Renvoie le nombre d'objets supprimés. Le préfixe doit
+// se terminer par "/" pour ne jamais toucher un dossier voisin.
+export async function deleteObjectsByPrefix(prefix: string, keep: ReadonlySet<string> = new Set()): Promise<number> {
+  if (!prefix.endsWith("/")) throw new Error(`Préfixe de stockage invalide : ${prefix}`);
+  const objects = (await listAllObjects(prefix)).filter((o) => !keep.has(o.key));
+  for (let i = 0; i < objects.length; i += 10) {
+    await Promise.all(objects.slice(i, i + 10).map((o) => deleteObject(o.key).catch(() => {})));
+  }
+  return objects.length;
 }
 
 export async function getSignedDownloadUrl(key: string, expiresInSec = 3600): Promise<string> {

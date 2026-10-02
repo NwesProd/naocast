@@ -7,7 +7,7 @@ import { tmpdir } from "os";
 import path from "path";
 import { prisma } from "@/lib/db";
 import { jsonResponse } from "@/lib/json";
-import { putLocalFile } from "@/lib/storage";
+import { putLocalFile, deleteObject } from "@/lib/storage";
 import { parseMultipart } from "@/lib/parseMultipart";
 import { requireUserId, requireOwnedEpisode } from "@/lib/authz";
 
@@ -40,11 +40,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     const storageKey = `episodes/${episodeId}/intro-teaser-import/${randomUUID()}-${originalFilename}`;
     await putLocalFile(storageKey, tmpPath);
+    const previousKey = (await prisma.episode.findUnique({ where: { id: episodeId }, select: { introTeaserImportKey: true } }))?.introTeaserImportKey;
 
     const episode = await prisma.episode.update({
       where: { id: episodeId },
       data: { introTeaserImportKey: storageKey, introTeaserChoice: "IMPORT" },
     });
+    // Le fichier remplacé ne sert plus : on le supprime du stockage.
+    if (previousKey && previousKey !== storageKey) await deleteObject(previousKey).catch(() => {});
     return jsonResponse(episode);
   } finally {
     await rm(tmpDir, { recursive: true, force: true });

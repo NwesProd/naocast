@@ -29,6 +29,7 @@ export interface StorageReport {
   byUser: Map<string, UserStorage>;
   orphanBytes: number;
   orphanFiles: number;
+  orphanKeys: string[];
 }
 
 const EMPTY: UserStorage = { bytes: 0, files: 0, rushes: 0, episodes: 0, podcast: 0 };
@@ -65,7 +66,7 @@ async function buildReport(): Promise<StorageReport> {
     for (const k of keys) if (k) ownerOfPodcastKey.set(k, p.userId);
   }
 
-  const report: StorageReport = { totalBytes: 0, totalFiles: 0, byUser: new Map(), orphanBytes: 0, orphanFiles: 0 };
+  const report: StorageReport = { totalBytes: 0, totalFiles: 0, byUser: new Map(), orphanBytes: 0, orphanFiles: 0, orphanKeys: [] };
   for (const { key, size } of objects) {
     report.totalBytes += size;
     report.totalFiles += 1;
@@ -83,6 +84,7 @@ async function buildReport(): Promise<StorageReport> {
     if (!owner) {
       report.orphanBytes += size;
       report.orphanFiles += 1;
+      report.orphanKeys.push(key);
       continue;
     }
     const entry = report.byUser.get(owner) ?? { ...EMPTY };

@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { prisma } from "@/lib/db";
 import { runJob } from "@/worker/pipeline";
-import { cleanupExportedEpisodeRushes } from "@/lib/pipeline/cleanup";
+import { cleanupExportedEpisodeFiles } from "@/lib/pipeline/cleanup";
 
 // Worker minimal : interroge la table ProcessingJob toutes les POLL_INTERVAL_MS
 // et exécute le prochain job PENDING le plus ancien, épisode par épisode, dans
@@ -97,12 +97,13 @@ async function tick(): Promise<boolean> {
         const nextStatus = job.type === "EXPORT_AUDIO" ? "EXPORTED" : "READY_FOR_REVIEW";
         await withRetry(() => prisma.episode.update({ where: { id: job.episodeId }, data: { status: nextStatus } }));
         if (nextStatus === "EXPORTED") {
-          // Épisode définitivement figé (cf. /restart-tunnel) : les rushs
-          // bruts ne serviront plus jamais, autant libérer le stockage R2/B2
-          // qu'ils occupent (best-effort, ne doit jamais faire échouer le job
-          // déjà marqué DONE).
-          await cleanupExportedEpisodeRushes(job.episodeId).catch((err) =>
-            console.warn(`[worker] nettoyage des rushs échoué pour l'épisode ${job.episodeId}:`, err)
+          // Épisode définitivement figé (cf. /restart-tunnel) : seuls les
+          // exports vidéo et audio finaux servent encore, tout le reste
+          // (rushs, génériques d'épisode, teaser) libère le stockage R2/B2
+          // (best-effort, ne doit jamais faire échouer le job déjà marqué
+          // DONE).
+          await cleanupExportedEpisodeFiles(job.episodeId).catch((err) =>
+            console.warn(`[worker] nettoyage des fichiers échoué pour l'épisode ${job.episodeId}:`, err)
           );
         }
       }
