@@ -1,5 +1,6 @@
 import path from "path";
-import { mkdir, rm } from "fs/promises";
+import { randomUUID } from "crypto";
+import { mkdir, rename, rm } from "fs/promises";
 import { existsSync } from "fs";
 import { prisma } from "@/lib/db";
 import { getLocalWorkingPath, putLocalFile } from "@/lib/storage";
@@ -64,7 +65,18 @@ export async function buildBody(episodeId: string, onProgress?: (fraction: numbe
     rushes.map((r) => getLocalWorkingPath(r.storageKey!, dir))
   );
 
-  await concatWithIntroOutro(localPaths, bodyPath, onProgress);
+  // Encodé sous un nom temporaire puis renommé une fois COMPLET : un process
+  // tué en cours d'encodage (OOM...) laissait sinon un body.mp4 tronqué au
+  // chemin attendu, que `existsSync(bodyPath)` ci-dessus prenait ensuite
+  // pour valide aux tentatives suivantes (cf. getLocalWorkingPath).
+  const tmpBodyPath = `${bodyPath}.building-${randomUUID()}.mp4`;
+  try {
+    await concatWithIntroOutro(localPaths, tmpBodyPath, onProgress);
+    await rename(tmpBodyPath, bodyPath);
+  } catch (err) {
+    await rm(tmpBodyPath, { force: true });
+    throw err;
+  }
   return bodyPath;
 }
 
@@ -111,7 +123,14 @@ export async function renderVideo(
 ): Promise<string> {
   const dir = workDirFor(episodeId);
   const finalPath = path.join(dir, "final.mp4");
-  if (existsSync(finalPath)) return finalPath;
+  // Toujours un rendu neuf : un job RENDER existe précisément pour produire
+  // un nouveau rendu. L'ancien raccourci "final.mp4 existe déjà, on le
+  // renvoie" sautait aussi l'envoi vers le stockage et la création de
+  // l'ExportAsset : après un rendu tué par l'OOM, le fichier tronqué restait
+  // sur le disque du WORKER (/retry et /rerender ne nettoient que le disque
+  // du service web, un autre conteneur), le job se terminait "avec succès"
+  // sans rien produire, relecture vide.
+  await rm(finalPath, { force: true });
 
   const episode = await prisma.episode.findUniqueOrThrow({
     where: { id: episodeId },
@@ -232,7 +251,16 @@ export async function renderVideo(
     logo = { path: logoPath, position: episode.logoPosition, enableRangesSec };
   }
 
-  await renderEpisodeVideo(bodyPath, finalPath, { keepRanges, introPath, outroPath, logo }, onProgress);
+  // Rendu sous un nom temporaire puis renommé une fois complet (même
+  // raisonnement que buildBody) : final.mp4 n'existe jamais à moitié écrit.
+  const tmpFinalPath = `${finalPath}.building-${randomUUID()}.mp4`;
+  try {
+    await renderEpisodeVideo(bodyPath, tmpFinalPath, { keepRanges, introPath, outroPath, logo }, onProgress);
+    await rename(tmpFinalPath, finalPath);
+  } catch (err) {
+    await rm(tmpFinalPath, { force: true });
+    throw err;
+  }
 
   const storageKey = `episodes/${episodeId}/final.mp4`;
   await putLocalFile(storageKey, finalPath, "video/mp4");

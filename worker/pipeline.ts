@@ -1,6 +1,14 @@
 import { prisma } from "@/lib/db";
 import { fetchRush } from "@/lib/pipeline/ingest";
-import { buildBody, runTranscription, runAutocut, renderVideo, runExportAudio, finalVideoPathFor } from "@/lib/pipeline/render";
+import {
+  buildBody,
+  runTranscription,
+  runAutocut,
+  renderVideo,
+  runExportAudio,
+  finalVideoPathFor,
+  resetEpisodeWorkDir,
+} from "@/lib/pipeline/render";
 import { runManualTranscribe } from "@/lib/pipeline/manualTranscript";
 import type { ProcessingJob } from "@/app/generated/prisma/client";
 
@@ -33,6 +41,12 @@ export async function runJob(job: ProcessingJob): Promise<void> {
 
   switch (job.type) {
     case "FETCH_RUSHES": {
+      // Premier job d'un pipeline complet (lancement ou "Relancer le
+      // processus") : repart d'un répertoire de travail vide sur CE disque.
+      // /retry efface bien le sien, mais c'est celui du service web, pas du
+      // worker (autre conteneur), les fichiers intermédiaires tronqués d'une
+      // tentative précédente (OOM...) y restaient donc indéfiniment.
+      await resetEpisodeWorkDir(episodeId);
       const rushes = await prisma.rushSource.findMany({
         where: { episodeId, selectedForEpisode: true },
       });
