@@ -58,6 +58,8 @@ export default async function DashboardPage() {
               fallbackLabel={`Épisode du ${ep.createdAt.toLocaleDateString("fr-FR")}`}
               introTeaserChoice={ep.introTeaserChoice}
               introTeaserValidated={ep.introTeaserValidated}
+              introValidatedExternally={ep.introValidatedExternally}
+              montageValidatedExternally={ep.montageValidatedExternally}
               guestsCastingValidated={ep.guestsCastingValidated}
               hasTranscript={ep._count.transcriptSegments > 0}
               scriptValidated={ep.scriptValidated}

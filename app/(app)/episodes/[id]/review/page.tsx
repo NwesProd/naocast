@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { getFullEpisode } from "@/lib/episode";
 import { getSignedDownloadUrl } from "@/lib/storage";
 import type { TranscriptWord } from "@/components/TranscriptCutEditor";
+import { ExternalValidation } from "@/components/ExternalValidation";
 import { ReviewClient } from "./ReviewClient";
 
 export default async function ReviewPage({ params }: { params: Promise<{ id: string }> }) {
@@ -73,6 +74,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
         ownEditorEmail={episode.ownEditorEmail}
         initialExpectedSpeakerCount={episode.expectedSpeakerCount}
       />
+      <ExternalValidation episodeId={id} field="montageValidatedExternally" wording={{ ask: "Montage géré en dehors de naocast ?", validated: "Montage validé hors naocast.", button: "Valider le montage hors naocast" }} initialValidated={episode.montageValidatedExternally} />
     </main>
   );
 }

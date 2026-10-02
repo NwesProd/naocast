@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { getSignedDownloadUrl } from "@/lib/storage";
 import { episodeLabel } from "@/lib/episode";
+import { ExternalValidation } from "@/components/ExternalValidation";
 import { IntroClient } from "./IntroClient";
 
 // Module "Intro" (étape 7 du tunnel, à part du reste) : accessible quel que
@@ -54,6 +55,7 @@ export default async function IntroPage({ params }: { params: Promise<{ id: stri
         initialValidated={episode.introTeaserValidated}
         episodeLabel={episodeLabel(episode)}
       />
+      <ExternalValidation episodeId={id} field="introValidatedExternally" wording={{ ask: "Intro gérée en dehors de naocast ?", validated: "Intro validée hors naocast.", button: "Valider l'intro hors naocast" }} initialValidated={episode.introValidatedExternally} />
     </main>
   );
 }

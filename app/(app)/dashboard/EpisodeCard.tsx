@@ -59,6 +59,8 @@ interface EpisodeCardProps {
   fallbackLabel: string;
   introTeaserChoice: "NONE" | "MODULE" | "IMPORT";
   introTeaserValidated: boolean;
+  introValidatedExternally: boolean;
+  montageValidatedExternally: boolean;
   guestsCastingValidated: boolean;
   hasTranscript: boolean;
   scriptValidated: boolean;
@@ -76,6 +78,8 @@ export function EpisodeCard({
   fallbackLabel,
   introTeaserChoice,
   introTeaserValidated,
+  introValidatedExternally,
+  montageValidatedExternally,
   guestsCastingValidated,
   hasTranscript,
   scriptValidated,
@@ -101,6 +105,8 @@ export function EpisodeCard({
     status,
     introTeaserChoice,
     introTeaserValidated,
+    introValidatedExternally,
+    montageValidatedExternally,
     guestsCastingValidated,
     hasTranscript,
     scriptValidated,

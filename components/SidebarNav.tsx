@@ -143,6 +143,8 @@ interface SelectedEpisode {
   status: string;
   introTeaserValidated: boolean;
   introTeaserChoice: "NONE" | "MODULE" | "IMPORT";
+  introValidatedExternally: boolean;
+  montageValidatedExternally: boolean;
   guestsCastingValidated: boolean;
   transcriptSegments: unknown[];
   scriptValidated: boolean;
@@ -270,8 +272,14 @@ export function SidebarNav({
   // brouillon jamais validé, cf. Episode.introTeaserChoice) ; pour le
   // Montage, l'épisode a été exporté (le tunnel + la relecture qu'il couvre
   // sont bien allés jusqu'au bout, pas seulement soumis au traitement).
-  const introDone = !!episode && (episode.introTeaserChoice === "IMPORT" || (episode.introTeaserChoice === "MODULE" && episode.introTeaserValidated));
-  const montageDone = episode?.status === "EXPORTED";
+  const introDone =
+    !!episode &&
+    (episode.introValidatedExternally ||
+      episode.introTeaserChoice === "IMPORT" ||
+      (episode.introTeaserChoice === "MODULE" && episode.introTeaserValidated));
+  // Validés "hors naocast" (post-production faite ailleurs) : même tick, sans
+  // avoir fait le module.
+  const montageDone = !!episode && (episode.montageValidatedExternally || episode.status === "EXPORTED");
   const guestsDone = !!episode && episode.guestsCastingValidated;
   // Pas de notion de "validation" dédiée pour le transcript (contrairement à
   // l'intro ou au casting) : la présence d'un transcript suffit à le

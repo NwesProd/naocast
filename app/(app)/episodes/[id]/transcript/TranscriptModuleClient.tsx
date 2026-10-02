@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { EPISODE_UPDATED_EVENT } from "@/components/SidebarNav";
 import { useSimulatedProgress } from "@/lib/useSimulatedProgress";
 import { pollJobUntilDone } from "@/lib/pollJob";
 import { groupBySpeaker } from "@/lib/transcriptGrouping";
@@ -61,6 +63,55 @@ export function TranscriptModuleClient({
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const transcribeProgress = useSimulatedProgress(generating);
+  const router = useRouter();
+  const [showImport, setShowImport] = useState(false);
+  const [importText, setImportText] = useState("");
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Transcript importé sans horodatage : les "temps" sont de simples positions
+  // (début = fin), on ne les affiche pas.
+  const hasTiming = transcript.some((s) => s.endMs > s.startMs);
+
+  async function readFile(file: File | undefined) {
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      setError("Fichier trop volumineux (5 Mo maximum).");
+      return;
+    }
+    setError(null);
+    setImportText(await file.text());
+  }
+
+  async function importTranscript() {
+    setImporting(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/episodes/${episodeId}/transcript/import`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: importText }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || "Échec de l'import du transcript.");
+      }
+      const episodeRes = await fetch(`/api/episodes/${episodeId}`);
+      if (!episodeRes.ok) throw new Error("Échec du rechargement du transcript.");
+      const data = await episodeRes.json();
+      setTranscript(data.transcriptSegments);
+      setSpeakers(data.speakers);
+      setShowImport(false);
+      setImportText("");
+      // Le tick vert du module dans la sidebar suit la présence du transcript.
+      window.dispatchEvent(new Event(EPISODE_UPDATED_EVENT));
+      router.refresh();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setImporting(false);
+    }
+  }
 
   async function renameSpeaker(speakerId: string, displayName: string) {
     setSpeakers((sp) => sp.map((s) => (s.id === speakerId ? { ...s, displayName } : s)));
@@ -87,7 +138,7 @@ export function TranscriptModuleClient({
       .map((turn) => {
         const speakerName = speakerDisplay(turn.speaker);
         const text = turn.segments.map((s) => s.text).join(" ");
-        return `${formatTime(turn.startMs)}${speakerName ? ` ${speakerName} :` : ""} ${text}`;
+        return `${hasTiming ? formatTime(turn.startMs) : ""}${speakerName ? ` ${speakerName} :` : ""} ${text}`.trim();
       })
       .join("\n\n");
   }
@@ -144,6 +195,52 @@ export function TranscriptModuleClient({
     }
   }
 
+  const importPanel = showImport ? (
+    <div className="rounded-xl border border-border bg-white p-4 space-y-3">
+      <div>
+        <p className="text-sm font-semibold text-ink">Importer un transcript</p>
+        <p className="text-xs text-text-muted mt-0.5">
+          Pour un montage fait en dehors de naocast. Collez le texte ou choisissez un fichier .txt, .srt ou .vtt. Les
+          lignes « Nom : texte » deviennent des locuteurs.
+          {transcript.length > 0 && " Le transcript actuel sera remplacé."}
+        </p>
+      </div>
+      <textarea
+        value={importText}
+        onChange={(e) => setImportText(e.target.value)}
+        rows={8}
+        placeholder={"Amandine : Bonjour et bienvenue.\n\nYohan : Merci de m'accueillir."}
+        className="w-full rounded-md border border-border px-3 py-2 text-sm"
+      />
+      <div className="flex items-center gap-2 flex-wrap">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".txt,.md,.srt,.vtt,text/plain"
+          className="hidden"
+          onChange={(e) => {
+            readFile(e.target.files?.[0]);
+            e.target.value = "";
+          }}
+        />
+        <button type="button" onClick={() => fileInputRef.current?.click()} className={pillBtn}>
+          Choisir un fichier
+        </button>
+        <button
+          type="button"
+          onClick={importTranscript}
+          disabled={!importText.trim() || importing}
+          className="text-sm font-semibold rounded-[10px] bg-primary-button text-white px-4 py-2 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {importing ? "Import en cours..." : "Importer le transcript"}
+        </button>
+        <button type="button" onClick={() => setShowImport(false)} disabled={importing} className={pillBtn}>
+          Annuler
+        </button>
+      </div>
+    </div>
+  ) : null;
+
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
@@ -189,6 +286,8 @@ export function TranscriptModuleClient({
 
       {error && <p className="text-sm text-[#8A2E1F]">{error}</p>}
 
+      {transcript.length === 0 && importPanel}
+
       {transcript.length === 0 ? (
         <div className="rounded-xl bg-mint p-5 space-y-3">
           {rushes.length === 0 ? (
@@ -231,6 +330,14 @@ export function TranscriptModuleClient({
               </button>
             </>
           )}
+          {!showImport && (
+            <div className="pt-1">
+              <button type="button" onClick={() => setShowImport(true)} className={pillBtn}>
+                Importer un transcript
+              </button>
+              <p className="text-xs text-mint-ink mt-1">Pour un montage fait en dehors de naocast.</p>
+            </div>
+          )}
         </div>
       ) : (
         <div className="space-y-3">
@@ -260,7 +367,7 @@ export function TranscriptModuleClient({
                 const speakerName = speakerDisplay(turn.speaker);
                 return (
                   <p key={turn.segments[0].id}>
-                    <span className="text-xs text-text-muted mr-2">{formatTime(turn.startMs)}</span>
+                    {hasTiming && <span className="text-xs text-text-muted mr-2">{formatTime(turn.startMs)}</span>}
                     {speakerName && <span className="mr-2 font-semibold text-[#0F6B67]">{speakerName} :</span>}
                     {turn.segments.map((s) => s.text).join(" ")}
                   </p>
@@ -269,11 +376,20 @@ export function TranscriptModuleClient({
             </div>
           </div>
 
-          {rushes.length > 0 && (
-            <button type="button" onClick={generateTranscript} disabled={generating} className={pillBtn}>
-              {generating ? `Régénération en cours... ${transcribeProgress}%` : "Régénérer le transcript"}
-            </button>
-          )}
+          {importPanel}
+
+          <div className="flex items-center gap-2 flex-wrap">
+            {rushes.length > 0 && (
+              <button type="button" onClick={generateTranscript} disabled={generating} className={pillBtn}>
+                {generating ? `Régénération en cours... ${transcribeProgress}%` : "Régénérer le transcript"}
+              </button>
+            )}
+            {!showImport && (
+              <button type="button" onClick={() => setShowImport(true)} className={pillBtn}>
+                Remplacer par un transcript importé
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>

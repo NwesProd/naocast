@@ -373,6 +373,13 @@ model Episode {
   scriptDraft            String?
   scriptValidated        Boolean    @default(false)
 
+  // Pour qui gère une partie de la post-production en dehors de naocast :
+  // "valider hors naocast" affiche simplement le tick vert du module dans la
+  // sidebar, sans passer par le module ni changer le statut de l'épisode
+  // (pas d'export, pas de verrouillage).
+  introValidatedExternally   Boolean @default(false)
+  montageValidatedExternally Boolean @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

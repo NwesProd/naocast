@@ -61,6 +61,8 @@ const patchSchema = z.object({
   guestsCastingValidated: z.boolean().optional(),
   scriptDraft: z.string().optional(),
   scriptValidated: z.boolean().optional(),
+  introValidatedExternally: z.boolean().optional(),
+  montageValidatedExternally: z.boolean().optional(),
 });
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {

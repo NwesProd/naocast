@@ -10,17 +10,26 @@ export interface EpisodeModuleState {
   status: string;
   introTeaserChoice: "NONE" | "MODULE" | "IMPORT";
   introTeaserValidated: boolean;
+  // Validés à la main par l'utilisateur, post-production faite hors naocast.
+  introValidatedExternally: boolean;
+  montageValidatedExternally: boolean;
   guestsCastingValidated: boolean;
   hasTranscript: boolean;
   scriptValidated: boolean;
 }
 
-export function isIntroDone(state: Pick<EpisodeModuleState, "introTeaserChoice" | "introTeaserValidated">): boolean {
-  return state.introTeaserChoice === "IMPORT" || (state.introTeaserChoice === "MODULE" && state.introTeaserValidated);
+export function isIntroDone(
+  state: Pick<EpisodeModuleState, "introTeaserChoice" | "introTeaserValidated" | "introValidatedExternally">
+): boolean {
+  return (
+    state.introValidatedExternally ||
+    state.introTeaserChoice === "IMPORT" ||
+    (state.introTeaserChoice === "MODULE" && state.introTeaserValidated)
+  );
 }
 
-export function isMontageDone(state: Pick<EpisodeModuleState, "status">): boolean {
-  return state.status === "EXPORTED";
+export function isMontageDone(state: Pick<EpisodeModuleState, "status" | "montageValidatedExternally">): boolean {
+  return state.montageValidatedExternally || state.status === "EXPORTED";
 }
 
 // Épisode pas encore paramétré (pas de titre) : direction la page d'infos,
