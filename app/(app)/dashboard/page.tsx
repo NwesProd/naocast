@@ -6,6 +6,12 @@ import { NewEpisodeButton } from "./NewEpisodeButton";
 import { EpisodeCard } from "./EpisodeCard";
 import { PlanUsageBanner } from "./PlanUsageBanner";
 import { PLAN_LOCKS_VALIDATED_EPISODE_DELETION } from "@/lib/plan";
+import { displayStatus } from "@/lib/moduleProgress";
+
+// Date du jour (AAAA-MM-JJ) à Paris, pour comparer à la date de sortie.
+function todayInParis(): string {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Paris" });
+}
 
 export default async function DashboardPage() {
   const session = await auth();
@@ -15,6 +21,7 @@ export default async function DashboardPage() {
   if (!podcast) redirect("/podcast");
 
   const usage = await getEpisodeUsage(session.user.id);
+  const today = todayInParis();
 
   // Le plus gros SxEx en premier (S2 avant S1, E5 avant E3 au sein d'une même
   // saison), les épisodes sans saison/numéro renseignés (brouillon tout
@@ -52,6 +59,21 @@ export default async function DashboardPage() {
               id={ep.id}
               title={ep.title}
               status={ep.status}
+              displayStatus={displayStatus(
+                {
+                  title: ep.title,
+                  status: ep.status,
+                  introTeaserChoice: ep.introTeaserChoice,
+                  introTeaserValidated: ep.introTeaserValidated,
+                  introValidatedExternally: ep.introValidatedExternally,
+                  montageValidatedExternally: ep.montageValidatedExternally,
+                  guestsCastingValidated: ep.guestsCastingValidated,
+                  hasTranscript: ep._count.transcriptSegments > 0,
+                  scriptValidated: ep.scriptValidated,
+                },
+                ep.releaseDate,
+                today
+              )}
               season={ep.season}
               episodeNumber={ep.episodeNumber}
               releaseDateLabel={ep.releaseDate ? ep.releaseDate.toLocaleDateString("fr-FR") : null}

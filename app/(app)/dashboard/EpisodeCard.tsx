@@ -17,6 +17,8 @@ const ZONE_CLASSES: Record<string, { bg: string; text: string; muted: string }> 
   HUMAN_EDITOR_REQUESTED: { bg: "bg-sky", text: "text-sky-ink", muted: "text-sky-ink/70" },
   READY_FOR_REVIEW: { bg: "bg-mint", text: "text-mint-ink", muted: "text-mint-muted" },
   EXPORTED: { bg: "bg-mint", text: "text-mint-ink", muted: "text-mint-muted" },
+  READY_TO_PUBLISH: { bg: "bg-mint", text: "text-mint-ink", muted: "text-mint-muted" },
+  PUBLISHED: { bg: "bg-mint", text: "text-mint-ink", muted: "text-mint-muted" },
   FAILED: { bg: "bg-[#FBEAE7]", text: "text-[#8A2E1F]", muted: "text-[#8A2E1F]/70" },
 };
 const DEFAULT_ZONE = ZONE_CLASSES.DRAFT;
@@ -53,6 +55,9 @@ interface EpisodeCardProps {
   id: string;
   title: string | null;
   status: string;
+  // Statut affiché (badge, couleur) : peut être "Prêt à diffuser" / "Diffusé" une fois tout
+  // validé (cf. displayStatus). `status` reste le statut réel, utilisé pour la logique.
+  displayStatus: string;
   season: number | null;
   episodeNumber: number | null;
   releaseDateLabel: string | null;
@@ -72,6 +77,7 @@ export function EpisodeCard({
   id,
   title,
   status,
+  displayStatus,
   season,
   episodeNumber,
   releaseDateLabel,
@@ -91,7 +97,7 @@ export function EpisodeCard({
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const locked = status === "EXPORTED" && deletionLockedWhenValidated;
 
-  const zone = ZONE_CLASSES[status] || DEFAULT_ZONE;
+  const zone = ZONE_CLASSES[displayStatus] || DEFAULT_ZONE;
   const sn = [season != null ? `S${season}` : null, episodeNumber != null ? `E${episodeNumber}` : null]
     .filter(Boolean)
     .join("");
@@ -139,7 +145,7 @@ export function EpisodeCard({
           <p className={`font-medium ${zone.text} line-clamp-2`}>{title || fallbackLabel}</p>
           {releaseDateLabel && <p className={`text-xs ${zone.muted} mt-1`}>Sortie le {releaseDateLabel}</p>}
         </div>
-        <StatusBadge status={status} />
+        <StatusBadge status={displayStatus} />
       </Link>
 
       <div className="absolute top-3 right-3 flex gap-1.5">

@@ -7,6 +7,9 @@ const STATUS: Record<string, { label: string; bg: string; text: string }> = {
   READY_FOR_REVIEW: { label: "Prêt pour relecture", bg: "#EEEAE4", text: "#57524B" },
   EXPORTED: { label: "Publié", bg: "#1F2A2E", text: "#FFFFFF" },
   HUMAN_EDITOR_REQUESTED: { label: "Chez le monteur", bg: "#E85A2A", text: "#FFFFFF" },
+  // Affichés une fois tous les modules de post-production validés (cf. displayStatus, lib/moduleProgress.ts).
+  READY_TO_PUBLISH: { label: "Prêt à diffuser", bg: "#2E7D4F", text: "#FFFFFF" },
+  PUBLISHED: { label: "Diffusé", bg: "#1F2A2E", text: "#FFFFFF" },
   FAILED: { label: "Échec", bg: "#8A2E1F", text: "#FFFFFF" },
 };
 

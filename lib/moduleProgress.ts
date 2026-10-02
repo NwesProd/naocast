@@ -32,6 +32,25 @@ export function isMontageDone(state: Pick<EpisodeModuleState, "status" | "montag
   return state.montageValidatedExternally || state.status === "EXPORTED";
 }
 
+// Statut affiché sur la carte de l'épisode. Une fois la post-production
+// complète (intro, montage et transcript validés, dans naocast ou hors
+// naocast), l'épisode est "Prêt à diffuser" tant que sa date de sortie est à
+// venir (ou absente), et "Diffusé" dès le jour de sortie. Les statuts en cours
+// de route (traitement, échec, chez le monteur) priment toujours : tant que le
+// pipeline travaille, on n'affiche pas "prêt". `todayYmd` : date du jour au
+// format AAAA-MM-JJ, dans le fuseau de l'utilisateur.
+export type DisplayStatus = string;
+
+export function displayStatus(state: EpisodeModuleState, releaseDate: Date | null, todayYmd: string): DisplayStatus {
+  const settled = state.status === "DRAFT" || state.status === "READY_FOR_REVIEW" || state.status === "EXPORTED";
+  const allDone = isIntroDone(state) && isMontageDone(state) && state.hasTranscript;
+  if (!settled || !allDone) return state.status;
+
+  // La date de sortie est stockée à minuit UTC du jour choisi.
+  const releaseYmd = releaseDate ? releaseDate.toISOString().slice(0, 10) : null;
+  return releaseYmd && releaseYmd <= todayYmd ? "PUBLISHED" : "READY_TO_PUBLISH";
+}
+
 // Épisode pas encore paramétré (pas de titre) : direction la page d'infos,
 // aucun module n'est déverrouillé avant ça (cf. sidebar : "Sélectionne un
 // épisode pour débloquer les modules"). Sinon, le premier module déverrouillé
