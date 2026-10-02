@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
+import { sendWelcomeEmail } from "@/lib/email";
 
 const schema = z.object({
   email: z.string().email(),
@@ -25,6 +26,10 @@ export async function POST(req: Request) {
 
   const passwordHash = await bcrypt.hash(password, 10);
   const user = await prisma.user.create({ data: { email, passwordHash, profileType } });
+
+  // Mail de bienvenue : jamais bloquant, un souci d'envoi ne doit pas faire
+  // échouer une inscription par ailleurs réussie.
+  sendWelcomeEmail(user.email).catch((err) => console.error("[signup] échec du mail de bienvenue:", err));
 
   return NextResponse.json({ id: user.id, email: user.email });
 }

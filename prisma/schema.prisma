@@ -51,6 +51,27 @@ model User {
   // pour distinguer un abonnement suspendu (impayé) d'un downgrade explicite.
   subscriptionStatus   String?
   currentPeriodEnd     DateTime?
+
+  // Désinscription des mails d'information (news, nouveautés) : les mails
+  // transactionnels (bienvenue, mot de passe, magic link) partent toujours.
+  marketingOptOut Boolean @default(false)
+
+  loginTokens LoginToken[]
+}
+
+// Lien de connexion à usage unique ("magic link"), envoyé par email depuis le
+// back office. Même principe que PasswordResetToken : seul le hash est
+// stocké, la valeur en clair n'existe que dans le lien envoyé à l'utilisateur.
+model LoginToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
 }
 
 model PasswordResetToken {
