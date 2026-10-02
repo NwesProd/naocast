@@ -3,7 +3,11 @@ import type { EpisodeUsage } from "@/lib/entitlements";
 
 // Bandeau d'état du forfait sur le dashboard : où en est l'utilisateur par
 // rapport à sa limite d'épisodes, avec un lien vers /billing pour upgrader.
+// Absent sur infinity et lifetime : épisodes illimités, rien à surveiller ni à
+// upgrader (le forfait reste visible dans la sidebar).
 export function PlanUsageBanner({ usage }: { usage: EpisodeUsage }) {
+  if (usage.plan === "INFINITY" || usage.plan === "LIFETIME") return null;
+
   const nearLimit = usage.limit !== null && usage.used >= usage.limit;
 
   return (
