@@ -5,6 +5,7 @@ import { getEpisodeUsage } from "@/lib/entitlements";
 import { NewEpisodeButton } from "./NewEpisodeButton";
 import { EpisodeCard } from "./EpisodeCard";
 import { PlanUsageBanner } from "./PlanUsageBanner";
+import { PLAN_LOCKS_VALIDATED_EPISODE_DELETION } from "@/lib/plan";
 
 export default async function DashboardPage() {
   const session = await auth();
@@ -60,6 +61,7 @@ export default async function DashboardPage() {
               guestsCastingValidated={ep.guestsCastingValidated}
               hasTranscript={ep._count.transcriptSegments > 0}
               scriptValidated={ep.scriptValidated}
+              deletionLockedWhenValidated={PLAN_LOCKS_VALIDATED_EPISODE_DELETION[usage.plan]}
             />
           ))}
         </div>

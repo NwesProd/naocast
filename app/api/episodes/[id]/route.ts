@@ -4,6 +4,8 @@ import { requireUserId, requireOwnedEpisode, AuthError } from "@/lib/authz";
 import { jsonResponse } from "@/lib/json";
 import { getFullEpisode } from "@/lib/episode";
 import { deleteEpisodeStorage } from "@/lib/pipeline/cleanup";
+import { getUserPlan } from "@/lib/entitlements";
+import { PLAN_LOCKS_VALIDATED_EPISODE_DELETION } from "@/lib/plan";
 import { z } from "zod";
 
 // requireUserId/requireOwnedEpisode lèvent au lieu de répondre directement
@@ -93,10 +95,12 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     return errorResponse(err);
   }
 
-  // Un épisode exporté est définitivement figé (cf. /restart-tunnel) : le
-  // supprimer permettrait de contourner la limite du forfait gratuit (1
-  // épisode) en recommençant indéfiniment avec un nouvel épisode "vierge".
-  if (episode.status === "EXPORTED") {
+  // Free et basic : un épisode exporté ne peut plus être supprimé (cf.
+  // PLAN_LOCKS_VALIDATED_EPISODE_DELETION), ce qui permettrait de contourner
+  // le quota en recommençant avec un nouvel épisode "vierge". Infinity et
+  // lifetime, sans limite d'épisodes, peuvent le supprimer.
+  const plan = await getUserPlan(userId);
+  if (episode.status === "EXPORTED" && PLAN_LOCKS_VALIDATED_EPISODE_DELETION[plan]) {
     return NextResponse.json({ error: "Cet épisode a été validé et ne peut plus être supprimé." }, { status: 403 });
   }
 

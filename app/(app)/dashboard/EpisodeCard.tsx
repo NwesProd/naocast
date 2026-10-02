@@ -62,6 +62,8 @@ interface EpisodeCardProps {
   guestsCastingValidated: boolean;
   hasTranscript: boolean;
   scriptValidated: boolean;
+  // Free et basic : un épisode validé ne peut plus être supprimé (cf. lib/plan.ts).
+  deletionLockedWhenValidated: boolean;
 }
 
 export function EpisodeCard({
@@ -77,12 +79,13 @@ export function EpisodeCard({
   guestsCastingValidated,
   hasTranscript,
   scriptValidated,
+  deletionLockedWhenValidated,
 }: EpisodeCardProps) {
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const locked = status === "EXPORTED";
+  const locked = status === "EXPORTED" && deletionLockedWhenValidated;
 
   const zone = ZONE_CLASSES[status] || DEFAULT_ZONE;
   const sn = [season != null ? `S${season}` : null, episodeNumber != null ? `E${episodeNumber}` : null]
@@ -153,7 +156,7 @@ export function EpisodeCard({
             setConfirming(true);
           }}
           disabled={locked}
-          title={locked ? "Épisode validé : ne peut plus être supprimé" : "Supprimer l'épisode"}
+          title={locked ? "Épisode validé : ne peut plus être supprimé avec votre forfait" : "Supprimer l'épisode"}
           className={`rounded-full bg-white/70 p-1.5 transition ${
             locked ? "text-[#8A2E1F]/30 cursor-not-allowed" : "hover:bg-white text-[#8A2E1F]"
           }`}

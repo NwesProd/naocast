@@ -54,6 +54,17 @@ export const PLAN_MULTI_PODCAST: Record<Plan, boolean> = {
   LIFETIME: true,
 };
 
+// Un épisode validé (exporté) ne peut plus être supprimé sur les forfaits à
+// quota (free : 1 épisode au total, basic : 10 par mois) : sinon supprimer puis
+// recréer un épisode contournerait la limite. Sans objet pour infinity et
+// lifetime (épisodes illimités).
+export const PLAN_LOCKS_VALIDATED_EPISODE_DELETION: Record<Plan, boolean> = {
+  FREE: true,
+  BASIC: true,
+  INFINITY: false,
+  LIFETIME: false,
+};
+
 export const LIFETIME_SEATS_LIMIT = 50;
 
 // Modules réellement construits, avec leur libellé : ce sont les seuls qu'on
