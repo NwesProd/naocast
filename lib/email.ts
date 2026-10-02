@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "crypto";
-import { newsEmail, renderTemplate } from "@/lib/emailTemplates";
+import { newsEmail, renderTemplate, type EmailKind } from "@/lib/emailTemplates";
+import { logEmails } from "@/lib/emailLog";
 import { getTemplateFields } from "@/lib/emailTemplateStore";
 
 // Envoi d'emails via Resend (https://resend.com). Sans RESEND_API_KEY (dev),
@@ -27,6 +28,8 @@ export interface EmailMessage {
   html: string;
   text?: string;
   headers?: Record<string, string>;
+  // Nature du mail, pour le journal d'emails (jamais envoyée à Resend).
+  kind?: EmailKind;
 }
 
 function fromAddress(): string {
@@ -49,18 +52,28 @@ export async function sendEmail(msg: EmailMessage): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     console.log(`[email] (dev, aucun RESEND_API_KEY) à ${msg.to} : ${msg.subject}\n${msg.text || msg.html}`);
+    await logEmails([{ msg, status: "SIMULATED" }]);
     return;
   }
 
-  const res = await fetch(`${RESEND_API}/emails`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify(toResendPayload(msg)),
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${RESEND_API}/emails`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify(toResendPayload(msg)),
+    });
+  } catch (err) {
+    await logEmails([{ msg, status: "FAILED", error: (err as Error).message }]);
+    throw err;
+  }
   if (!res.ok) {
     const body = await res.text().catch(() => "");
+    await logEmails([{ msg, status: "FAILED", error: `HTTP ${res.status} ${body}` }]);
     throw new Error(`Échec de l'envoi de l'email (Resend, HTTP ${res.status}) : ${body}`);
   }
+  const data = (await res.json().catch(() => null)) as { id?: string } | null;
+  await logEmails([{ msg, status: "SENT", providerId: data?.id }]);
 }
 
 // Envoi groupé (news) : l'API batch de Resend accepte 100 messages par appel,
@@ -70,21 +83,31 @@ export async function sendEmailBatch(messages: EmailMessage[]): Promise<number> 
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     console.log(`[email] (dev, aucun RESEND_API_KEY) envoi groupé simulé : ${messages.length} message(s)`);
+    await logEmails(messages.map((msg) => ({ msg, status: "SIMULATED" as const })));
     return messages.length;
   }
 
   let sent = 0;
   for (let i = 0; i < messages.length; i += 100) {
     const chunk = messages.slice(i, i + 100);
-    const res = await fetch(`${RESEND_API}/emails/batch`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify(chunk.map(toResendPayload)),
-    });
+    let res: Response;
+    try {
+      res = await fetch(`${RESEND_API}/emails/batch`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify(chunk.map(toResendPayload)),
+      });
+    } catch (err) {
+      await logEmails(chunk.map((msg) => ({ msg, status: "FAILED" as const, error: (err as Error).message })));
+      throw err;
+    }
     if (!res.ok) {
       const body = await res.text().catch(() => "");
+      await logEmails(chunk.map((msg) => ({ msg, status: "FAILED" as const, error: `HTTP ${res.status} ${body}` })));
       throw new Error(`Échec de l'envoi groupé (Resend, HTTP ${res.status}) après ${sent} message(s) : ${body}`);
     }
+    const data = (await res.json().catch(() => null)) as { data?: { id?: string }[] } | null;
+    await logEmails(chunk.map((msg, idx) => ({ msg, status: "SENT" as const, providerId: data?.data?.[idx]?.id })));
     sent += chunk.length;
     if (i + 100 < messages.length) await new Promise((r) => setTimeout(r, 600));
   }
@@ -92,15 +115,15 @@ export async function sendEmailBatch(messages: EmailMessage[]): Promise<number> 
 }
 
 export async function sendPasswordResetEmail(to: string, resetUrl: string): Promise<void> {
-  await sendEmail({ to, ...renderTemplate(await getTemplateFields("password_reset"), resetUrl) });
+  await sendEmail({ to, kind: "password_reset", ...renderTemplate(await getTemplateFields("password_reset"), resetUrl) });
 }
 
 export async function sendWelcomeEmail(to: string): Promise<void> {
-  await sendEmail({ to, ...renderTemplate(await getTemplateFields("welcome"), `${appUrl()}/podcast`) });
+  await sendEmail({ to, kind: "welcome", ...renderTemplate(await getTemplateFields("welcome"), `${appUrl()}/podcast`) });
 }
 
 export async function sendMagicLinkEmail(to: string, loginUrl: string): Promise<void> {
-  await sendEmail({ to, ...renderTemplate(await getTemplateFields("magic_link"), loginUrl) });
+  await sendEmail({ to, kind: "magic_link", ...renderTemplate(await getTemplateFields("magic_link"), loginUrl) });
 }
 
 // Jeton de désinscription : HMAC de l'id utilisateur avec le secret de
@@ -131,6 +154,7 @@ export function buildNewsMessage(user: { id: string; email: string }, subject: s
   const unsub = unsubscribeUrl(user.id);
   return {
     to: user.email,
+    kind: "news",
     ...newsEmail(subject, body, unsub),
     headers: { "List-Unsubscribe": `<${unsub}>` },
   };

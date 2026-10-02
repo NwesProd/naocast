@@ -15,6 +15,6 @@ export const POST = withAdmin<{ params: Promise<{ key: string }> }>(async (req, 
   if (!parsed.success) return NextResponse.json({ error: "Objet, titre, message et libellé du bouton sont requis." }, { status: 400 });
 
   const rendered = renderTemplate(parsed.data, `${appUrl()}/login`);
-  await sendEmail({ to: admin.email, ...rendered, subject: `[Test] ${rendered.subject}` });
+  await sendEmail({ to: admin.email, kind: "test", ...rendered, subject: `[Test] ${rendered.subject}` });
   return NextResponse.json({ ok: true, sentTo: admin.email });
 });

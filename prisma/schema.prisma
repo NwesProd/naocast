@@ -59,6 +59,33 @@ model User {
   loginTokens LoginToken[]
 }
 
+enum EmailStatus {
+  SENT
+  FAILED
+  // Aucune clé Resend configurée (dev) : le mail a seulement été loggé.
+  SIMULATED
+}
+
+// Journal des emails envoyés par l'app (consultable dans le back office, en
+// global et par utilisateur). Ne contient jamais le contenu du mail : un lien
+// de réinitialisation ou de connexion y serait un secret en clair. Rattaché à
+// l'utilisateur par son email (en minuscules), pas par une clé étrangère : le
+// journal survit à la suppression d'un compte.
+model EmailLog {
+  id         String      @id @default(cuid())
+  toEmail    String
+  // welcome | password_reset | magic_link | news | test | other
+  kind       String
+  subject    String
+  status     EmailStatus
+  error      String?
+  providerId String?
+  createdAt  DateTime    @default(now())
+
+  @@index([createdAt])
+  @@index([toEmail])
+}
+
 // Version modifiée d'un mail automatique (bienvenue, mot de passe oublié,
 // magic link), éditée depuis le back office. Absente = texte d'origine défini
 // dans lib/emailTemplates.ts.

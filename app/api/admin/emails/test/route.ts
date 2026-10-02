@@ -11,6 +11,6 @@ export const POST = withAdmin(async (req, _ctx, admin) => {
   const parsed = schema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Objet et message sont requis." }, { status: 400 });
 
-  await sendEmail(buildNewsMessage(admin, parsed.data.subject, parsed.data.body));
+  await sendEmail({ ...buildNewsMessage(admin, parsed.data.subject, parsed.data.body), kind: "test" });
   return NextResponse.json({ ok: true, sentTo: admin.email });
 });

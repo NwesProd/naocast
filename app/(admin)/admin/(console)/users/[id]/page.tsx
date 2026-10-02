@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { requireAdminPage } from "@/lib/admin";
 import { prisma } from "@/lib/db";
 import { PlanPill, StatusPill, formatDate, formatDateTime } from "../../ui";
+import { EmailLogTable } from "../../EmailLogTable";
 import { UserActions } from "./UserActions";
 
 export default async function AdminUserPage({ params }: { params: Promise<{ id: string }> }) {
@@ -20,6 +21,12 @@ export default async function AdminUserPage({ params }: { params: Promise<{ id: 
         select: { id: true, title: true, season: true, episodeNumber: true, status: true, createdAt: true },
       })
     : [];
+
+  const emailLog = await prisma.emailLog.findMany({
+    where: { toEmail: user.email.toLowerCase() },
+    orderBy: { createdAt: "desc" },
+    take: 20,
+  });
 
   const hasActiveSubscription = !!user.stripeSubscriptionId && ["active", "trialing", "past_due"].includes(user.subscriptionStatus ?? "");
 
@@ -124,6 +131,12 @@ export default async function AdminUserPage({ params }: { params: Promise<{ id: 
             </tbody>
           </table>
         </div>
+      </section>
+
+      <section className="admin-section">
+        <h2 className="admin-section-title">journal d&apos;emails</h2>
+        <EmailLogTable rows={emailLog} showRecipient={false} />
+        {emailLog.length === 20 && <p className="admin-help">Les 20 derniers emails. L&apos;historique complet est dans l&apos;onglet Emails.</p>}
       </section>
     </>
   );

@@ -53,6 +53,9 @@ export interface TemplateFields {
   note: string;
 }
 
+// Nature d'un mail envoyé, pour le journal d'emails du back office.
+export type EmailKind = TemplateKey | "news" | "test" | "other";
+
 export const TEMPLATE_KEYS: TemplateKey[] = ["welcome", "password_reset", "magic_link"];
 
 export const TEMPLATE_DEFS: Record<TemplateKey, { label: string; trigger: string; linkHelp: string; defaults: TemplateFields }> = {
