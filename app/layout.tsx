@@ -16,7 +16,7 @@ const plusJakartaSans = Plus_Jakarta_Sans({
 
 export const metadata: Metadata = {
   title: "naocast.",
-  description: "Post-production podcast, sans effort.",
+  description: "Ton podcast manager",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
