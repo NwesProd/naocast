@@ -484,6 +484,66 @@
   word-break: break-all;
 }
 
+/* Fenêtre modale : seule chose flottante, donc seule à porter une ombre */
+.admin-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(40, 40, 40, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+}
+
+.admin-modal {
+  background: var(--bg);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-pop);
+  width: 100%;
+  max-width: 1040px;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.admin-modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.admin-modal-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 24px;
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.admin-modal-preview {
+  width: 100%;
+  height: 520px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: #f6f4f1;
+}
+
+.admin-modal-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 16px 24px;
+  background: var(--bg-sidebar);
+  border-top: 1px solid var(--border);
+}
+
 /* Mobile : la barre latérale devient une barre horizontale défilante */
 @media (max-width: 900px) {
   .admin-root {
@@ -521,6 +581,12 @@
   }
   .admin-kv {
     grid-template-columns: 1fr;
+  }
+  .admin-modal-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .admin-modal-preview {
+    height: 420px;
   }
 }
 

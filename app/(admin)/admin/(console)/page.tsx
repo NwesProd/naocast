@@ -21,24 +21,6 @@ export default async function AdminDashboardPage() {
         </div>
       </div>
 
-      {stats.failedJobs7d > 0 && (
-        <section className="admin-section">
-          <div className="admin-card highlight admin-row" style={{ justifyContent: "space-between" }}>
-            <div>
-              <h2 className="admin-section-title" style={{ marginBottom: 4 }}>
-                {stats.failedJobs7d} traitement{stats.failedJobs7d > 1 ? "s" : ""} en échec cette semaine
-              </h2>
-              <p className="admin-card-detail" style={{ color: "var(--orange-ink)", marginTop: 0 }}>
-                Des utilisateurs attendent peut-être un montage. Regarde les erreurs et relance si besoin.
-              </p>
-            </div>
-            <Link href="/admin/sante" className="admin-btn primary">
-              Voir les échecs
-            </Link>
-          </div>
-        </section>
-      )}
-
       <section className="admin-section">
         <div className="admin-grid">
           <div className="admin-card">
@@ -66,7 +48,7 @@ export default async function AdminDashboardPage() {
       </section>
 
       <section className="admin-section">
-        <div className="admin-grid">
+        <div className="admin-grid cols-2">
           <div className="admin-card">
             <h2 className="admin-section-title">utilisateurs par forfait</h2>
             <table className="admin-table" style={{ width: "100%" }}>
@@ -90,25 +72,6 @@ export default async function AdminDashboardPage() {
                     <td className="num" style={{ paddingRight: 0 }}>{stats.episodesByStatus[status] ?? 0}</td>
                   </tr>
                 ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="admin-card">
-            <h2 className="admin-section-title">pipeline</h2>
-            <table className="admin-table" style={{ width: "100%" }}>
-              <tbody>
-                <tr>
-                  <td style={{ paddingLeft: 0 }}>En attente</td>
-                  <td className="num" style={{ paddingRight: 0 }}>{stats.pendingJobs}</td>
-                </tr>
-                <tr>
-                  <td style={{ paddingLeft: 0 }}>En cours</td>
-                  <td className="num" style={{ paddingRight: 0 }}>{stats.runningJobs}</td>
-                </tr>
-                <tr>
-                  <td style={{ paddingLeft: 0 }}>Échecs (7 jours)</td>
-                  <td className="num" style={{ paddingRight: 0 }}>{stats.failedJobs7d}</td>
-                </tr>
               </tbody>
             </table>
           </div>

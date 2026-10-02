@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { priceIdToPlanKey, type PaidPlanKey } from "@/lib/stripe";
-import type { Plan } from "@/app/generated/prisma/client";
+import type { Plan, Prisma } from "@/app/generated/prisma/client";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -13,6 +13,23 @@ const MONTHLY_EQUIVALENT_EUR: Record<Exclude<PaidPlanKey, "LIFETIME">, number> =
   INFINITY_YEAR: 890 / 12,
 };
 const LIFETIME_PRICE_EUR = 328;
+
+// Comptes de test (QA, démos) : domaines réservés par la RFC 2606 (example.*,
+// .test, .invalid), qui ne peuvent jamais être de vrais utilisateurs. Ils sont
+// exclus des chiffres du back office et des envois d'actualités, mais restent
+// visibles (avec une pastille "test") dans la liste des utilisateurs.
+const TEST_EMAIL_SUFFIXES = ["@example.com", "@example.org", "@example.net", ".test", ".invalid"];
+
+export const isTestUserWhere: Prisma.UserWhereInput = {
+  OR: TEST_EMAIL_SUFFIXES.map((suffix) => ({ email: { endsWith: suffix, mode: "insensitive" as const } })),
+};
+
+export const realUserWhere: Prisma.UserWhereInput = { NOT: isTestUserWhere };
+
+export function isTestEmail(email: string): boolean {
+  const lower = email.toLowerCase();
+  return TEST_EMAIL_SUFFIXES.some((suffix) => lower.endsWith(suffix));
+}
 
 export interface DailyPoint {
   date: string; // YYYY-MM-DD
@@ -44,33 +61,34 @@ export async function getDashboardStats() {
   // Lots de 5 requêtes maximum en parallèle, jamais les 14 d'un coup : avec
   // les driver adapters de Prisma 7, trop de requêtes concurrentes font fermer
   // la connexion Postgres (P1017, cf. lib/episode.ts).
+  // Tout est limité aux vrais comptes : les épisodes et podcasts des comptes
+  // de test (leurs "actions") ne comptent pas non plus.
+  const ofRealUser = { user: realUserWhere };
+  const episodeOfRealUser = { podcast: ofRealUser };
+
   const [totalUsers, usersByPlanRaw, newUsers7d, recentUsers, totalEpisodes] = await Promise.all([
-    prisma.user.count(),
-    prisma.user.groupBy({ by: ["plan"], _count: { _all: true } }),
-    prisma.user.count({ where: { createdAt: { gte: since7 } } }),
-    prisma.user.findMany({ where: { createdAt: { gte: since30 } }, select: { createdAt: true } }),
-    prisma.episode.count(),
+    prisma.user.count({ where: realUserWhere }),
+    prisma.user.groupBy({ by: ["plan"], where: realUserWhere, _count: { _all: true } }),
+    prisma.user.count({ where: { ...realUserWhere, createdAt: { gte: since7 } } }),
+    prisma.user.findMany({ where: { ...realUserWhere, createdAt: { gte: since30 } }, select: { createdAt: true } }),
+    prisma.episode.count({ where: episodeOfRealUser }),
   ]);
   const [episodesByStatusRaw, recentEpisodes, podcastCount, subscribers, lifetimeCount] = await Promise.all([
-    prisma.episode.groupBy({ by: ["status"], _count: { _all: true } }),
-    prisma.episode.findMany({ where: { createdAt: { gte: since30 } }, select: { createdAt: true } }),
-    prisma.podcast.count(),
+    prisma.episode.groupBy({ by: ["status"], where: episodeOfRealUser, _count: { _all: true } }),
+    prisma.episode.findMany({ where: { ...episodeOfRealUser, createdAt: { gte: since30 } }, select: { createdAt: true } }),
+    prisma.podcast.count({ where: ofRealUser }),
     prisma.user.findMany({
-      where: { stripePriceId: { not: null }, subscriptionStatus: { in: ["active", "trialing", "past_due"] } },
+      where: { ...realUserWhere, stripePriceId: { not: null }, subscriptionStatus: { in: ["active", "trialing", "past_due"] } },
       select: { stripePriceId: true },
     }),
-    prisma.user.count({ where: { plan: "LIFETIME" } }),
+    prisma.user.count({ where: { ...realUserWhere, plan: "LIFETIME" } }),
   ]);
-  const [failedJobs7d, pendingJobs, runningJobs, latestUsers] = await Promise.all([
-    prisma.processingJob.count({ where: { status: "FAILED", createdAt: { gte: since7 } } }),
-    prisma.processingJob.count({ where: { status: "PENDING" } }),
-    prisma.processingJob.count({ where: { status: "RUNNING" } }),
-    prisma.user.findMany({
-      orderBy: { createdAt: "desc" },
-      take: 6,
-      select: { id: true, email: true, plan: true, createdAt: true },
-    }),
-  ]);
+  const latestUsers = await prisma.user.findMany({
+    where: realUserWhere,
+    orderBy: { createdAt: "desc" },
+    take: 6,
+    select: { id: true, email: true, plan: true, createdAt: true },
+  });
 
   const usersByPlan: Record<Plan, number> = { FREE: 0, BASIC: 0, INFINITY: 0, LIFETIME: 0 };
   for (const row of usersByPlanRaw) usersByPlan[row.plan] = row._count._all;
@@ -99,9 +117,6 @@ export async function getDashboardStats() {
     mrrEur: Math.round(mrr * 100) / 100,
     lifetimeCount,
     lifetimeRevenueEur: lifetimeCount * LIFETIME_PRICE_EUR,
-    failedJobs7d,
-    pendingJobs,
-    runningJobs,
     latestUsers,
   };
 }

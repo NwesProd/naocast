@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { withAdmin } from "@/lib/adminApi";
+import { realUserWhere } from "@/lib/adminStats";
 import { buildNewsMessage, sendEmailBatch } from "@/lib/email";
 import type { Prisma } from "@/app/generated/prisma/client";
 
@@ -22,15 +23,15 @@ function segmentFilter(segment: z.infer<typeof schema>["segment"]): Prisma.UserW
 
 // Mail d'information à un segment d'utilisateurs. Les désinscrits
 // (marketingOptOut) sont toujours exclus, et chaque message porte son lien de
-// désinscription personnel. Les mails de compte (mot de passe, connexion) ne
-// passent jamais par ici.
+// désinscription personnel. Les comptes de test (example.*) sont exclus. Les
+// mails de compte (mot de passe, connexion) ne passent jamais par ici.
 export const POST = withAdmin(async (req) => {
   const parsed = schema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Objet, message et segment sont requis." }, { status: 400 });
   const { subject, body, segment, dryRun } = parsed.data;
 
   const recipients = await prisma.user.findMany({
-    where: { ...segmentFilter(segment), marketingOptOut: false },
+    where: { ...segmentFilter(segment), ...realUserWhere, marketingOptOut: false },
     select: { id: true, email: true },
   });
 

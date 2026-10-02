@@ -59,6 +59,19 @@ model User {
   loginTokens LoginToken[]
 }
 
+// Version modifiée d'un mail automatique (bienvenue, mot de passe oublié,
+// magic link), éditée depuis le back office. Absente = texte d'origine défini
+// dans lib/emailTemplates.ts.
+model EmailTemplate {
+  key         String   @id
+  subject     String
+  heading     String
+  body        String
+  buttonLabel String
+  note        String
+  updatedAt   DateTime @updatedAt
+}
+
 // Lien de connexion à usage unique ("magic link"), envoyé par email depuis le
 // back office. Même principe que PasswordResetToken : seul le hash est
 // stocké, la valeur en clair n'existe que dans le lien envoyé à l'utilisateur.

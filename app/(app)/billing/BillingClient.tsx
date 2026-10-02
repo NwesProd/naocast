@@ -29,7 +29,7 @@ const PLAN_CARDS: PlanCard[] = [
     priceLabel: "22,80€ TTC / mois",
     monthlyCheckoutKey: "BASIC_MONTH",
     yearlyCheckoutKey: "BASIC_YEAR",
-    note: "10 épisodes/mois · 1 podcast · ou 228€ TTC/an",
+    note: "10 épisodes/mois · 1 podcast",
   },
   // naocast infinity masqué pour le moment (offre pas encore mise en avant),
   // le forfait existe toujours côté quotas/Stripe, seule la carte est cachée.
@@ -151,7 +151,7 @@ export function BillingClient({
                       disabled={!!loadingKey}
                       className="w-full text-sm font-semibold rounded-pill bg-primary-button text-white px-3 py-2 hover:opacity-90 transition disabled:opacity-50"
                     >
-                      {loadingKey === card.monthlyCheckoutKey ? "..." : "Choisir (mensuel)"}
+                      {loadingKey === card.monthlyCheckoutKey ? "..." : "Mensuel"}
                     </button>
                   )}
                   {card.yearlyCheckoutKey && (
@@ -160,7 +160,7 @@ export function BillingClient({
                       disabled={!!loadingKey}
                       className="w-full text-sm font-semibold rounded-pill bg-white border border-border px-3 py-2 hover:bg-[#FAFAF8] transition disabled:opacity-50"
                     >
-                      {loadingKey === card.yearlyCheckoutKey ? "..." : "Choisir (annuel)"}
+                      {loadingKey === card.yearlyCheckoutKey ? "..." : "Annuel - 2 mois offerts"}
                     </button>
                   )}
                   {card.lifetimeCheckoutKey && (

@@ -1,10 +1,6 @@
 import { createHmac, timingSafeEqual } from "crypto";
-import {
-  magicLinkEmail,
-  newsEmail,
-  passwordResetEmail,
-  welcomeEmail,
-} from "@/lib/emailTemplates";
+import { newsEmail, renderTemplate } from "@/lib/emailTemplates";
+import { getTemplateFields } from "@/lib/emailTemplateStore";
 
 // Envoi d'emails via Resend (https://resend.com). Sans RESEND_API_KEY (dev),
 // le message est simplement loggé côté serveur : tout reste testable de bout
@@ -96,15 +92,15 @@ export async function sendEmailBatch(messages: EmailMessage[]): Promise<number> 
 }
 
 export async function sendPasswordResetEmail(to: string, resetUrl: string): Promise<void> {
-  await sendEmail({ to, ...passwordResetEmail(resetUrl) });
+  await sendEmail({ to, ...renderTemplate(await getTemplateFields("password_reset"), resetUrl) });
 }
 
 export async function sendWelcomeEmail(to: string): Promise<void> {
-  await sendEmail({ to, ...welcomeEmail(appUrl()) });
+  await sendEmail({ to, ...renderTemplate(await getTemplateFields("welcome"), `${appUrl()}/podcast`) });
 }
 
 export async function sendMagicLinkEmail(to: string, loginUrl: string): Promise<void> {
-  await sendEmail({ to, ...magicLinkEmail(loginUrl) });
+  await sendEmail({ to, ...renderTemplate(await getTemplateFields("magic_link"), loginUrl) });
 }
 
 // Jeton de désinscription : HMAC de l'id utilisateur avec le secret de

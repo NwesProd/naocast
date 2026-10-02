@@ -36,45 +36,89 @@ ${footerHtml ? `<p style="max-width:560px;color:${MUTED};font-size:12px;font-fam
 </body></html>`;
 }
 
-export function welcomeEmail(appBaseUrl: string) {
-  const url = `${appBaseUrl}/podcast`;
-  return {
-    subject: "Bienvenue sur naocast.",
-    html: layout(`
-<p style="margin:0 0 12px;font-size:18px;font-weight:700">Bienvenue sur naocast.</p>
-<p style="margin:0 0 12px">Votre compte est prêt. Pour monter votre premier épisode, trois étapes :</p>
-<ol style="margin:0 0 12px;padding-left:20px">
-<li>Configurez votre podcast : titre, pochette, génériques et logo.</li>
-<li>Créez un épisode et importez vos rushs.</li>
-<li>Laissez naocast. monter, puis validez le résultat en relecture.</li>
-</ol>
-${button(url, "Configurer mon podcast")}
-<p style="margin:0">Une question ? Répondez simplement à cet email.</p>`),
-    text: `Bienvenue sur naocast.\n\nVotre compte est prêt. Pour monter votre premier épisode :\n1. Configurez votre podcast (titre, pochette, génériques, logo)\n2. Créez un épisode et importez vos rushs\n3. Laissez naocast. monter, puis validez en relecture\n\nCommencer : ${url}\n\nUne question ? Répondez simplement à cet email.`,
-  };
+// Mails automatiques dont le texte est modifiable depuis le back office
+// (onglet Emails). Les valeurs d'origine sont ici ; une version modifiée est
+// stockée en base (EmailTemplate) et remplace ces valeurs champ par champ.
+// Le lien du bouton reste, lui, toujours généré par l'app (jeton propre à
+// chaque envoi) : seul son libellé se modifie.
+export type TemplateKey = "welcome" | "password_reset" | "magic_link";
+
+export interface TemplateFields {
+  subject: string;
+  heading: string;
+  // Texte simple : une ligne vide sépare deux paragraphes.
+  body: string;
+  buttonLabel: string;
+  // Petite mention sous le bouton (peut être vide).
+  note: string;
 }
 
-export function passwordResetEmail(resetUrl: string) {
-  return {
-    subject: "Réinitialisation de votre mot de passe naocast.",
-    html: layout(`
-<p style="margin:0 0 12px;font-size:18px;font-weight:700">Choisissez un nouveau mot de passe</p>
-<p style="margin:0 0 12px">Un lien de réinitialisation a été demandé pour votre compte.</p>
-${button(resetUrl, "Choisir un nouveau mot de passe")}
-<p style="margin:0;color:${MUTED};font-size:13px">Ce lien expire dans une heure. Si vous n'êtes pas à l'origine de cette demande, ignorez cet email.</p>`),
-    text: `Un lien de réinitialisation a été demandé pour votre compte naocast.\n\nChoisir un nouveau mot de passe : ${resetUrl}\n\nCe lien expire dans une heure. Si vous n'êtes pas à l'origine de cette demande, ignorez cet email.`,
-  };
+export const TEMPLATE_KEYS: TemplateKey[] = ["welcome", "password_reset", "magic_link"];
+
+export const TEMPLATE_DEFS: Record<TemplateKey, { label: string; trigger: string; linkHelp: string; defaults: TemplateFields }> = {
+  welcome: {
+    label: "Bienvenue",
+    trigger: "À l'inscription (renvoyable depuis la fiche utilisateur)",
+    linkHelp: "Le bouton ouvre la page de configuration du podcast.",
+    defaults: {
+      subject: "Bienvenue sur naocast.",
+      heading: "Bienvenue sur naocast.",
+      body: "Votre compte est prêt. Pour monter votre premier épisode, trois étapes :\n\n1. Configurez votre podcast : titre, pochette, génériques et logo.\n2. Créez un épisode et importez vos rushs.\n3. Laissez naocast. monter, puis validez le résultat en relecture.",
+      buttonLabel: "Configurer mon podcast",
+      note: "Une question ? Répondez simplement à cet email.",
+    },
+  },
+  password_reset: {
+    label: "Mot de passe oublié",
+    trigger: "Demande de l'utilisateur, ou envoi depuis la fiche utilisateur",
+    linkHelp: "Le bouton ouvre un lien de réinitialisation personnel, valable une heure.",
+    defaults: {
+      subject: "Réinitialisation de votre mot de passe naocast.",
+      heading: "Choisissez un nouveau mot de passe",
+      body: "Un lien de réinitialisation a été demandé pour votre compte.",
+      buttonLabel: "Choisir un nouveau mot de passe",
+      note: "Ce lien expire dans une heure. Si vous n'êtes pas à l'origine de cette demande, ignorez cet email.",
+    },
+  },
+  magic_link: {
+    label: "Magic link",
+    trigger: "Envoi depuis la fiche utilisateur (valable 30 minutes, à usage unique)",
+    linkHelp: "Le bouton ouvre un lien de connexion personnel, à usage unique.",
+    defaults: {
+      subject: "Votre lien de connexion naocast.",
+      heading: "Connexion à naocast.",
+      body: "Utilisez ce lien pour vous connecter sans mot de passe.",
+      buttonLabel: "Me connecter",
+      note: "Ce lien est à usage unique et expire dans 30 minutes. Si vous n'avez rien demandé, ignorez cet email.",
+    },
+  },
+};
+
+export function isTemplateKey(value: string): value is TemplateKey {
+  return (TEMPLATE_KEYS as string[]).includes(value);
 }
 
-export function magicLinkEmail(loginUrl: string) {
+function paragraphsHtml(text: string): string {
+  return text
+    .trim()
+    .split(/\n{2,}/)
+    .filter(Boolean)
+    .map((p) => `<p style="margin:0 0 14px">${escapeHtml(p).replace(/\n/g, "<br>")}</p>`)
+    .join("");
+}
+
+// Rend un mail automatique à partir de ses champs (d'origine ou modifiés) et
+// du lien propre à cet envoi.
+export function renderTemplate(fields: TemplateFields, url: string) {
+  const note = fields.note.trim();
   return {
-    subject: "Votre lien de connexion naocast.",
+    subject: fields.subject,
     html: layout(`
-<p style="margin:0 0 12px;font-size:18px;font-weight:700">Connexion à naocast.</p>
-<p style="margin:0 0 12px">Utilisez ce lien pour vous connecter sans mot de passe.</p>
-${button(loginUrl, "Me connecter")}
-<p style="margin:0;color:${MUTED};font-size:13px">Ce lien est à usage unique et expire dans 30 minutes. Si vous n'avez rien demandé, ignorez cet email.</p>`),
-    text: `Utilisez ce lien pour vous connecter à naocast. sans mot de passe : ${loginUrl}\n\nCe lien est à usage unique et expire dans 30 minutes. Si vous n'avez rien demandé, ignorez cet email.`,
+<p style="margin:0 0 12px;font-size:18px;font-weight:700">${escapeHtml(fields.heading)}</p>
+${paragraphsHtml(fields.body)}
+${button(url, fields.buttonLabel)}
+${note ? `<p style="margin:0;color:${MUTED};font-size:13px">${escapeHtml(note)}</p>` : ""}`),
+    text: `${fields.heading}\n\n${fields.body.trim()}\n\n${fields.buttonLabel} : ${url}${note ? `\n\n${note}` : ""}`,
   };
 }
 

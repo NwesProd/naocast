@@ -1,5 +1,7 @@
 import { requireAdminPage } from "@/lib/admin";
+import { listTemplates } from "@/lib/emailTemplateStore";
 import { EmailsClient } from "./EmailsClient";
+import { TemplatesClient } from "./TemplatesClient";
 
 export default async function AdminEmailsPage() {
   const admin = await requireAdminPage();
@@ -22,33 +24,7 @@ export default async function AdminEmailsPage() {
 
       <EmailsClient adminEmail={admin.email} />
 
-      <section className="admin-section" style={{ marginTop: 32 }}>
-        <h2 className="admin-section-title">mails automatiques</h2>
-        <div className="admin-table-wrap">
-          <table className="admin-table">
-            <thead>
-              <tr>
-                <th>Mail</th>
-                <th>Déclencheur</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>Bienvenue</td>
-                <td>À l&apos;inscription (renvoyable depuis la fiche utilisateur)</td>
-              </tr>
-              <tr>
-                <td>Mot de passe oublié</td>
-                <td>Demande de l&apos;utilisateur, ou envoi depuis la fiche utilisateur</td>
-              </tr>
-              <tr>
-                <td>Magic link</td>
-                <td>Envoi depuis la fiche utilisateur (valable 30 minutes, à usage unique)</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
+      <TemplatesClient templates={await listTemplates()} adminEmail={admin.email} />
     </>
   );
 }

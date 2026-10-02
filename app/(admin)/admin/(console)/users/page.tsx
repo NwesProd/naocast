@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { requireAdminPage } from "@/lib/admin";
 import { prisma } from "@/lib/db";
+import { isTestEmail, realUserWhere } from "@/lib/adminStats";
 import { PLAN_LABELS } from "@/lib/plan";
-import { PlanPill, formatDate } from "../ui";
+import { Pill, PlanPill, formatDate } from "../ui";
 import type { Plan, Prisma } from "@/app/generated/prisma/client";
 
 const PAGE_SIZE = 25;
@@ -11,16 +12,19 @@ const PLANS: Plan[] = ["FREE", "BASIC", "INFINITY", "LIFETIME"];
 export default async function AdminUsersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; plan?: string; page?: string }>;
+  searchParams: Promise<{ q?: string; plan?: string; page?: string; test?: string }>;
 }) {
   await requireAdminPage();
-  const { q, plan, page } = await searchParams;
+  const { q, plan, page, test } = await searchParams;
+  // Les comptes de test (emails example.*) sont masqués par défaut.
+  const showTest = test === "1";
 
   const currentPage = Math.max(1, Number(page) || 1);
   const planFilter = PLANS.includes(plan as Plan) ? (plan as Plan) : undefined;
   const where: Prisma.UserWhereInput = {
     ...(q ? { email: { contains: q.trim(), mode: "insensitive" } } : {}),
     ...(planFilter ? { plan: planFilter } : {}),
+    ...(showTest ? {} : realUserWhere),
   };
 
   const total = await prisma.user.count({ where });
@@ -46,6 +50,7 @@ export default async function AdminUsersPage({
     const params = new URLSearchParams();
     if (q) params.set("q", q);
     if (planFilter) params.set("plan", planFilter);
+    if (showTest) params.set("test", "1");
     if (p > 1) params.set("page", String(p));
     const qs = params.toString();
     return `/admin/users${qs ? `?${qs}` : ""}`;
@@ -81,6 +86,10 @@ export default async function AdminUsersPage({
             </option>
           ))}
         </select>
+        <label className="admin-row" style={{ gap: 6, color: "var(--ink-muted)" }}>
+          <input type="checkbox" name="test" value="1" defaultChecked={showTest} />
+          Afficher les comptes de test
+        </label>
         <button type="submit" className="admin-btn secondary">
           Filtrer
         </button>
@@ -112,6 +121,11 @@ export default async function AdminUsersPage({
                   <Link href={`/admin/users/${u.id}`} className="admin-link">
                     {u.email}
                   </Link>
+                  {isTestEmail(u.email) && (
+                    <span style={{ marginLeft: 8 }}>
+                      <Pill>test</Pill>
+                    </span>
+                  )}
                 </td>
                 <td>
                   <PlanPill plan={u.plan} />

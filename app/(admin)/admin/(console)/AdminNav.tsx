@@ -36,11 +36,6 @@ const ICONS = {
       <path d="m4.93 4.93 4.24 4.24M14.83 9.17l4.24-4.24M14.83 14.83l4.24 4.24M9.17 14.83l-4.24 4.24" />
     </Icon>
   ),
-  health: (
-    <Icon>
-      <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-    </Icon>
-  ),
   mail: (
     <Icon>
       <rect x="2" y="4" width="20" height="16" rx="2" />
@@ -68,7 +63,6 @@ const GROUPS: { label: string; items: { href: string; label: string; icon: keyof
   {
     label: "exploitation",
     items: [
-      { href: "/admin/sante", label: "Santé du pipeline", icon: "health" },
       { href: "/admin/emails", label: "Emails", icon: "mail" },
     ],
   },
