@@ -78,6 +78,7 @@ export default async function MontagePage({ params }: { params: Promise<{ id: st
             choice: episode.introTeaserChoice,
             hasImport: !!episode.introTeaserImportKey,
           }}
+          initialIntroEditorNotes={episode.introEditorNotes ?? ""}
           initialGenerics={{
             introSource: episode.introSource,
             hasEpisodeIntro: !!episode.introKey,

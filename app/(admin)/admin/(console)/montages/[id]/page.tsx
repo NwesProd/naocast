@@ -160,6 +160,12 @@ export default async function AdminMontagePage({ params }: { params: Promise<{ i
                 <dl className="admin-kv">
                   <dt>Intro</dt>
                   <dd>{summary.intro}</dd>
+                  {summary.introNotes && (
+                    <>
+                      <dt>Remarques teaser</dt>
+                      <dd style={{ whiteSpace: "pre-wrap" }}>{summary.introNotes}</dd>
+                    </>
+                  )}
                   {summary.generics.map((g) => (
                     <div key={g.label} style={{ display: "contents" }}>
                       <dt>Générique {g.label.toLowerCase()}</dt>

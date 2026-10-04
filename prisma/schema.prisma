@@ -329,6 +329,9 @@ model Episode {
   introCreationMode      GenericCreationMode?
   introCustomMode        GenericCustomMode?
   introCustomDescription String?
+  // Étape "Intro" avec un monteur naocast. : remarques du podcasteur pour le teaser
+  // des meilleures punchlines que le monteur réalise.
+  introEditorNotes       String?
   outroCreationMode      GenericCreationMode?
   outroCustomMode        GenericCustomMode?
   outroCustomDescription String?

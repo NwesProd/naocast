@@ -55,6 +55,7 @@ const patchSchema = z.object({
   introCreationMode: z.enum(["IMPORT", "CUSTOM"]).optional(),
   introCustomMode: z.enum(["TEASER_COMPILATION", "OWN_IDEA"]).optional(),
   introCustomDescription: z.string().optional(),
+  introEditorNotes: z.string().max(5000).nullable().optional(),
   outroCreationMode: z.enum(["IMPORT", "CUSTOM"]).optional(),
   outroCustomMode: z.enum(["TEASER_COMPILATION", "OWN_IDEA"]).optional(),
   outroCustomDescription: z.string().optional(),

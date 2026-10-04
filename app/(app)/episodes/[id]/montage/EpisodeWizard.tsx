@@ -158,6 +158,7 @@ export function EpisodeWizard({
   initialIntroTeaser,
   initialGenerics,
   initialEditorNotes,
+  initialIntroEditorNotes,
 }: {
   episodeId: string;
   initialRushes: Rush[];
@@ -173,6 +174,7 @@ export function EpisodeWizard({
   initialCutSuggestions: CutSuggestionItem[];
   initialIntroTeaser: { validated: boolean; choice: IntroTeaserChoice; hasImport: boolean };
   initialEditorNotes: string;
+  initialIntroEditorNotes: string;
   initialGenerics: {
     introSource: IntroOutroSource;
     hasEpisodeIntro: boolean;
@@ -241,6 +243,8 @@ export function EpisodeWizard({
   const [ownEditorEmail, setOwnEditorEmail] = useState("");
   // Remarques pour le monteur naocast. (étape "Envoi") et validation du paiement au retour de Stripe.
   const [editorNotes, setEditorNotes] = useState(initialEditorNotes);
+  // Étape "Intro" avec un monteur naocast. : remarques pour son teaser de punchlines.
+  const [introEditorNotes, setIntroEditorNotes] = useState(initialIntroEditorNotes);
   const [confirmingPayment, setConfirmingPayment] = useState(searchParams.get("editing") === "success");
 
   // Certains appelants (ex. le bouton "Charger le transcript") n'attendent
@@ -694,6 +698,14 @@ export function EpisodeWizard({
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ introCustomMode: value }),
+    });
+  }
+
+  async function saveIntroEditorNotes() {
+    await fetch(`/api/episodes/${episodeId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ introEditorNotes: introEditorNotes.trim() || null }),
     });
   }
 
@@ -1470,6 +1482,23 @@ export function EpisodeWizard({
         {key === "intro" && (
           <div className="space-y-4">
             <h2 className="font-medium text-mint-ink">Intro</h2>
+            {editorChoice === "NEED_EDITOR" && (
+              <div className="rounded-[10px] border border-border bg-white p-3 space-y-2">
+                <p className="text-sm font-medium text-ink">
+                  Le monteur réalisera un teaser des meilleures punchlines. Fais-nous part de tes remarques.
+                </p>
+                <textarea
+                  value={introEditorNotes}
+                  onChange={(e) => setIntroEditorNotes(e.target.value)}
+                  onBlur={saveIntroEditorNotes}
+                  maxLength={5000}
+                  rows={4}
+                  aria-label="Remarques pour le teaser"
+                  placeholder="Les passages à retenir, le ton, la durée souhaitée, ce qu'il faut éviter..."
+                  className="w-full rounded-md border border-border bg-white px-3 py-2 text-sm"
+                />
+              </div>
+            )}
             <p className="text-sm text-mint-muted">
               Tu peux ici construire et insérer ton intro, avant le générique de début : un teaser de quelques
               passages choisis.
