@@ -158,6 +158,7 @@ export function EpisodeWizard({
   initialIntroTeaser,
   initialGenerics,
   initialMontageValidatedExternally,
+  initialEditorNotes,
 }: {
   episodeId: string;
   initialRushes: Rush[];
@@ -173,6 +174,7 @@ export function EpisodeWizard({
   initialCutSuggestions: CutSuggestionItem[];
   initialIntroTeaser: { validated: boolean; choice: IntroTeaserChoice; hasImport: boolean };
   initialMontageValidatedExternally: boolean;
+  initialEditorNotes: string;
   initialGenerics: {
     introSource: IntroOutroSource;
     hasEpisodeIntro: boolean;
@@ -239,6 +241,9 @@ export function EpisodeWizard({
   const [outroCustomMode, setOutroCustomMode] = useState<GenericCustomMode | null>(initialGenerics.outroCustomMode);
   const [outroCustomDescription, setOutroCustomDescription] = useState(initialGenerics.outroCustomDescription);
   const [ownEditorEmail, setOwnEditorEmail] = useState("");
+  // Remarques pour le monteur naocast. (étape "Envoi") et validation du paiement au retour de Stripe.
+  const [editorNotes, setEditorNotes] = useState(initialEditorNotes);
+  const [confirmingPayment, setConfirmingPayment] = useState(searchParams.get("editing") === "success");
 
   // Certains appelants (ex. le bouton "Charger le transcript") n'attendent
   // pas cette fonction dans leur propre try/catch, une erreur réseau ou un
@@ -773,6 +778,54 @@ export function EpisodeWizard({
       setSubmitting(false);
     }
   }
+
+  // "J'ai besoin d'un monteur" → étape "Envoi" : enregistre la demande avec les
+  // remarques puis redirige vers le paiement Stripe. La demande n'est transmise
+  // qu'une fois le paiement validé (cf. lib/editingRequest.ts).
+  async function handleSendToEditor() {
+    setSubmitting(true);
+    setError(null);
+    try {
+      await saveAutocut();
+      const res = await fetch(`/api/episodes/${episodeId}/editing-request`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notes: editorNotes }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.url) throw new Error(data.error || "Impossible de lancer le paiement, réessayez.");
+      window.location.href = data.url;
+    } catch (e) {
+      setError((e as Error).message);
+      setSubmitting(false);
+    }
+  }
+
+  // Retour de Stripe : "success" → on vérifie le paiement puis on file en
+  // relecture (page de suivi) ; "cancel" → rien n'est parti, on le dit.
+  useEffect(() => {
+    const editing = searchParams.get("editing");
+    if (editing === "cancel") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setError("Paiement annulé : votre demande n'a pas été envoyée au monteur.");
+      return;
+    }
+    const sessionId = searchParams.get("session_id");
+    if (editing !== "success" || !sessionId) return;
+    (async () => {
+      try {
+        const res = await fetch(`/api/episodes/${episodeId}/editing-request/confirm?session_id=${encodeURIComponent(sessionId)}`);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.paid) throw new Error("Paiement non confirmé pour le moment. Rechargez la page dans quelques instants.");
+        window.dispatchEvent(new Event(EPISODE_UPDATED_EVENT));
+        router.push(`/episodes/${episodeId}/review`);
+      } catch (e) {
+        setError((e as Error).message);
+        setConfirmingPayment(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // "J'ai déjà un monteur" → étape "Lancer" : au lieu de traiter l'épisode,
   // envoie un récapitulatif (rushs, découpes, génériques...) par email au
@@ -1693,13 +1746,33 @@ export function EpisodeWizard({
                   {submitting ? "Envoi..." : "Envoyer à mon monteur"}
                 </Button>
               </div>
+            ) : editorChoice === "NEED_EDITOR" ? (
+              <div className="space-y-3 max-w-xl">
+                <div>
+                  <label htmlFor="editor-notes" className="block text-sm mb-1 text-mint-ink">
+                    Remarques pour le monteur (facultatif)
+                  </label>
+                  <textarea
+                    id="editor-notes"
+                    value={editorNotes}
+                    onChange={(e) => setEditorNotes(e.target.value)}
+                    maxLength={5000}
+                    rows={5}
+                    placeholder="Un passage à soigner, un style de montage, une référence, un invité à mettre en avant..."
+                    className="w-full rounded-md border border-border bg-white px-3 py-2 text-sm"
+                  />
+                </div>
+                <p className="text-xs text-mint-muted">
+                  Vous serez redirigé vers le paiement sécurisé. Votre demande est transmise au monteur une fois le
+                  paiement validé.
+                </p>
+                <Button onClick={handleSendToEditor} disabled={submitting || confirmingPayment}>
+                  {confirmingPayment ? "Validation du paiement..." : submitting ? "Redirection vers le paiement..." : "Envoyer au monteur"}
+                </Button>
+              </div>
             ) : (
               <Button onClick={handleFinalSubmit} disabled={submitting}>
-                {submitting
-                  ? "Lancement..."
-                  : editorChoice === "NEED_EDITOR"
-                    ? "Envoyer au monteur"
-                    : "Lancer le traitement automatique"}
+                {submitting ? "Lancement..." : "Lancer le traitement automatique"}
               </Button>
             )}
           </div>

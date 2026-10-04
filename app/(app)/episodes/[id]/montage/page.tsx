@@ -18,6 +18,11 @@ export default async function MontagePage({ params }: { params: Promise<{ id: st
       _count: { select: { episodeGuests: true } },
     },
   });
+  const pendingRequest = await prisma.editingRequest.findFirst({
+    where: { episodeId: id, status: "PENDING_PAYMENT" },
+    orderBy: { createdAt: "desc" },
+    select: { notes: true },
+  });
   if (!episode || episode.podcast.userId !== session.user.id) redirect("/dashboard");
 
   // Les informations de base (titre obligatoire) doivent être renseignées
@@ -56,6 +61,7 @@ export default async function MontagePage({ params }: { params: Promise<{ id: st
         }}
         initialEditorChoice={episode.editorChoice}
         initialMontageValidatedExternally={episode.montageValidatedExternally}
+        initialEditorNotes={pendingRequest?.notes ?? ""}
         initialCameraSetup={episode.cameraSetup}
         initialExpectedSpeakerCount={episode.expectedSpeakerCount}
         initialGuestCount={episode._count.episodeGuests}

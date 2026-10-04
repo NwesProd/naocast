@@ -159,9 +159,9 @@ model Podcast {
   // (guidé côté UI par des questions suggérées : c'est quoi, à qui, pourquoi,
   // ligne éditoriale, règles) + documents de référence optionnels (bible
   // existante...) fournis en plus à Claude pour générer la bible ci-dessous.
-  dna            String?
+  dna              String?
   // [{ "key": "...", "filename": "...", "mimeType": "..." }, ...]
-  referenceFiles Json?
+  referenceFiles   Json?
   // Bible générée (API Claude) à partir de dna + referenceFiles, puis
   // librement modifiable par l'utilisateur, le texte stocké ici est
   // toujours la version affichée/éditée, qu'elle ait été retouchée ou non.
@@ -179,11 +179,11 @@ model Podcast {
 // infos (média, réseaux) déjà pré-remplies plutôt qu'à ressaisir à chaque
 // fois. Le rattachement à un épisode donné passe par EpisodeGuest.
 model Guest {
-  id        String   @id @default(cuid())
-  podcastId String
-  podcast   Podcast  @relation(fields: [podcastId], references: [id], onDelete: Cascade)
-  name      String
-  mediaName String? // "Nom du média / Entreprise"
+  id          String   @id @default(cuid())
+  podcastId   String
+  podcast     Podcast  @relation(fields: [podcastId], references: [id], onDelete: Cascade)
+  name        String
+  mediaName   String? // "Nom du média / Entreprise"
   // Liens réseaux sociaux : [{ "platform": "instagram", "url": "..." }, ...],
   // format libre plutôt qu'une colonne par réseau, pour ajouter des
   // plateformes sans migration.
@@ -281,8 +281,8 @@ model Episode {
   editorChoice EditorChoice?
 
   // Étape 4 du formulaire : autocut
-  autocutEnabled        Boolean @default(false)
-  autocutSilenceMs      Int? // seuil de silence à partir duquel couper (ms)
+  autocutEnabled   Boolean @default(false)
+  autocutSilenceMs Int? // seuil de silence à partir duquel couper (ms)
 
   // Étape "Cut" : nombre de locuteurs connu à l'avance, transmis à pyannote.ai
   // (paramètre numSpeakers) pour la reconnaissance des locuteurs, laissé vide,
@@ -293,7 +293,7 @@ model Episode {
   // app/api/episodes/[id]/transcript) : le job tournant en tâche de fond
   // (worker), il a besoin de retrouver ce choix fait à la création de la
   // requête plutôt que de le recevoir en paramètre direct.
-  transcriptRushId String?
+  transcriptRushId     String?
 
   // Étapes "Générique de début/fin" : par défaut le générique de la config
   // podcast est utilisé (source PODCAST, pas de clé propre à l'épisode) ; en
@@ -338,10 +338,10 @@ model Episode {
   // dépendre de la résolution du fichier uploadé.
   // Permet de désactiver entièrement le logo pour cet épisode précis, même si
   // le podcast en a un configuré (ex. épisode sponsorisé, invité exclusif...).
-  logoEnabled   Boolean      @default(true)
-  logoOnIntro   Boolean      @default(true)
-  logoOnOutro   Boolean      @default(true)
-  logoPosition  LogoPosition @default(BOTTOM_RIGHT)
+  logoEnabled  Boolean      @default(true)
+  logoOnIntro  Boolean      @default(true)
+  logoOnOutro  Boolean      @default(true)
+  logoPosition LogoPosition @default(BOTTOM_RIGHT)
 
   // Bascule vers le service de montage humain (tarif existant, hors SaaS),
   // NEED_EDITOR (monteur Podko) uniquement. Pour HAS_EDITOR_SEND (monteur
@@ -360,7 +360,7 @@ model Episode {
   // "Valider le casting" (module Invités) : la liste d'invités de l'épisode
   // est jugée complète, affiche le tick dans la sidebar comme pour l'intro
   // validée ou l'épisode exporté (cf. components/SidebarNav.tsx).
-  guestsCastingValidated Boolean @default(false)
+  guestsCastingValidated  Boolean   @default(false)
 
   // Module "Script" : idées d'angles/thèmes pour l'épisode, générées (API
   // Claude) à partir de la bible du podcast, s'ils existent déjà des invités
@@ -371,7 +371,7 @@ model Episode {
   scriptAngleIdeas       Json?
   scriptIdeasGeneratedAt DateTime?
   scriptDraft            String?
-  scriptValidated        Boolean    @default(false)
+  scriptValidated        Boolean   @default(false)
 
   // Pour qui gère une partie de la post-production en dehors de naocast :
   // "valider hors naocast" affiche simplement le tick vert du module dans la
@@ -383,15 +383,16 @@ model Episode {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  rushes            RushSource[]
+  rushes             RushSource[]
   transcriptSegments TranscriptSegment[]
-  cutMarkers        CutMarker[]
-  jobs              ProcessingJob[]
-  exports           ExportAsset[]
-  speakers          EpisodeSpeaker[]
-  episodeGuests     EpisodeGuest[]
-  introSegments     IntroSegment[]
-  cutSuggestions    CutSuggestion[]
+  cutMarkers         CutMarker[]
+  jobs               ProcessingJob[]
+  exports            ExportAsset[]
+  speakers           EpisodeSpeaker[]
+  episodeGuests      EpisodeGuest[]
+  introSegments      IntroSegment[]
+  cutSuggestions     CutSuggestion[]
+  editingRequests    EditingRequest[]
 }
 
 // Un passage du transcript choisi pour le teaser du module "Intro", `order`
@@ -456,18 +457,18 @@ model RushSource {
   status    RushStatus     @default(PENDING)
 
   // Pour Smash/Drive/Dropbox : référence externe (lien ou id de fichier) avant rapatriement
-  externalRef String?
+  externalRef        String?
   // Une fois rapatrié : nom d'origine + clé de stockage temporaire (R2/B2)
-  originalFilename String?
-  storageKey       String?
-  durationSec      Float?
-  fileSizeBytes    BigInt?
+  originalFilename   String?
+  storageKey         String?
+  durationSec        Float?
+  fileSizeBytes      BigInt?
   // Choisi par l'utilisateur à l'étape "analyse du transfert" (fichiers à traiter)
   selectedForEpisode Boolean @default(true)
   // Aperçu H.264/AAC (90 premières secondes) généré à la demande au premier
   // clic sur "Aperçu", mis en cache ici pour ne jamais le regénérer. Le
   // fichier original (storageKey) reste utilisé tel quel par le pipeline.
-  previewKey String?
+  previewKey         String?
 
   createdAt DateTime @default(now())
 }
@@ -485,7 +486,7 @@ model TranscriptSegment {
   // phrase reste l'unité de stockage/regroupement à l'affichage, mais
   // "Recouper un passage" permet de sélectionner un sous-ensemble de mots
   // (glisser-cliquer, comme du texte), pas forcément la phrase entière.
-  words Json?
+  words   Json?
 }
 
 // Un label pyannote.ai (ex. "SPEAKER_00") par épisode, avec le nom que
@@ -565,23 +566,23 @@ enum JobStatus {
 }
 
 model ProcessingJob {
-  id        String    @id @default(cuid())
-  episodeId String
-  episode   Episode   @relation(fields: [episodeId], references: [id], onDelete: Cascade)
-  type      JobType
-  status    JobStatus @default(PENDING)
+  id              String    @id @default(cuid())
+  episodeId       String
+  episode         Episode   @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  type            JobType
+  status          JobStatus @default(PENDING)
   // Ordre d'exécution dans le pipeline (permet de reprendre après échec)
-  sequence  Int
-  errorMessage String?
+  sequence        Int
+  errorMessage    String?
   // Avancement (0-100) DANS le job en cours (ex. % de la vidéo déjà
   // encodée), permet à la barre de progression de suivre en continu plutôt
   // que par palier (un incrément par job terminé). Alimenté par ffmpeg
   // (option -progress) quand le job concerné a une étape ffmpeg dominante,
   // cf. lib/pipeline/ffmpeg.ts::runFfmpegWithProgress.
   progressPercent Int?
-  startedAt    DateTime?
-  finishedAt   DateTime?
-  createdAt    DateTime  @default(now())
+  startedAt       DateTime?
+  finishedAt      DateTime?
+  createdAt       DateTime  @default(now())
 
   @@index([status, sequence])
 }
@@ -592,10 +593,46 @@ enum ExportType {
 }
 
 model ExportAsset {
-  id        String     @id @default(cuid())
-  episodeId String
-  episode   Episode    @relation(fields: [episodeId], references: [id], onDelete: Cascade)
-  type      ExportType
+  id         String     @id @default(cuid())
+  episodeId  String
+  episode    Episode    @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  type       ExportType
   storageKey String
-  createdAt DateTime   @default(now())
+  createdAt  DateTime   @default(now())
+}
+
+// Demande de montage par un monteur naocast. (tunnel "J'ai besoin d'un monteur",
+// étape "Envoi") : créée à l'envoi, payée via Stripe Checkout, puis transmise par
+// email à l'équipe une fois le paiement confirmé (cf. lib/editingRequest.ts).
+// Les champs "snapshot" (titres, email) survivent à la suppression de l'épisode
+// ou du compte : une demande payée ne doit jamais disparaître.
+enum EditingRequestStatus {
+  PENDING_PAYMENT
+  PAID
+}
+
+model EditingRequest {
+  id           String   @id @default(cuid())
+  episodeId    String?
+  episode      Episode? @relation(fields: [episodeId], references: [id], onDelete: SetNull)
+  userId       String
+  userEmail    String
+  podcastTitle String?
+  episodeTitle String?
+
+  // Remarques libres du podcasteur pour le monteur.
+  notes String?
+
+  status          EditingRequestStatus @default(PENDING_PAYMENT)
+  stripeSessionId String?              @unique
+  amountTotal     Int? // centimes
+  currency        String?
+  paidAt          DateTime?
+  emailSentAt     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([episodeId])
 }

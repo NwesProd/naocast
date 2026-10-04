@@ -42,6 +42,12 @@ const ICONS = {
       <path d="m22 7-10 6L2 7" />
     </Icon>
   ),
+  film: (
+    <Icon>
+      <rect x="2" y="3" width="20" height="18" rx="2" />
+      <path d="M7 3v18M17 3v18M2 8h5M2 16h5M17 8h5M17 16h5" />
+    </Icon>
+  ),
   logout: (
     <Icon>
       <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
@@ -63,6 +69,7 @@ const GROUPS: { label: string; items: { href: string; label: string; icon: keyof
   {
     label: "exploitation",
     items: [
+      { href: "/admin/montages", label: "Montages", icon: "film" },
       { href: "/admin/emails", label: "Emails", icon: "mail" },
     ],
   },

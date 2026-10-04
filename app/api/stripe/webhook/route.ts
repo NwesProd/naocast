@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { prisma } from "@/lib/db";
 import { stripe, priceIdToPlanKey, planKeyToPlan } from "@/lib/stripe";
+import { finalizeEditingRequest } from "@/lib/editingRequest";
 
 // Next.js parse le corps en JSON par défaut, mais Stripe signe le corps BRUT
 // (octet pour octet) : le lire via `req.text()` plutôt que `req.json()` est
@@ -26,6 +27,12 @@ export async function POST(req: Request) {
   switch (event.type) {
     case "checkout.session.completed": {
       const session = event.data.object as Stripe.Checkout.Session;
+      // Paiement d'une demande de montage (et non d'un forfait) : cf. lib/editingRequest.ts.
+      if (session.metadata?.kind === "editing") {
+        const requestId = session.metadata.editingRequestId;
+        if (requestId) await finalizeEditingRequest(requestId, session);
+        break;
+      }
       const userId = session.metadata?.userId || session.client_reference_id;
       const planKey = session.metadata?.planKey as keyof typeof import("@/lib/stripe").PRICE_ID_BY_PLAN | undefined;
       if (!userId || !planKey) break;
