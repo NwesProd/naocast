@@ -9,6 +9,7 @@ import { EPISODE_UPDATED_EVENT } from "@/components/SidebarNav";
 import { pollJobUntilDone } from "@/lib/pollJob";
 import { uploadRushDirect } from "@/lib/directUpload";
 import { segmentsToReassign } from "@/lib/speakerAssign";
+import { ExternalValidation } from "@/components/ExternalValidation";
 import { AUTOCUT_PRESETS, presetForThreshold } from "@/lib/autocutPresets";
 
 const secondaryBtn = "text-sm rounded-[10px] bg-white border border-border text-ink px-3 py-1.5 hover:bg-[#FAFAF8] transition";
@@ -156,6 +157,7 @@ export function EpisodeWizard({
   initialCutSuggestions,
   initialIntroTeaser,
   initialGenerics,
+  initialMontageValidatedExternally,
 }: {
   episodeId: string;
   initialRushes: Rush[];
@@ -170,6 +172,7 @@ export function EpisodeWizard({
   initialAutocut: { enabled: boolean; silenceMs: number | null };
   initialCutSuggestions: CutSuggestionItem[];
   initialIntroTeaser: { validated: boolean; choice: IntroTeaserChoice; hasImport: boolean };
+  initialMontageValidatedExternally: boolean;
   initialGenerics: {
     introSource: IntroOutroSource;
     hasEpisodeIntro: boolean;
@@ -1726,6 +1729,16 @@ export function EpisodeWizard({
           </div>
         )}
       </div>
+
+      {/* Réservé à l'étape "Monteur" : pour qui gère tout son montage en dehors de naocast. */}
+      {key === "editor" && (
+        <ExternalValidation
+          episodeId={episodeId}
+          field="montageValidatedExternally"
+          wording={{ ask: "Montage géré en dehors de naocast ?", validated: "Montage validé hors naocast.", button: "Valider le montage hors naocast" }}
+          initialValidated={initialMontageValidatedExternally}
+        />
+      )}
 
       {previewModal && (
         <div

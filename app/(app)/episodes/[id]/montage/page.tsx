@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
-import { ExternalValidation } from "@/components/ExternalValidation";
 import { EpisodeWizard } from "./EpisodeWizard";
 
 export default async function MontagePage({ params }: { params: Promise<{ id: string }> }) {
@@ -56,6 +55,7 @@ export default async function MontagePage({ params }: { params: Promise<{ id: st
           logoPosition: episode.logoPosition,
         }}
         initialEditorChoice={episode.editorChoice}
+        initialMontageValidatedExternally={episode.montageValidatedExternally}
         initialCameraSetup={episode.cameraSetup}
         initialExpectedSpeakerCount={episode.expectedSpeakerCount}
         initialGuestCount={episode._count.episodeGuests}
@@ -79,7 +79,6 @@ export default async function MontagePage({ params }: { params: Promise<{ id: st
           outroCustomDescription: episode.outroCustomDescription || "",
         }}
       />
-      <ExternalValidation episodeId={id} field="montageValidatedExternally" wording={{ ask: "Montage géré en dehors de naocast ?", validated: "Montage validé hors naocast.", button: "Valider le montage hors naocast" }} initialValidated={episode.montageValidatedExternally} />
     </main>
   );
 }
