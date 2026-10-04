@@ -44,9 +44,11 @@ export default async function GuestsPage({ params }: { params: Promise<{ id: str
             name: eg.guest.name,
             mediaName: eg.guest.mediaName,
             socialLinks: (eg.guest.socialLinks as { platform: string; url: string }[] | null) ?? [],
+            tags: eg.guest.tags,
           },
         }))}
         initialGuestMessage={episode.guestMessage || ""}
+        initialBroadcastMessage={episode.guestBroadcastMessage || ""}
         initialCastingValidated={episode.guestsCastingValidated}
       />
     </main>

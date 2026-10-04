@@ -16,6 +16,7 @@ interface Guest {
   name: string;
   mediaName: string | null;
   socialLinks: SocialLink[];
+  tags: string[];
 }
 
 interface EpisodeGuestItem {
@@ -26,6 +27,8 @@ interface EpisodeGuestItem {
 interface PoolGuest extends Guest {
   lastAppearanceAt: string | null;
   alreadyAdded: boolean;
+  // Mots clés de l'invité présents dans le script de l'épisode (invité remonté en tête).
+  relevantTags: string[];
 }
 
 const pillBtn =
@@ -88,11 +91,13 @@ export function GuestsModuleClient({
   episodeId,
   initialEpisodeGuests,
   initialGuestMessage,
+  initialBroadcastMessage,
   initialCastingValidated,
 }: {
   episodeId: string;
   initialEpisodeGuests: EpisodeGuestItem[];
   initialGuestMessage: string;
+  initialBroadcastMessage: string;
   initialCastingValidated: boolean;
 }) {
   const [episodeGuests, setEpisodeGuests] = useState<EpisodeGuestItem[]>(initialEpisodeGuests);
@@ -103,6 +108,7 @@ export function GuestsModuleClient({
   const [showAddForm, setShowAddForm] = useState(false);
   const [newName, setNewName] = useState("");
   const [newMedia, setNewMedia] = useState("");
+  const [newTags, setNewTags] = useState<string[]>([]);
   const [newSocialLinks, setNewSocialLinks] = useState<Record<string, string>>({});
   const [creating, setCreating] = useState(false);
 
@@ -110,17 +116,10 @@ export function GuestsModuleClient({
   const [poolQuery, setPoolQuery] = useState("");
   const [poolLoading, setPoolLoading] = useState(false);
 
-  const [guestMessage, setGuestMessage] = useState(initialGuestMessage);
-  const [generating, setGenerating] = useState(false);
-  const [savingMessage, setSavingMessage] = useState(false);
-  const [copied, setCopied] = useState(false);
-
   const [castingValidated, setCastingValidated] = useState(initialCastingValidated);
   const [validatingCasting, setValidatingCasting] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
-
-  const messageProgress = useSimulatedProgress(generating);
 
   function loadPool(query: string) {
     setPoolLoading(true);
@@ -158,7 +157,7 @@ export function GuestsModuleClient({
       markPoolAdded(guest.id);
       setEpisodeGuests((eg) => [
         ...eg,
-        { id: data.id, guest: { id: guest.id, name: guest.name, mediaName: guest.mediaName, socialLinks: guest.socialLinks } },
+        { id: data.id, guest: { id: guest.id, name: guest.name, mediaName: guest.mediaName, socialLinks: guest.socialLinks, tags: guest.tags } },
       ]);
       // Déplié direct, formulaire réseau déjà ouvert : l'utilisateur vient de
       // choisir cet invité, autant lui montrer tout de suite où renseigner
@@ -185,13 +184,14 @@ export function GuestsModuleClient({
       const res = await fetch(`/api/podcast/guests`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newName.trim(), mediaName: newMedia.trim() || null, socialLinks, episodeId }),
+        body: JSON.stringify({ name: newName.trim(), mediaName: newMedia.trim() || null, socialLinks, tags: newTags, episodeId }),
       });
       if (!res.ok) throw new Error();
       const guest = await res.json();
-      setEpisodeGuests((eg) => [...eg, { id: `${guest.id}-pending`, guest: { ...guest, socialLinks } }]);
+      setEpisodeGuests((eg) => [...eg, { id: `${guest.id}-pending`, guest: { ...guest, socialLinks, tags: newTags } }]);
       setNewName("");
       setNewMedia("");
+      setNewTags([]);
       setNewSocialLinks({});
       setShowAddForm(false);
       loadPool(poolQuery);
@@ -216,7 +216,7 @@ export function GuestsModuleClient({
     }
   }
 
-  async function updateGuest(guestId: string, data: { name?: string; mediaName?: string | null; socialLinks?: SocialLink[] }) {
+  async function updateGuest(guestId: string, data: { name?: string; mediaName?: string | null; socialLinks?: SocialLink[]; tags?: string[] }) {
     setEpisodeGuests((eg) =>
       eg.map((e) => (e.guest.id === guestId ? { ...e, guest: { ...e.guest, ...data } as Guest } : e))
     );
@@ -227,6 +227,8 @@ export function GuestsModuleClient({
         body: JSON.stringify(data),
       });
       if (!res.ok) throw new Error();
+      // Les mots clés changent la pertinence : on recalcule l'ordre du pool.
+      if (data.tags !== undefined) loadPool(poolQuery);
     } catch {
       setError("Échec de l'enregistrement de l'invité.");
     }
@@ -251,40 +253,6 @@ export function GuestsModuleClient({
     setNewPlatformUrl("");
   }
 
-  async function generateMessage() {
-    setGenerating(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/episodes/${episodeId}/guest-message`, { method: "POST" });
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        throw new Error(data?.error || "Échec de la génération du message.");
-      }
-      const data = await res.json();
-      setGuestMessage(data.guestMessage || "");
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setGenerating(false);
-    }
-  }
-
-  async function saveMessage() {
-    setSavingMessage(true);
-    try {
-      const res = await fetch(`/api/episodes/${episodeId}/guest-message`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ guestMessage }),
-      });
-      if (!res.ok) throw new Error();
-    } catch {
-      setError("Échec de l'enregistrement du message.");
-    } finally {
-      setSavingMessage(false);
-    }
-  }
-
   async function toggleCastingValidated() {
     const next = !castingValidated;
     setValidatingCasting(true);
@@ -302,16 +270,6 @@ export function GuestsModuleClient({
       setError("Échec de la validation du casting.");
     } finally {
       setValidatingCasting(false);
-    }
-  }
-
-  async function copyMessage() {
-    try {
-      await navigator.clipboard.writeText(guestMessage);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      setError("Échec de la copie dans le presse-papier.");
     }
   }
 
@@ -359,6 +317,10 @@ export function GuestsModuleClient({
                 placeholder="Nom du média / entreprise (optionnel)"
                 className={inputCls}
               />
+              <div>
+                <label className={labelCls}>Mots clés (optionnel)</label>
+                <TagInput tags={newTags} onChange={setNewTags} />
+              </div>
               <div className="space-y-2 pt-1">
                 <label className={labelCls}>Réseaux (optionnel)</label>
                 {SOCIAL_PLATFORMS.map((p) => (
@@ -388,6 +350,7 @@ export function GuestsModuleClient({
                   onClick={() => {
                     setShowAddForm(false);
                     setNewSocialLinks({});
+                    setNewTags([]);
                   }}
                   className={pillBtn}
                 >
@@ -474,6 +437,14 @@ export function GuestsModuleClient({
                             className={inputCls}
                           />
                         </div>
+                      </div>
+
+                      <div>
+                        <label className={labelCls}>Mots clés</label>
+                        <TagInput tags={eg.guest.tags} onChange={(tags) => updateGuest(eg.guest.id, { tags })} />
+                        <p className="text-xs text-text-muted mt-1">
+                          Une virgule valide le mot clé. Les invités dont les mots clés apparaissent dans le script remontent en tête du pool.
+                        </p>
                       </div>
 
                       <div className="space-y-2">
@@ -570,19 +541,40 @@ export function GuestsModuleClient({
             />
           </div>
 
-          <div className="space-y-2">
+          {/* 4 invités visibles à la fois, le reste défile */}
+          <div className="max-h-[328px] space-y-2 overflow-y-auto pr-1">
             {poolLoading && <p className="text-xs text-text-muted">Chargement...</p>}
             {!poolLoading && poolGuests.length === 0 && (
               <p className="text-xs text-text-muted">Aucun invité dans le pool pour le moment.</p>
             )}
             {poolGuests.map((g) => (
-              <div key={g.id} className="rounded-xl bg-sky p-3 flex items-start justify-between gap-2">
+              <div key={g.id} className="h-[76px] rounded-xl bg-sky p-3 flex items-start justify-between gap-2 overflow-hidden">
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-sky-ink truncate">
                     {g.name}
                     {g.mediaName && <span className="text-sky-muted font-normal"> - {g.mediaName}</span>}
                   </p>
-                  <p className="text-xs text-sky-muted">{formatDate(g.lastAppearanceAt)}</p>
+                  {g.relevantTags.length > 0 ? (
+                    <p className="text-xs text-sky-ink truncate" title="Mots clés présents dans le script">
+                      <span className="font-semibold">Pertinent</span> : {g.relevantTags.join(", ")}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-sky-muted truncate">{formatDate(g.lastAppearanceAt)}</p>
+                  )}
+                  {g.tags.length > 0 && (
+                    <div className="mt-1 flex gap-1 overflow-hidden">
+                      {g.tags.slice(0, 4).map((t) => (
+                        <span
+                          key={t}
+                          className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] leading-none ${
+                            g.relevantTags.includes(t) ? "bg-white font-semibold text-sky-ink" : "bg-white/50 text-sky-muted"
+                          }`}
+                        >
+                          {t}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 {g.alreadyAdded ? (
                   <span className="shrink-0 text-accent-teal" title="Déjà ajouté à cet épisode">
@@ -606,60 +598,182 @@ export function GuestsModuleClient({
         </div>
       </div>
 
-      {/* Message */}
-      <div className="rounded-xl bg-mint p-5 space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="font-medium text-mint-ink text-sm">Message</h2>
-          {guestMessage && (
-            <button type="button" onClick={copyMessage} title="Copier le message" className="rounded-md border border-border bg-white p-2 text-ink hover:bg-[#FAFAF8] transition">
-              {copied ? (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                  <path d="M5 13l4 4L19 7" stroke="#0F6B67" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              ) : (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                  <rect x="9" y="9" width="11" height="11" rx="1.5" stroke="currentColor" strokeWidth="2" />
-                  <path d="M5 15V6a1.5 1.5 0 0 1 1.5-1.5H15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                </svg>
-              )}
-            </button>
-          )}
-        </div>
+      <MessageCard title="Message d'info" endpoint={`/api/episodes/${episodeId}/guest-message`} field="guestMessage" initialMessage={initialGuestMessage} onError={setError} />
 
-        {!guestMessage && (
-          <p className="text-sm text-mint-ink">
-            Génère un message prêt à envoyer aux invités : les infos que naocast. ne connaît pas encore (date, lieu, sujet
-            précis, liens...) seront laissées en [à compléter] dans le texte.
-          </p>
-        )}
+      {/* Annonce de la sortie aux invités et consignes pour la relayer. */}
+      <MessageCard
+        title="Message diffusion"
+        endpoint={`/api/episodes/${episodeId}/guest-broadcast-message`}
+        field="guestBroadcastMessage"
+        initialMessage={initialBroadcastMessage}
+        onError={setError}
+      />
+    </div>
+  );
+}
 
-        <button
-          type="button"
-          onClick={generateMessage}
-          disabled={generating}
-          className="text-sm font-semibold rounded-[10px] bg-primary-button text-white px-4 py-2 disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          {generating
-            ? `Génération en cours... ${messageProgress}%`
-            : guestMessage
-              ? "Régénérer le message"
-              : "Générer le message"}
-        </button>
+// Encart de message généré (message d'info, message diffusion) : bouton de
+// génération, texte modifiable, copie dans le presse-papier.
+function MessageCard({
+  title,
+  endpoint,
+  field,
+  initialMessage,
+  onError,
+}: {
+  title: string;
+  endpoint: string;
+  field: "guestMessage" | "guestBroadcastMessage";
+  initialMessage: string;
+  onError: (message: string | null) => void;
+}) {
+  const [message, setMessage] = useState(initialMessage);
+  const [generating, setGenerating] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const progress = useSimulatedProgress(generating);
 
-        {guestMessage && (
-          <div className="space-y-2">
-            <textarea
-              value={guestMessage}
-              onChange={(e) => setGuestMessage(e.target.value)}
-              rows={10}
-              className={`${inputCls} bg-white`}
-            />
-            <button type="button" onClick={saveMessage} disabled={savingMessage} className={pillBtn}>
-              {savingMessage ? "Enregistrement..." : "Modifier"}
-            </button>
-          </div>
+  async function generate() {
+    setGenerating(true);
+    onError(null);
+    try {
+      const res = await fetch(endpoint, { method: "POST" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || "Échec de la génération du message.");
+      }
+      const data = await res.json();
+      setMessage(data[field] || "");
+    } catch (e) {
+      onError((e as Error).message);
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  async function save() {
+    setSaving(true);
+    try {
+      const res = await fetch(endpoint, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [field]: message }),
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      onError("Échec de l'enregistrement du message.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(message);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      onError("Échec de la copie dans le presse-papier.");
+    }
+  }
+
+  return (
+    <div className="rounded-xl bg-mint p-5 space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="font-medium text-mint-ink text-sm">{title}</h2>
+        {message && (
+          <button type="button" onClick={copy} title="Copier le message" className="rounded-md border border-border bg-white p-2 text-ink hover:bg-[#FAFAF8] transition">
+            {copied ? (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                <path d="M5 13l4 4L19 7" stroke="#0F6B67" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                <rect x="9" y="9" width="11" height="11" rx="1.5" stroke="currentColor" strokeWidth="2" />
+                <path d="M5 15V6a1.5 1.5 0 0 1 1.5-1.5H15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+            )}
+          </button>
         )}
       </div>
+
+      <button
+        type="button"
+        onClick={generate}
+        disabled={generating}
+        className="text-sm font-semibold rounded-[10px] bg-primary-button text-white px-4 py-2 disabled:opacity-40 disabled:cursor-not-allowed"
+      >
+        {generating ? `Génération en cours... ${progress}%` : message ? "Régénérer le message" : "Générer le message"}
+      </button>
+
+      {message && (
+        <div className="space-y-2">
+          <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={10} className={`${inputCls} bg-white`} />
+          <button type="button" onClick={save} disabled={saving} className={pillBtn}>
+            {saving ? "Enregistrement..." : "Modifier"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Champ de mots clés en bulles : une virgule (ou Entrée) valide la bulle, la
+// croix la retire, Retour arrière sur un champ vide retire la dernière.
+function TagInput({ tags, onChange }: { tags: string[]; onChange: (tags: string[]) => void }) {
+  const [draft, setDraft] = useState("");
+
+  function commit(value: string) {
+    const parts = value
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean);
+    if (parts.length === 0) return;
+    const next = [...tags];
+    for (const part of parts) {
+      if (!next.some((t) => t.toLowerCase() === part.toLowerCase())) next.push(part.slice(0, 40));
+    }
+    if (next.length !== tags.length) onChange(next);
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-border bg-white px-2 py-1.5">
+      {tags.map((t) => (
+        <span key={t} className="inline-flex items-center gap-1 rounded-full bg-sky px-2.5 py-0.5 text-xs text-sky-ink">
+          {t}
+          <button type="button" onClick={() => onChange(tags.filter((x) => x !== t))} className="text-sky-muted hover:text-[#8A2E1F]" title="Retirer ce mot clé" aria-label={`Retirer ${t}`}>
+            ×
+          </button>
+        </span>
+      ))}
+      <input
+        type="text"
+        value={draft}
+        onChange={(e) => {
+          const v = e.target.value;
+          if (v.includes(",")) {
+            commit(v);
+            setDraft("");
+          } else {
+            setDraft(v);
+          }
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            commit(draft);
+            setDraft("");
+          } else if (e.key === "Backspace" && !draft && tags.length > 0) {
+            onChange(tags.slice(0, -1));
+          }
+        }}
+        onBlur={() => {
+          commit(draft);
+          setDraft("");
+        }}
+        placeholder={tags.length === 0 ? "Ex. entrepreneuriat, IA, marketing" : ""}
+        className="min-w-[8rem] flex-1 bg-transparent py-0.5 text-sm outline-none"
+      />
     </div>
   );
 }

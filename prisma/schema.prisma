@@ -188,6 +188,9 @@ model Guest {
   // format libre plutôt qu'une colonne par réseau, pour ajouter des
   // plateformes sans migration.
   socialLinks Json?
+  // Mots clés libres (bulles) : servent à faire remonter, dans le pool, les invités
+  // pertinents par rapport au script de l'épisode.
+  tags        String[] @default([])
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -355,12 +358,16 @@ model Episode {
   // message est généré directement à partir du peu qu'on connaît déjà
   // (podcast, épisode, invités) et laisse des [à compléter] pour le reste ;
   // guestMessage garde aussi les modifications manuelles de l'utilisateur.
-  guestMessage            String?
-  guestMessageGeneratedAt DateTime?
+  guestMessage                     String?
+  guestMessageGeneratedAt          DateTime?
+  // "Message diffusion" : message aux invités pour annoncer la sortie de l'épisode et
+  // leur dire comment le relayer.
+  guestBroadcastMessage            String?
+  guestBroadcastMessageGeneratedAt DateTime?
   // "Valider le casting" (module Invités) : la liste d'invités de l'épisode
   // est jugée complète, affiche le tick dans la sidebar comme pour l'intro
   // validée ou l'épisode exporté (cf. components/SidebarNav.tsx).
-  guestsCastingValidated  Boolean   @default(false)
+  guestsCastingValidated           Boolean   @default(false)
 
   // Module "Script" : idées d'angles/thèmes pour l'épisode, générées (API
   // Claude) à partir de la bible du podcast, s'ils existent déjà des invités

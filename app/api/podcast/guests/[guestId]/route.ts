@@ -4,6 +4,7 @@ import { Prisma } from "@/app/generated/prisma/client";
 import { requireUserId, requirePodcast } from "@/lib/authz";
 import { jsonResponse } from "@/lib/json";
 import { z } from "zod";
+import { normalizeTags } from "@/lib/guestRelevance";
 
 const socialLinkSchema = z.object({ platform: z.string().min(1), url: z.string().min(1) });
 
@@ -14,6 +15,7 @@ const patchSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   mediaName: z.string().max(200).nullable().optional(),
   socialLinks: z.array(socialLinkSchema).optional(),
+  tags: z.array(z.string().max(40)).max(30).optional(),
 });
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ guestId: string }> }) {
@@ -28,13 +30,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ guestI
 
   const parsed = patchSchema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: "Requête invalide." }, { status: 400 });
-  const { name, mediaName, socialLinks } = parsed.data;
+  const { name, mediaName, socialLinks, tags } = parsed.data;
 
   const guest = await prisma.guest.update({
     where: { id: guestId },
     data: {
       ...(name !== undefined ? { name } : {}),
       ...(mediaName !== undefined ? { mediaName: mediaName || null } : {}),
+      ...(tags !== undefined ? { tags: normalizeTags(tags) } : {}),
       ...(socialLinks !== undefined ? { socialLinks: socialLinks as unknown as Prisma.InputJsonValue } : {}),
     },
   });

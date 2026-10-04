@@ -58,3 +58,49 @@ export async function generateGuestMessage(input: GuestMessageInput): Promise<st
 
   return response.content.map((block) => (block.type === "text" ? block.text : "")).join("\n").trim();
 }
+
+// "Message diffusion" : message envoyé aux invités une fois l'épisode prêt, pour
+// leur dire quand il sort et comment le relayer (partage sur leurs réseaux,
+// mention, lien...). Même principe : on ne connaît presque rien, les détails
+// manquants restent en [à compléter].
+const BROADCAST_MESSAGE_PROMPT = `Tu rédiges, pour le compte d'un podcasteur, le message à envoyer à ses invités pour leur annoncer la sortie de l'épisode auquel ils ont participé et les inviter à le relayer.
+
+Ton : chaleureux, reconnaissant, direct et professionnel, comme un email qu'on enverrait vraiment à quelqu'un qu'on remercie.
+
+Tu ne disposes que du nom du podcast, du nom de l'épisode, de la date de sortie (si elle est connue), du/des prénom(s) de l'invité(s) et, éventuellement, de leurs réseaux. Le message doit couvrir ces points, dans cet ordre :
+- Un remerciement personnalisé avec le(s) prénom(s) de l'invité(s).
+- Quand l'épisode sort et où l'écouter ou le regarder.
+- Comment l'invité peut le diffuser : le partager sur ses réseaux, en story ou en publication, nous mentionner, utiliser le lien et le visuel fournis, en parler à son audience.
+- Une proposition d'aide (visuel, extrait, texte de publication prêt à poster).
+
+Pour tout ce que tu ne connais pas (date si absente, lien de l'épisode, nom de compte à mentionner, visuel), mets un espace entre crochets à compléter à la main, par exemple [date de sortie], [lien de l'épisode], [@compte du podcast]. N'invente jamais un détail. Ne mets pas de crochets pour ce que tu connais déjà.
+
+Termine par une formule de politesse simple, signée au nom du podcast.
+
+Renvoie uniquement le texte du message, prêt à copier-coller dans un email. Pas de titre, pas d'objet, pas de commentaire avant ou après. Pas de formatage markdown, jamais de tiret cadratin "—" : du texte brut uniquement.`;
+
+export interface BroadcastMessageInput extends GuestMessageInput {
+  releaseDateLabel: string | null;
+}
+
+export async function generateBroadcastMessage(input: BroadcastMessageInput): Promise<string> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    throw new Error("ANTHROPIC_API_KEY manquant : configurez une clé API pour activer la génération du message (voir .env).");
+  }
+
+  const client = new Anthropic({ apiKey });
+  const response = await client.messages.create({
+    model: MODEL,
+    max_tokens: 1024,
+    system: BROADCAST_MESSAGE_PROMPT,
+    messages: [
+      {
+        role: "user",
+        content: [buildUserMessage(input), `Date de sortie : ${input.releaseDateLabel ?? "(non définie, laisse [date de sortie])"}`].join("\n"),
+      },
+    ],
+  });
+
+  return response.content.map((block) => (block.type === "text" ? block.text : "")).join("\n").trim();
+}
