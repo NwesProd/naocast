@@ -7,6 +7,7 @@ import { Button } from "@/components/Button";
 import { TranscriptCutEditor, type TranscriptSegment, type Speaker, type CutMarker } from "@/components/TranscriptCutEditor";
 import { EPISODE_UPDATED_EVENT } from "@/components/SidebarNav";
 import { pollJobUntilDone } from "@/lib/pollJob";
+import { uploadRushDirect } from "@/lib/directUpload";
 import { AUTOCUT_PRESETS, presetForThreshold } from "@/lib/autocutPresets";
 
 const secondaryBtn = "text-sm rounded-[10px] bg-white border border-border text-ink px-3 py-1.5 hover:bg-[#FAFAF8] transition";
@@ -41,7 +42,7 @@ type StepKey = "editor" | "deposit" | "analysis" | "cut" | "intro" | "generics" 
 
 const STEP_LABELS: Record<StepKey, string> = {
   editor: "Monteur",
-  deposit: "Dépose",
+  deposit: "Import",
   analysis: "Analyse",
   cut: "Cut",
   intro: "Intro",
@@ -347,18 +348,24 @@ export function EpisodeWizard({
       const totalBytes = fileArray.reduce((sum, f) => sum + f.size, 0);
       let bytesSentBeforeCurrent = 0;
       for (const file of fileArray) {
-        const form = new FormData();
-        form.append("file", file);
+        const onSent = (sentInFile: number) => {
+          const pct = totalBytes > 0 ? Math.round(((bytesSentBeforeCurrent + sentInFile) / totalBytes) * 100) : 0;
+          setUploadProgress(pct);
+          // Tout envoyé mais la requête n'a pas encore répondu : le serveur
+          // stocke le fichier et en extrait la durée, pas de % mesurable
+          // pour cette partie, on change juste le message plutôt que de
+          // figer une fausse valeur.
+          if (pct >= 100) setUploadPhase("processing");
+        };
         try {
-          await uploadWithProgress(`/api/episodes/${episodeId}/rushes`, form, (sentInFile) => {
-            const pct = totalBytes > 0 ? Math.round(((bytesSentBeforeCurrent + sentInFile) / totalBytes) * 100) : 0;
-            setUploadProgress(pct);
-            // Tout envoyé mais la requête n'a pas encore répondu : le serveur
-            // stocke le fichier et en extrait la durée, pas de % mesurable
-            // pour cette partie, on change juste le message plutôt que de
-            // figer une fausse valeur.
-            if (pct >= 100) setUploadPhase("processing");
-          });
+          // Envoi direct vers R2 (sans passer par le serveur, qui renvoyait des 502 sur
+          // les gros fichiers) ; repli sur l'upload serveur quand il n'est pas possible.
+          const direct = await uploadRushDirect(episodeId, file, onSent);
+          if (direct === null) {
+            const form = new FormData();
+            form.append("file", file);
+            await uploadWithProgress(`/api/episodes/${episodeId}/rushes`, form, onSent);
+          }
         } catch (err) {
           throw new Error(`Échec de l'upload de ${file.name} : ${(err as Error).message}`);
         }

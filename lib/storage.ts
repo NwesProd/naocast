@@ -1,4 +1,14 @@
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, ListObjectsV2Command } from "@aws-sdk/client-s3";
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  DeleteObjectCommand,
+  ListObjectsV2Command,
+  CreateMultipartUploadCommand,
+  UploadPartCommand,
+  CompleteMultipartUploadCommand,
+  AbortMultipartUploadCommand,
+} from "@aws-sdk/client-s3";
 import { Upload } from "@aws-sdk/lib-storage";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { mkdir, readFile, writeFile, unlink, stat, rename, readdir } from "fs/promises";
@@ -228,6 +238,43 @@ export async function getSignedDownloadUrl(key: string, expiresInSec = 3600): Pr
   }
   // Servi en dev via la route /api/storage/[...key]
   return `/api/storage/${key}`;
+}
+
+// Envoi direct navigateur -> R2 (upload multipart par blocs, URLs signées) : le
+// fichier ne passe plus par le serveur web, donc plus de 502 du proxy Railway
+// sur un gros rush. Uniquement en mode S3/R2 (en local, l'upload passe par la
+// route serveur). Le bucket doit autoriser le CORS du site (PUT, ETag exposé).
+export async function createDirectUpload(key: string, contentType?: string): Promise<string> {
+  if (!s3 || !bucket) throw new Error("Envoi direct indisponible en stockage local.");
+  const res = await s3.send(new CreateMultipartUploadCommand({ Bucket: bucket, Key: key, ContentType: contentType }));
+  if (!res.UploadId) throw new Error("Impossible de démarrer l'envoi.");
+  return res.UploadId;
+}
+
+export async function getDirectUploadPartUrl(key: string, uploadId: string, partNumber: number): Promise<string> {
+  if (!s3 || !bucket) throw new Error("Envoi direct indisponible en stockage local.");
+  return getSignedUrl(s3, new UploadPartCommand({ Bucket: bucket, Key: key, UploadId: uploadId, PartNumber: partNumber }), {
+    expiresIn: 6 * 3600,
+  });
+}
+
+export async function completeDirectUpload(key: string, uploadId: string, parts: { partNumber: number; etag: string }[]): Promise<void> {
+  if (!s3 || !bucket) throw new Error("Envoi direct indisponible en stockage local.");
+  await s3.send(
+    new CompleteMultipartUploadCommand({
+      Bucket: bucket,
+      Key: key,
+      UploadId: uploadId,
+      MultipartUpload: {
+        Parts: [...parts].sort((a, b) => a.partNumber - b.partNumber).map((p) => ({ PartNumber: p.partNumber, ETag: p.etag })),
+      },
+    })
+  );
+}
+
+export async function abortDirectUpload(key: string, uploadId: string): Promise<void> {
+  if (!s3 || !bucket) return;
+  await s3.send(new AbortMultipartUploadCommand({ Bucket: bucket, Key: key, UploadId: uploadId })).catch(() => {});
 }
 
 export const storageMode: "s3" | "local" = s3 && bucket ? "s3" : "local";
