@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/Button";
 import { TranscriptCutEditor, type TranscriptSegment, type Speaker, type CutMarker } from "@/components/TranscriptCutEditor";
 import { EPISODE_UPDATED_EVENT } from "@/components/SidebarNav";
 import { pollJobUntilDone } from "@/lib/pollJob";
+import { AUTOCUT_PRESETS, presetForThreshold } from "@/lib/autocutPresets";
 
 const secondaryBtn = "text-sm rounded-[10px] bg-white border border-border text-ink px-3 py-1.5 hover:bg-[#FAFAF8] transition";
 const listCardClass = "divide-y rounded-md bg-white border border-border";
@@ -33,19 +34,32 @@ interface Rush {
   selectedForEpisode: boolean;
 }
 
-const STEPS = [
-  "Monteur",
-  "Import",
-  "Analyse",
-  "Tournage",
-  "Rythme",
-  "Cut",
-  "Intro",
-  "Générique de début",
-  "Générique de fin",
-  "Logo",
-  "Lancer",
-] as const;
+// Étapes du tunnel. Avec un monteur humain (monteur naocast. ou personnel),
+// les deux dernières (prévisualisation, rendu final) laissent la place à une
+// seule étape "Envoi" : c'est le monteur qui produit le résultat.
+type StepKey = "editor" | "deposit" | "analysis" | "cut" | "intro" | "generics" | "preview" | "final" | "send";
+
+const STEP_LABELS: Record<StepKey, string> = {
+  editor: "Monteur",
+  deposit: "Dépose",
+  analysis: "Analyse",
+  cut: "Cut",
+  intro: "Intro",
+  generics: "Génériques et logo",
+  preview: "Prévisualisation",
+  final: "Rendu final",
+  send: "Envoi",
+};
+
+const COMMON_STEPS: StepKey[] = ["editor", "deposit", "analysis", "cut", "intro", "generics"];
+
+interface CutSuggestionItem {
+  id: string;
+  startMs: number;
+  endMs: number;
+  text: string;
+  reason: string;
+}
 
 type LogoPosition = "TOP_LEFT" | "TOP_RIGHT" | "BOTTOM_LEFT" | "BOTTOM_RIGHT";
 type EditorChoice = "PODKO" | "NEED_EDITOR" | "HAS_EDITOR_SEND" | "HAS_EDITOR_IMPORT";
@@ -135,6 +149,9 @@ export function EpisodeWizard({
   initialEditorChoice,
   initialCameraSetup,
   initialExpectedSpeakerCount,
+  initialGuestCount,
+  initialAutocut,
+  initialCutSuggestions,
   initialIntroTeaser,
   initialGenerics,
 }: {
@@ -146,6 +163,10 @@ export function EpisodeWizard({
   initialEditorChoice: EditorChoice | null;
   initialCameraSetup: "PRE_EDITED" | "MULTI_CAMERA" | null;
   initialExpectedSpeakerCount: number | null;
+  // Invités déjà renseignés pour l'épisode : sert à deviner le nombre de voix.
+  initialGuestCount: number;
+  initialAutocut: { enabled: boolean; silenceMs: number | null };
+  initialCutSuggestions: CutSuggestionItem[];
   initialIntroTeaser: { validated: boolean; choice: IntroTeaserChoice; hasImport: boolean };
   initialGenerics: {
     introSource: IntroOutroSource;
@@ -168,13 +189,23 @@ export function EpisodeWizard({
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadPhase, setUploadPhase] = useState<"sending" | "processing">("sending");
   const [cameraSetup, setCameraSetup] = useState<"PRE_EDITED" | "MULTI_CAMERA" | null>(initialCameraSetup);
-  const [autocutEnabled, setAutocutEnabled] = useState(false);
-  const [autocutSilenceMs, setAutocutSilenceMs] = useState(3000);
+  const [autocutEnabled, setAutocutEnabled] = useState(initialAutocut.enabled);
+  const [autocutSilenceMs, setAutocutSilenceMs] = useState(initialAutocut.silenceMs ?? 3000);
   const [transcript, setTranscript] = useState<TranscriptSegment[] | null>(null);
   const [speakers, setSpeakers] = useState<Speaker[]>([]);
   const [transcriptRushId, setTranscriptRushId] = useState<string | null>(null);
   const [generatingTranscript, setGeneratingTranscript] = useState(false);
-  const [expectedSpeakerCount, setExpectedSpeakerCount] = useState<number | null>(initialExpectedSpeakerCount);
+  // Nombre de voix : celui déjà renseigné, sinon une estimation (invités + animateur, 2 par défaut).
+  const [expectedSpeakerCount, setExpectedSpeakerCount] = useState<number | null>(
+    initialExpectedSpeakerCount ?? (initialGuestCount > 0 ? initialGuestCount + 1 : 2)
+  );
+  const [cutSuggestions, setCutSuggestions] = useState<CutSuggestionItem[]>(initialCutSuggestions);
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestionsAnalyzed, setSuggestionsAnalyzed] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewStatus, setPreviewStatus] = useState<"idle" | "running">("idle");
+  const [previewProgress, setPreviewProgress] = useState(0);
+  const [previewPhase, setPreviewPhase] = useState("Préparation des rushs...");
   const [previewModal, setPreviewModal] = useState<{ filename: string; url: string | null } | null>(null);
   const [cutMarkers, setCutMarkers] = useState<CutMarker[]>(initialCutMarkers);
   const [submitting, setSubmitting] = useState(false);
@@ -219,6 +250,7 @@ export function EpisodeWizard({
       setTranscript(data.transcriptSegments);
       setSpeakers(data.speakers);
       setCutMarkers(data.cutMarkers);
+      setCutSuggestions(data.cutSuggestions ?? []);
     } catch {
       setError("Échec du rechargement de l'épisode, réessayez.");
     }
@@ -256,11 +288,52 @@ export function EpisodeWizard({
       const job = await pollJobUntilDone(episodeId, jobId);
       if (job.status === "FAILED") throw new Error(job.errorMessage || "Échec de la génération du transcript.");
       await refreshEpisode();
+      // Le transcript tout juste généré est aussitôt relu par l'IA : les
+      // passages à couper apparaissent surlignés sans action de plus.
+      runCutSuggestions();
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setGeneratingTranscript(false);
     }
+  }
+
+  // Demande à l'IA les passages à couper (ratés, faux départs, reprises...),
+  // affichés surlignés dans le transcript : rien n'est coupé sans accord.
+  async function runCutSuggestions() {
+    setSuggesting(true);
+    try {
+      const res = await fetch(`/api/episodes/${episodeId}/cut-suggestions`, { method: "POST" });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || "Analyse impossible pour le moment.");
+      setCutSuggestions(data);
+      setSuggestionsAnalyzed(true);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSuggesting(false);
+    }
+  }
+
+  async function decideSuggestion(suggestionId: string, action: "accept" | "reject") {
+    const res = await fetch(`/api/episodes/${episodeId}/cut-suggestions/${suggestionId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action }),
+    });
+    if (!res.ok) {
+      setError("Impossible d'enregistrer ce choix, réessayez.");
+      return;
+    }
+    if (action === "accept") {
+      const marker = await res.json();
+      setCutMarkers((m) => [...m, marker]);
+    }
+    setCutSuggestions((list) => list.filter((x) => x.id !== suggestionId));
+  }
+
+  async function acceptAllSuggestions() {
+    for (const sg of [...cutSuggestions]) await decideSuggestion(sg.id, "accept");
   }
 
   async function handleUpload(files: FileList | null) {
@@ -338,6 +411,84 @@ export function EpisodeWizard({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ autocutEnabled, autocutSilenceMs }),
     });
+  }
+
+  // Réglage "Couper les silences" de l'étape Cut : enregistré dès le clic (la
+  // prévisualisation et le rendu final le lisent côté serveur).
+  async function saveAutocutSettings(patch: { enabled?: boolean; silenceMs?: number }) {
+    const enabled = patch.enabled ?? autocutEnabled;
+    const silenceMs = patch.silenceMs ?? autocutSilenceMs;
+    setAutocutEnabled(enabled);
+    setAutocutSilenceMs(silenceMs);
+    await fetch(`/api/episodes/${episodeId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ autocutEnabled: enabled, autocutSilenceMs: silenceMs }),
+    });
+  }
+
+  // Suit les jobs de la prévisualisation (préparation des rushs, silences,
+  // rendu basse définition) jusqu'à la fin du rendu, avec une progression
+  // globale : chaque job terminé compte pour sa part, le job en cours pour la
+  // sienne.
+  async function waitForPreview(jobId: string) {
+    const startedAt = Date.now();
+    for (;;) {
+      if (Date.now() - startedAt > 30 * 60 * 1000) throw new Error("La prévisualisation prend trop de temps, réessayez.");
+      await new Promise((r) => setTimeout(r, 2000));
+      const res = await fetch(`/api/episodes/${episodeId}`);
+      if (!res.ok) continue;
+      const data = await res.json();
+      const jobs = (data.jobs as { id: string; type: string; status: string; sequence: number; progressPercent: number | null; errorMessage: string | null }[])
+        .filter((j) => ["FETCH_RUSHES", "AUTOCUT", "PREVIEW_RENDER"].includes(j.type))
+        .sort((a, b) => a.sequence - b.sequence);
+      const failed = jobs.find((j) => j.status === "FAILED");
+      if (failed) throw new Error(failed.errorMessage || "La prévisualisation a échoué.");
+      const render = jobs.find((j) => j.id === jobId);
+      if (render?.status === "DONE") return;
+
+      const done = jobs.filter((j) => j.status === "DONE").length;
+      const running = jobs.find((j) => j.status === "RUNNING");
+      const total = Math.max(1, jobs.length);
+      setPreviewProgress(Math.min(99, Math.round(((done + (running?.progressPercent ?? 0) / 100) / total) * 100)));
+      setPreviewPhase(
+        running?.type === "FETCH_RUSHES"
+          ? "Préparation des rushs..."
+          : running?.type === "AUTOCUT"
+            ? "Détection des silences..."
+            : running?.type === "PREVIEW_RENDER"
+              ? "Rendu en basse définition..."
+              : "En attente du traitement..."
+      );
+    }
+  }
+
+  async function loadPreviewUrl() {
+    const res = await fetch(`/api/episodes/${episodeId}/preview`);
+    if (res.ok) setPreviewUrl((await res.json()).url);
+  }
+
+  async function generatePreview() {
+    setError(null);
+    previewPollingRef.current = true;
+    setPreviewStatus("running");
+    setPreviewProgress(0);
+    setPreviewPhase("Préparation des rushs...");
+    try {
+      const res = await fetch(`/api/episodes/${episodeId}/preview`, { method: "POST" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || "Impossible de lancer la prévisualisation.");
+      }
+      const { jobId } = await res.json();
+      await waitForPreview(jobId);
+      await loadPreviewUrl();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setPreviewStatus("idle");
+      previewPollingRef.current = false;
+    }
   }
 
   async function saveLogoSettings(
@@ -607,25 +758,56 @@ export function EpisodeWizard({
   // generateTranscript).
   const selectableRushesForTranscript = rushes.filter((r) => r.selectedForEpisode && r.status === "READY");
 
+  // Étapes affichées : avec un monteur humain, "Envoi" remplace la
+  // prévisualisation et le rendu final (c'est lui qui monte).
+  const stepKeys: StepKey[] = hasHumanEditor ? [...COMMON_STEPS, "send"] : [...COMMON_STEPS, "preview", "final"];
+  const key = stepKeys[Math.min(step, stepKeys.length - 1)];
+
+  // Évite de lancer deux suivis de prévisualisation en parallèle (changer
+  // d'étape puis revenir pendant qu'un rendu tourne).
+  const previewPollingRef = useRef(false);
+
+  // Résumé de l'analyse ("Voilà ce que j'ai compris : ..."). Plusieurs fichiers
+  // de durées quasi identiques sont probablement des caméras du MÊME
+  // enregistrement (durée de l'épisode = celle du plus long) ; sinon ce sont
+  // des parties à mettre bout à bout (durée = somme). Le nombre de voix est
+  // celui renseigné ou estimé.
+  const selectedRushes = rushes.filter((r) => r.selectedForEpisode);
+  const durations = selectedRushes.map((r) => r.durationSec ?? 0);
+  const longestSec = Math.max(0, ...durations);
+  const totalSec = durations.reduce((sum, d) => sum + d, 0);
+  const looksLikeCameras = selectedRushes.length > 1 && longestSec > 0 && durations.every((d) => d >= longestSec * 0.95);
+  const treatAsCameras = cameraSetup === "MULTI_CAMERA" || (cameraSetup === null && looksLikeCameras);
+  const episodeSec = treatAsCameras ? longestSec : totalSec;
+  const analysisSummary = [
+    "1 épisode",
+    `${selectedRushes.length} ${treatAsCameras ? (selectedRushes.length > 1 ? "caméras" : "caméra") : selectedRushes.length > 1 ? "fichiers" : "fichier"}`,
+    episodeSec > 0 ? `${Math.max(1, Math.round(episodeSec / 60))} min` : null,
+    expectedSpeakerCount ? `${expectedSpeakerCount} voix` : null,
+  ]
+    .filter(Boolean)
+    .join(", ");
+
   // Complétude recalculée à chaque rendu (pas de ratchet type `maxStep`) :
   // si on revient en arrière et qu'une étape suivante devient invalide, elle
   // redevient incomplète et inaccessible.
   function isStepComplete(i: number): boolean {
-    switch (i) {
-      case 0:
+    switch (stepKeys[i]) {
+      case "editor":
         return editorChoice === "PODKO" || editorChoice === "NEED_EDITOR" || editorChoice === "HAS_EDITOR_SEND";
-      case 1:
+      case "deposit":
         return rushes.length > 0;
-      case 2:
-        return rushes.some((r) => r.selectedForEpisode);
-      case 3:
-        return cameraSetup !== null;
-      // case 6 ("Intro") volontairement absent : étape optionnelle, tombe
-      // sur le `default: return true` ci-dessous, comme "Rythme" et "Logo".
-      case 7:
-        return isGenericComplete(introSource, hasHumanEditor, hasEpisodeIntro, introCreationMode, introCustomMode, introCustomDescription);
-      case 8:
-        return isGenericComplete(outroSource, hasHumanEditor, hasEpisodeOutro, outroCreationMode, outroCustomMode, outroCustomDescription);
+      case "analysis":
+        return selectedRushes.length > 0 && cameraSetup !== null;
+      case "generics":
+        return (
+          isGenericComplete(introSource, hasHumanEditor, hasEpisodeIntro, introCreationMode, introCustomMode, introCustomDescription) &&
+          isGenericComplete(outroSource, hasHumanEditor, hasEpisodeOutro, outroCreationMode, outroCustomMode, outroCustomDescription)
+        );
+      case "preview":
+        return previewUrl !== null;
+      // "cut" et "intro" volontairement absents : étapes optionnelles, comme
+      // "final"/"send" (dernière étape, sans suivant).
       default:
         return true;
     }
@@ -638,7 +820,8 @@ export function EpisodeWizard({
     return true;
   }
 
-  const WIZARD_STEP_STORAGE_KEY = `podko:wizardStep:${episodeId}`;
+  // v2 : les étapes ont été refondues, les anciens numéros mémorisés ne correspondent plus.
+  const WIZARD_STEP_STORAGE_KEY = `podko:wizardStep2:${episodeId}`;
 
   // Change d'étape ET mémorise aussitôt le choix en localStorage, dans le
   // même appel plutôt que via un effet séparé déclenché par le changement de
@@ -678,7 +861,7 @@ export function EpisodeWizard({
       }
     }
     if (Number.isNaN(target) || target === 0) return;
-    let clamped = Math.max(0, Math.min(target, STEPS.length - 1));
+    let clamped = Math.max(0, Math.min(target, stepKeys.length - 1));
     while (clamped > 0 && !canReach(clamped)) clamped -= 1;
     if (clamped > 0) {
       goToStep(clamped);
@@ -686,21 +869,73 @@ export function EpisodeWizard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const STEP_HINTS: Partial<Record<number, string>> = {
-    0: "Choisissez qui monte cet épisode pour continuer.",
-    1: "Ajoutez au moins un fichier pour continuer.",
-    2: "Sélectionnez au moins un rush pour continuer.",
-    3: "Choisissez un type de tournage pour continuer.",
-    7: "Complétez le générique de début pour continuer.",
-    8: "Complétez le générique de fin pour continuer.",
+  const STEP_HINTS: Partial<Record<StepKey, string>> = {
+    editor: "Choisissez qui monte cet épisode pour continuer.",
+    deposit: "Ajoutez au moins un fichier pour continuer.",
+    analysis: "Sélectionnez au moins un rush pour continuer.",
+    generics: "Complétez les génériques de début et de fin pour continuer.",
+    preview: "Générez la prévisualisation pour continuer.",
   };
+
+  // Analyse : fichiers à la suite par défaut (il faut bien un réglage pour
+  // avancer), et on retire "caméras séparées" quand il n'a plus de sens
+  // (un seul fichier, ou pas de monteur humain pour synchroniser).
+  useEffect(() => {
+    if (key !== "analysis") return;
+    if (cameraSetup === null) {
+      // Caméras du même enregistrement : proposées comme telles quand un
+      // monteur humain peut les synchroniser, sinon "à la suite".
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      saveCameraSetup(looksLikeCameras && hasHumanEditor ? "MULTI_CAMERA" : "PRE_EDITED");
+    } else if (cameraSetup === "MULTI_CAMERA" && (selectedRushes.length <= 1 || !hasHumanEditor)) {
+      saveCameraSetup("PRE_EDITED");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, cameraSetup, selectedRushes.length, hasHumanEditor, looksLikeCameras]);
+
+  // Cut : le transcript se charge dès l'arrivée sur l'étape.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (key === "cut" && transcript === null) refreshEpisode();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, transcript]);
+
+  // Prévisualisation : charge la dernière si elle existe, et reprend le suivi
+  // d'un rendu déjà en cours (page rechargée entre-temps).
+  useEffect(() => {
+    if (key !== "preview" || previewPollingRef.current) return;
+    previewPollingRef.current = true;
+    (async () => {
+      try {
+        await loadPreviewUrl();
+        const res = await fetch(`/api/episodes/${episodeId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const running = (data.jobs as { id: string; type: string; status: string }[]).find(
+          (j) => j.type === "PREVIEW_RENDER" && (j.status === "PENDING" || j.status === "RUNNING")
+        );
+        if (running) {
+          setPreviewStatus("running");
+          await waitForPreview(running.id);
+          await loadPreviewUrl();
+        }
+      } catch (e) {
+        setError((e as Error).message);
+      } finally {
+        setPreviewStatus("idle");
+        previewPollingRef.current = false;
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
 
   const currentStepComplete = isStepComplete(step);
 
   return (
     <div>
       <ol className="flex flex-wrap gap-2 text-xs mb-6">
-        {STEPS.map((label, i) => {
+        {stepKeys.map((stepKey, i) => {
+          const label = STEP_LABELS[stepKey];
           const isCurrent = i === step;
           const reachable = canReach(i);
           // Uniquement les étapes déjà dépassées (i < step) : sinon une étape
@@ -731,7 +966,7 @@ export function EpisodeWizard({
       {error && <p className="text-sm text-[#8A2E1F] mb-4">{error}</p>}
 
       <div className="rounded-xl bg-mint p-6 min-h-[280px]">
-        {step === 0 && (
+        {key === "editor" && (
           <div className="space-y-4">
             {!showHasEditorSubChoice ? (
               <>
@@ -745,7 +980,7 @@ export function EpisodeWizard({
                   />
                   <EditorCard
                     label="J'ai besoin d'un monteur"
-                    description="Vous importez vos rushs ici, un monteur naocast. s'occupe du reste."
+                    description="Vous importez vos rushs ici, un monteur naocast. s'occupe du reste. Livraison sous 7 jours."
                     selected={editorChoice === "NEED_EDITOR"}
                     onClick={() => selectMainEditorChoice("NEED_EDITOR")}
                   />
@@ -795,11 +1030,11 @@ export function EpisodeWizard({
           </div>
         )}
 
-        {step === 1 && (
+        {key === "deposit" && (
           <div className="space-y-4">
-            <h2 className="font-medium text-mint-ink">Import des rushs</h2>
+            <h2 className="font-medium text-mint-ink">Déposez vos rushs</h2>
             <div>
-              <label className="block text-sm mb-1 text-mint-ink">Upload direct</label>
+              <label className="block text-sm mb-1 text-mint-ink">Envoyer des fichiers</label>
               <input
                 type="file"
                 multiple
@@ -823,50 +1058,50 @@ export function EpisodeWizard({
               )}
             </div>
 
-            <ExternalLinkField label="Lien Smash" type="SMASH" onSubmit={handleExternalLink} disabled />
+            <ExternalLinkField label="Ou coller un lien de transfert (Smash, Drive, Dropbox)" type="SMASH" onSubmit={handleExternalLink} disabled />
 
             {rushes.length > 0 && (
               <ul className={`${listCardClass} text-sm mt-3`}>
                 {rushes.map((r) => (
                   <li key={r.id} className="px-3 py-2 flex items-center justify-between gap-3">
                     <span>{r.originalFilename || `(${r.type}) référence externe`}</span>
-                    <span className="flex items-center gap-3 shrink-0">
-                      <span className="text-xs text-text-muted">{r.status}</span>
-                      <button
-                        type="button"
-                        onClick={() => deleteRush(r.id)}
-                        className="text-xs text-[#8A2E1F] hover:brightness-110"
-                        title="Supprimer ce rush"
-                      >
-                        ✕
-                      </button>
-                    </span>
+                    <button
+                      type="button"
+                      onClick={() => deleteRush(r.id)}
+                      className="text-xs text-[#8A2E1F] hover:brightness-110 shrink-0"
+                      title="Supprimer ce rush"
+                    >
+                      ✕
+                    </button>
                   </li>
                 ))}
               </ul>
             )}
           </div>
         )}
+        {key === "analysis" && (
+          <div className="space-y-4">
+            <h2 className="font-medium text-mint-ink">Analyse</h2>
+            <div className="rounded-xl bg-white border border-border p-4">
+              <p className="text-sm text-mint-muted mb-1">Voilà ce que j&apos;ai compris :</p>
+              <p className="text-lg font-semibold text-mint-ink">{analysisSummary}</p>
+            </div>
+            <p className="text-sm text-mint-muted">Quelque chose ne colle pas ? Corrigez ici, sinon passez à la suite.</p>
 
-        {step === 2 && (
-          <div className="space-y-3">
-            <h2 className="font-medium text-mint-ink">Analyse du transfert</h2>
-            <p className="text-sm text-mint-muted">
-              Sélectionnez les fichiers à traiter pour cet épisode.
-            </p>
-            <ul className={listCardClass}>
-              {rushes.map((r) => (
-                <li key={r.id} className="px-3 py-2 flex items-center justify-between text-sm">
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={r.selectedForEpisode}
-                      onChange={(e) => toggleRushSelected(r.id, e.target.checked)}
-                    />
-                    {r.originalFilename || r.type}
-                    {r.durationSec ? ` · ${formatTime(r.durationSec * 1000)}` : ""}
-                  </label>
-                  <div className="flex items-center gap-3">
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-mint-ink">Fichiers à traiter</p>
+              <ul className={listCardClass}>
+                {rushes.map((r) => (
+                  <li key={r.id} className="px-3 py-2 flex items-center justify-between text-sm">
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={r.selectedForEpisode}
+                        onChange={(e) => toggleRushSelected(r.id, e.target.checked)}
+                      />
+                      {r.originalFilename || r.type}
+                      {r.durationSec ? ` · ${formatTime(r.durationSec * 1000)}` : ""}
+                    </label>
                     {r.status === "READY" && (
                       <button
                         type="button"
@@ -876,108 +1111,76 @@ export function EpisodeWizard({
                         Aperçu
                       </button>
                     )}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {step === 3 && (
-          <div className="space-y-4">
-            <h2 className="font-medium text-mint-ink">Pré-montage ou caméras séparées ?</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <EditorCard
-                label="Pré-montage (ou caméra unique)"
-                description="Le pré-montage est déjà fait, ou une seule caméra a filmé l'épisode."
-                selected={cameraSetup === "PRE_EDITED"}
-                onClick={() => saveCameraSetup("PRE_EDITED")}
-              />
-              <EditorCard
-                label="Caméras séparées, non synchronisées"
-                description={
-                  hasHumanEditor
-                    ? "Votre monteur se chargera de la synchro et du switch entre les caméras."
-                    : "Synchro et switch multicam automatiques : pas encore disponibles."
-                }
-                selected={cameraSetup === "MULTI_CAMERA"}
-                onClick={() => saveCameraSetup("MULTI_CAMERA")}
-                disabled={!hasHumanEditor}
-              />
+                  </li>
+                ))}
+              </ul>
             </div>
-          </div>
-        )}
 
-        {step === 4 && (
-          <div className="space-y-4">
-            <h2 className="font-medium text-mint-ink">Rythme</h2>
-            <label className="flex items-center gap-2 text-sm text-mint-ink">
+            <div>
+              <label className="block text-sm mb-1 text-mint-ink">Nombre de voix</label>
               <input
-                type="checkbox"
-                checked={autocutEnabled}
-                onChange={(e) => setAutocutEnabled(e.target.checked)}
+                type="number"
+                min={1}
+                step={1}
+                value={expectedSpeakerCount ?? ""}
+                onChange={(e) => setExpectedSpeakerCount(e.target.value ? Number(e.target.value) : null)}
+                className="rounded-md border border-border bg-white px-3 py-2 w-24 text-sm"
               />
-              Couper les silences
-            </label>
-            {autocutEnabled && (
-              <div>
-                <label className="block text-sm mb-1 text-mint-ink">
-                  Durée de silence à partir de laquelle couper (ms)
-                </label>
-                <input
-                  type="number"
-                  min={100}
-                  step={50}
-                  value={autocutSilenceMs}
-                  onChange={(e) => setAutocutSilenceMs(Number(e.target.value))}
-                  className="rounded-md border border-border bg-white px-3 py-2 w-32"
-                />
+              <p className="text-xs text-mint-muted mt-1">Aide à bien reconnaître qui parle dans le transcript.</p>
+            </div>
+
+            {looksLikeCameras && !hasHumanEditor && cameraSetup !== "MULTI_CAMERA" && (
+              <p className="text-sm text-[#8A5300] rounded-md bg-butter p-3">
+                Ces fichiers ont la même durée : ce sont sans doute des caméras du même enregistrement. naocast. ne sait
+                pas encore les synchroniser : gardez uniquement la caméra principale (décochez les autres), sinon ils
+                seraient mis bout à bout.
+              </p>
+            )}
+
+            {selectedRushes.length > 1 && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-mint-ink">Ces fichiers sont…</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <EditorCard
+                    label="Des parties à la suite"
+                    description="Les fichiers sont mis bout à bout, dans l'ordre."
+                    selected={cameraSetup === "PRE_EDITED"}
+                    onClick={() => saveCameraSetup("PRE_EDITED")}
+                  />
+                  <EditorCard
+                    label="Des caméras séparées du même enregistrement"
+                    description={
+                      hasHumanEditor
+                        ? "Votre monteur se chargera de la synchro et du switch entre les caméras."
+                        : "La synchro et le switch multicam automatiques ne sont pas encore disponibles."
+                    }
+                    selected={cameraSetup === "MULTI_CAMERA"}
+                    onClick={() => saveCameraSetup("MULTI_CAMERA")}
+                    disabled={!hasHumanEditor}
+                  />
+                </div>
               </div>
             )}
           </div>
         )}
-
-        {step === 5 && (
-          <div className="space-y-3">
+        {key === "cut" && (
+          <div className="space-y-4">
             <h2 className="font-medium text-mint-ink">Cut</h2>
             <p className="text-sm text-mint-muted">
-              Cette étape sert à retirer des passages de l&apos;épisode : sélectionnez dans le transcript les mots ou
-              phrases à couper.
+              Voici le transcript. L&apos;IA surligne les passages qu&apos;elle propose de couper (ratés, faux départs,
+              reprises) : acceptez, refusez, ou ajoutez vos propres coupes en sélectionnant des mots.
             </p>
-            {!transcript && (
-              <button
-                onClick={refreshEpisode}
-                className={`${pillBtn} text-mint-muted`}
-              >
-                Charger le transcript
-              </button>
-            )}
+            {!transcript && <p className="text-sm text-mint-muted">Chargement du transcript...</p>}
             {transcript && transcript.length === 0 && selectableRushesForTranscript.length === 0 && (
               <p className="text-sm text-mint-muted">
                 Sélectionnez au moins un rush à l&apos;étape « Analyse » pour générer le transcript.
               </p>
             )}
-            {transcript && transcript.length === 0 && selectableRushesForTranscript.length > 0 && (
-              <div>
-                <label className="block text-sm mb-1 text-mint-ink">
-                  Nombre de locuteurs (optionnel, mais recommandé)
-                </label>
-                <input
-                  type="number"
-                  min={1}
-                  step={1}
-                  value={expectedSpeakerCount ?? ""}
-                  onChange={(e) => setExpectedSpeakerCount(e.target.value ? Number(e.target.value) : null)}
-                  placeholder="Ex. 4"
-                  className="rounded-md border border-border bg-white px-3 py-2 w-24 text-sm"
-                />
-              </div>
-            )}
             {transcript && transcript.length === 0 && selectableRushesForTranscript.length === 1 && (
               <button
                 onClick={() => generateTranscript(selectableRushesForTranscript[0].id)}
                 disabled={generatingTranscript}
-                className={`${pillBtn} text-mint-muted`}
+                className="text-sm font-semibold rounded-[10px] bg-primary-button text-white px-4 py-2 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {generatingTranscript ? "Génération en cours..." : "Générer le transcript"}
               </button>
@@ -1010,8 +1213,14 @@ export function EpisodeWizard({
                 </button>
               </div>
             )}
+            {transcript && transcript.length === 0 && selectableRushesForTranscript.length > 0 && (
+              <p className="text-xs text-mint-muted">
+                {expectedSpeakerCount ? `Nombre de voix : ${expectedSpeakerCount} (modifiable à l'étape « Analyse »).` : "Le nombre de voix se règle à l'étape « Analyse »."}
+              </p>
+            )}
+
             {transcript && transcript.length > 0 && (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {speakers.length > 0 && (
                   <div className="rounded-md bg-white border border-border p-3 space-y-2">
                     <p className="text-xs font-medium text-ink">
@@ -1031,11 +1240,88 @@ export function EpisodeWizard({
                     ))}
                   </div>
                 )}
+
+                <div className="rounded-md bg-white border border-border p-4 space-y-3">
+                  <label className="flex items-center gap-2 text-sm font-medium text-ink">
+                    <input type="checkbox" checked={autocutEnabled} onChange={(e) => saveAutocutSettings({ enabled: e.target.checked })} />
+                    Couper les silences
+                  </label>
+                  {autocutEnabled && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      {AUTOCUT_PRESETS.map((preset) => (
+                        <EditorCard
+                          key={preset.key}
+                          label={preset.label}
+                          description={preset.description}
+                          selected={presetForThreshold(autocutSilenceMs).key === preset.key}
+                          onClick={() => saveAutocutSettings({ silenceMs: preset.silenceMs })}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="rounded-md bg-white border border-border p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <p className="text-sm font-medium text-ink">
+                      Coupes proposées par l&apos;IA{cutSuggestions.length > 0 ? ` (${cutSuggestions.length})` : ""}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      {cutSuggestions.length > 1 && (
+                        <button type="button" onClick={acceptAllSuggestions} disabled={suggesting} className={pillBtn}>
+                          Tout accepter
+                        </button>
+                      )}
+                      <button type="button" onClick={runCutSuggestions} disabled={suggesting} className={pillBtn}>
+                        {suggesting
+                          ? "Analyse en cours..."
+                          : cutSuggestions.length > 0 || suggestionsAnalyzed
+                            ? "Relancer l'analyse"
+                            : "Analyser les passages à couper"}
+                      </button>
+                    </div>
+                  </div>
+                  {suggesting && (
+                    <p className="text-xs text-text-muted">L&apos;IA relit le transcript, cela peut prendre une minute.</p>
+                  )}
+                  {!suggesting && cutSuggestions.length === 0 && suggestionsAnalyzed && (
+                    <p className="text-xs text-text-muted">Rien à couper : l&apos;IA n&apos;a repéré aucun passage.</p>
+                  )}
+                  {cutSuggestions.length > 0 && (
+                    <ul className="divide-y rounded-md border border-border max-h-64 overflow-y-auto">
+                      {cutSuggestions.map((sg) => (
+                        <li key={sg.id} className="px-3 py-2 flex items-start justify-between gap-3 text-sm">
+                          <button
+                            type="button"
+                            onClick={() => document.getElementById(`sug-${sg.id}`)?.scrollIntoView({ block: "center", behavior: "smooth" })}
+                            className="text-left min-w-0"
+                            title="Voir dans le transcript"
+                          >
+                            <span className="text-xs text-text-muted">
+                              {formatTime(sg.startMs)} → {formatTime(sg.endMs)} · {sg.reason}
+                            </span>
+                            <span className="block text-ink line-clamp-2">{sg.text}</span>
+                          </button>
+                          <span className="flex items-center gap-1.5 shrink-0">
+                            <button type="button" onClick={() => decideSuggestion(sg.id, "accept")} className={`${pillBtn} text-[#0F6B67]`}>
+                              Couper
+                            </button>
+                            <button type="button" onClick={() => decideSuggestion(sg.id, "reject")} className={pillBtn}>
+                              Garder
+                            </button>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
                 <TranscriptCutEditor
                   episodeId={episodeId}
                   transcript={transcript}
                   speakers={speakers}
                   cutMarkers={cutMarkers}
+                  suggestions={cutSuggestions}
                   onCutMarkersChange={setCutMarkers}
                 />
               </div>
@@ -1047,7 +1333,7 @@ export function EpisodeWizard({
                   <li key={m.id} className="px-3 py-2 flex justify-between items-center">
                     <span>
                       {formatTime(m.startMs)} → {formatTime(m.endMs)}{" "}
-                      <span className="text-xs text-text-muted">({m.source === "AUTOCUT" ? "autocut" : "manuel"})</span>
+                      <span className="text-xs text-text-muted">({m.source === "AUTOCUT" ? "silence" : "manuel"})</span>
                     </span>
                     <button onClick={() => removeCutMarker(m.id)} className="text-xs text-[#8A2E1F]">
                       Retirer
@@ -1058,8 +1344,7 @@ export function EpisodeWizard({
             )}
           </div>
         )}
-
-        {step === 6 && (
+        {key === "intro" && (
           <div className="space-y-4">
             <h2 className="font-medium text-mint-ink">Intro</h2>
             <p className="text-sm text-mint-muted">
@@ -1133,7 +1418,8 @@ export function EpisodeWizard({
           </div>
         )}
 
-        {step === 7 && (
+        {key === "generics" && (
+          <div className="space-y-8">
           <GenericStepBody
             title="Générique de début"
             source={introSource}
@@ -1151,9 +1437,8 @@ export function EpisodeWizard({
             onCustomDescriptionChange={setIntroCustomDescription}
             onCustomDescriptionBlur={saveIntroCustomDescription}
           />
-        )}
 
-        {step === 8 && (
+            <div className="border-t border-mint-ink/10 pt-6">
           <GenericStepBody
             title="Générique de fin"
             source={outroSource}
@@ -1171,9 +1456,9 @@ export function EpisodeWizard({
             onCustomDescriptionChange={setOutroCustomDescription}
             onCustomDescriptionBlur={saveOutroCustomDescription}
           />
-        )}
 
-        {step === 9 && (
+            </div>
+            <div className="border-t border-mint-ink/10 pt-6">
           <div className="space-y-4">
             <h2 className="font-medium text-mint-ink">Logo</h2>
             {!podcastLogo.hasLogo ? (
@@ -1246,9 +1531,61 @@ export function EpisodeWizard({
               </>
             )}
           </div>
-        )}
 
-        {step === 10 && (
+            </div>
+          </div>
+        )}
+        {key === "preview" && (
+          <div className="space-y-4">
+            <h2 className="font-medium text-mint-ink">Prévisualisation</h2>
+            <p className="text-sm text-mint-muted">
+              Un rendu rapide en basse définition pour vérifier les coupes, l&apos;intro, les génériques et le logo
+              avant le rendu final. Rien n&apos;est définitif : un détail à reprendre ? Revenez aux étapes
+              précédentes, puis régénérez la prévisualisation.
+            </p>
+
+            {previewStatus === "running" && (
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-[#0F6B67]">
+                  {previewPhase} {previewProgress > 0 ? `${previewProgress}%` : ""}
+                </p>
+                <div className="h-1.5 w-full max-w-xs rounded-pill bg-white overflow-hidden">
+                  <div className="h-full bg-[#0F6B67] rounded-pill transition-[width] duration-500" style={{ width: `${previewProgress}%` }} />
+                </div>
+              </div>
+            )}
+
+            {previewUrl && previewStatus !== "running" && (
+              <video src={previewUrl} controls className="w-full max-h-[60vh] rounded-md bg-black" />
+            )}
+
+            <button
+              type="button"
+              onClick={generatePreview}
+              disabled={previewStatus === "running"}
+              className={
+                previewUrl
+                  ? pillBtn
+                  : "text-sm font-semibold rounded-[10px] bg-primary-button text-white px-4 py-2 disabled:opacity-40 disabled:cursor-not-allowed"
+              }
+            >
+              {previewStatus === "running" ? "Génération en cours..." : previewUrl ? "Régénérer la prévisualisation" : "Générer la prévisualisation"}
+            </button>
+          </div>
+        )}
+        {key === "final" && (
+          <div className="space-y-4">
+            <h2 className="font-medium text-mint-ink">Rendu final</h2>
+            <p className="text-sm text-mint-muted">
+              Le rendu en pleine définition est produit à partir des choix validés. Il apparaîtra ensuite en
+              relecture, avec la vidéo et l&apos;audio à télécharger.
+            </p>
+            <Button onClick={handleFinalSubmit} disabled={submitting}>
+              {submitting ? "Lancement..." : "Lancer le rendu final"}
+            </Button>
+          </div>
+        )}
+        {key === "send" && (
           <div className="space-y-4">
             <h2 className="font-medium text-mint-ink">Lancer le traitement</h2>
             {editorChoice === "NEED_EDITOR" && (
@@ -1305,17 +1642,17 @@ export function EpisodeWizard({
         >
           ← Précédent
         </button>
-        {step > 0 && step < STEPS.length - 1 && (
+        {step > 0 && step < stepKeys.length - 1 && (
           <div className="flex items-center gap-3">
-            {!currentStepComplete && STEP_HINTS[step] && (
-              <p className="text-xs text-[#8A2E1F]">{STEP_HINTS[step]}</p>
+            {!currentStepComplete && STEP_HINTS[key] && (
+              <p className="text-xs text-[#8A2E1F]">{STEP_HINTS[key]}</p>
             )}
             <button
-              onClick={() => goToStep(Math.min(STEPS.length - 1, step + 1))}
-              disabled={(step === 1 && uploading) || !currentStepComplete}
+              onClick={() => goToStep(Math.min(stepKeys.length - 1, step + 1))}
+              disabled={(key === "deposit" && uploading) || !currentStepComplete}
               className={`${secondaryBtn} disabled:opacity-40 disabled:cursor-not-allowed`}
             >
-              Suivant →
+              {key === "preview" ? "Valider la prévisualisation →" : "Suivant →"}
             </button>
           </div>
         )}

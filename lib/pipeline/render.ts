@@ -1,6 +1,6 @@
 import path from "path";
 import { randomUUID } from "crypto";
-import { mkdir, rename, rm } from "fs/promises";
+import { mkdir, readFile, rename, rm, writeFile } from "fs/promises";
 import { existsSync } from "fs";
 import { prisma } from "@/lib/db";
 import { getLocalWorkingPath, putLocalFile } from "@/lib/storage";
@@ -14,9 +14,14 @@ import {
   type LogoPosition,
 } from "@/lib/pipeline/ffmpeg";
 import { transcribeAudio } from "@/lib/pipeline/transcribe";
+import { keepMsForThreshold } from "@/lib/autocutPresets";
 
 // Répertoire de travail par épisode : conservé entre les étapes du pipeline
 // (permet de reprendre après un échec sans tout retélécharger/retraiter).
+export function previewKeyFor(episodeId: string): string {
+  return `episodes/${episodeId}/preview.mp4`;
+}
+
 export function workDirFor(episodeId: string): string {
   return path.join(process.cwd(), ".data", "tmp", episodeId);
 }
@@ -33,7 +38,7 @@ async function ensureWorkDir(episodeId: string): Promise<string> {
 // est conservé, il ne dépend pas des découpes).
 export async function clearRenderArtifacts(episodeId: string): Promise<void> {
   const dir = workDirFor(episodeId);
-  for (const f of ["final.mp4", "audio.mp3"]) {
+  for (const f of ["final.mp4", "audio.mp3", "preview.mp4"]) {
     await rm(path.join(dir, f), { force: true });
   }
 }
@@ -53,13 +58,25 @@ export async function resetEpisodeWorkDir(episodeId: string): Promise<void> {
 export async function buildBody(episodeId: string, onProgress?: (fraction: number) => void): Promise<string> {
   const dir = await ensureWorkDir(episodeId);
   const bodyPath = path.join(dir, "body.mp4");
-  if (existsSync(bodyPath)) return bodyPath;
+  const sigPath = path.join(dir, "body.sig");
 
   const rushes = await prisma.rushSource.findMany({
     where: { episodeId, selectedForEpisode: true, status: "READY" },
     orderBy: { createdAt: "asc" },
   });
   if (rushes.length === 0) throw new Error("Aucun rush prêt pour cet épisode.");
+
+  // Le corps déjà assemblé n'est réutilisé (prévisualisation puis rendu final,
+  // relances...) que s'il l'a été à partir EXACTEMENT des mêmes rushs : une
+  // signature (ids + clés de stockage) est écrite à côté une fois le corps
+  // complet. Rushs changés, supprimés ou ajoutés depuis, ou corps antérieur à
+  // la signature : on reconstruit.
+  const signature = rushes.map((r) => `${r.id}:${r.storageKey}`).join("|");
+  if (existsSync(bodyPath) && existsSync(sigPath) && (await readFile(sigPath, "utf8")) === signature) {
+    return bodyPath;
+  }
+  await rm(bodyPath, { force: true });
+  await rm(sigPath, { force: true });
 
   const localPaths = await Promise.all(
     rushes.map((r) => getLocalWorkingPath(r.storageKey!, dir))
@@ -73,6 +90,7 @@ export async function buildBody(episodeId: string, onProgress?: (fraction: numbe
   try {
     await concatWithIntroOutro(localPaths, tmpBodyPath, onProgress);
     await rename(tmpBodyPath, bodyPath);
+    await writeFile(sigPath, signature);
   } catch (err) {
     await rm(tmpBodyPath, { force: true });
     throw err;
@@ -97,15 +115,21 @@ export async function runTranscription(episodeId: string, bodyPath: string): Pro
 // la coupe réelle a lieu une fois combinée avec les découpes manuelles.
 export async function runAutocut(episodeId: string, bodyPath: string, thresholdMs: number): Promise<void> {
   const silences = await detectSilences(bodyPath, thresholdMs);
+  // On ne retire pas le silence en entier : une respiration est conservée au
+  // milieu (cf. lib/autocutPresets.ts), sans quoi les mots s'enchaînent sans
+  // aucune pause, ce qui fatigue l'écoute.
+  const keepSec = keepMsForThreshold(thresholdMs) / 1000;
   await prisma.$transaction([
     prisma.cutMarker.deleteMany({ where: { episodeId, source: "AUTOCUT" } }),
     prisma.cutMarker.createMany({
-      data: silences.map((s) => ({
-        episodeId,
-        startMs: Math.round(s.startSec * 1000),
-        endMs: Math.round(s.endSec * 1000),
-        source: "AUTOCUT",
-      })),
+      data: silences
+        .filter((s) => s.endSec - s.startSec > keepSec)
+        .map((s) => ({
+          episodeId,
+          startMs: Math.round((s.startSec + keepSec / 2) * 1000),
+          endMs: Math.round((s.endSec - keepSec / 2) * 1000),
+          source: "AUTOCUT" as const,
+        })),
     }),
   ]);
 }
@@ -119,10 +143,15 @@ export async function runAutocut(episodeId: string, bodyPath: string, thresholdM
 export async function renderVideo(
   episodeId: string,
   bodyPath: string,
-  onProgress?: (fraction: number) => void
+  onProgress?: (fraction: number) => void,
+  // Prévisualisation du tunnel de montage : même montage (coupes, intro,
+  // générique, logo) mais en basse définition et sans export, pour valider
+  // vite avant le rendu final (cf. RenderEpisodeOptions.lowDef).
+  options: { preview?: boolean } = {}
 ): Promise<string> {
+  const preview = !!options.preview;
   const dir = workDirFor(episodeId);
-  const finalPath = path.join(dir, "final.mp4");
+  const finalPath = path.join(dir, preview ? "preview.mp4" : "final.mp4");
   // Toujours un rendu neuf : un job RENDER existe précisément pour produire
   // un nouveau rendu. L'ancien raccourci "final.mp4 existe déjà, on le
   // renvoie" sautait aussi l'envoi vers le stockage et la création de
@@ -255,11 +284,18 @@ export async function renderVideo(
   // raisonnement que buildBody) : final.mp4 n'existe jamais à moitié écrit.
   const tmpFinalPath = `${finalPath}.building-${randomUUID()}.mp4`;
   try {
-    await renderEpisodeVideo(bodyPath, tmpFinalPath, { keepRanges, introPath, outroPath, logo }, onProgress);
+    await renderEpisodeVideo(bodyPath, tmpFinalPath, { keepRanges, introPath, outroPath, logo, lowDef: preview }, onProgress);
     await rename(tmpFinalPath, finalPath);
   } catch (err) {
     await rm(tmpFinalPath, { force: true });
     throw err;
+  }
+
+  if (preview) {
+    // La prévisualisation n'est pas un export : pas d'ExportAsset, un seul
+    // fichier à clé fixe, remplacé à chaque nouvelle prévisualisation.
+    await putLocalFile(previewKeyFor(episodeId), finalPath, "video/mp4");
+    return finalPath;
   }
 
   const storageKey = `episodes/${episodeId}/final.mp4`;

@@ -369,7 +369,7 @@ export function IntroClient({
           </div>
           <div className="lg:col-span-1 space-y-4">
             <Link
-              href={`/episodes/${episodeId}/montage?step=6`}
+              href={`/episodes/${episodeId}/montage?step=4`}
               className="block text-sm font-semibold rounded-[10px] bg-primary-button text-white px-4 py-2.5 text-center hover:brightness-110 transition"
             >
               Retourner au montage de l&apos;épisode

@@ -24,6 +24,14 @@ export interface Speaker {
   displayName: string | null;
 }
 
+// Passage que l'IA propose de couper (étape "Cut") : surligné en jaune, pas
+// encore une vraie coupe tant qu'il n'est pas accepté.
+export interface CutSuggestionRange {
+  id: string;
+  startMs: number;
+  endMs: number;
+}
+
 export interface CutMarker {
   id: string;
   startMs: number;
@@ -49,12 +57,14 @@ export function TranscriptCutEditor({
   transcript,
   speakers,
   cutMarkers,
+  suggestions = [],
   onCutMarkersChange,
 }: {
   episodeId: string;
   transcript: TranscriptSegment[];
   speakers: Speaker[];
   cutMarkers: CutMarker[];
+  suggestions?: CutSuggestionRange[];
   onCutMarkersChange: (updater: (markers: CutMarker[]) => CutMarker[]) => void;
 }) {
   const [dragAnchorIdx, setDragAnchorIdx] = useState<number | null>(null);
@@ -188,6 +198,18 @@ export function TranscriptCutEditor({
     return cutMarkers.some((m) => word.startMs >= m.startMs && word.endMs <= m.endMs);
   }
 
+  function isSuggested(word: TranscriptWord): boolean {
+    return suggestions.some((sg) => word.startMs >= sg.startMs && word.endMs <= sg.endMs);
+  }
+
+  // Premier mot de chaque proposition : sert d'ancre pour y faire défiler la
+  // page depuis la liste des propositions (id "sug-<id>").
+  const suggestionAnchors = new Map<number, string>();
+  for (const sg of suggestions) {
+    const first = flatWords.findIndex((w) => w.startMs >= sg.startMs && w.endMs <= sg.endMs);
+    if (first !== -1) suggestionAnchors.set(first, sg.id);
+  }
+
   function isDragSelected(idx: number): boolean {
     if (dragAnchorIdx === null || dragEndIdx === null) return false;
     return idx >= Math.min(dragAnchorIdx, dragEndIdx) && idx <= Math.max(dragAnchorIdx, dragEndIdx);
@@ -198,8 +220,8 @@ export function TranscriptCutEditor({
   return (
     <div className="space-y-2">
       <p className="text-sm text-mint-muted">
-        Cliquez-glissez sur les mots à supprimer (ils passent en rouge). Cliquez sur un passage déjà marqué pour
-        l&apos;annuler. Cliquez sur le nom d&apos;un locuteur pour marquer toute sa prise de parole.
+        Cliquez-glissez sur les mots à supprimer (ils passent en rouge). Les passages en jaune sont des propositions
+        de l&apos;IA, à accepter ou refuser dans la liste. Cliquez sur un passage déjà marqué pour l&apos;annuler. Cliquez sur le nom d&apos;un locuteur pour marquer toute sa prise de parole.
       </p>
       <div className="max-h-[32rem] overflow-y-auto rounded-md bg-white border border-border p-4 text-base leading-loose select-none">
         {groupBySpeaker(transcript).map((turn) => {
@@ -227,10 +249,13 @@ export function TranscriptCutEditor({
               {words.map((w, i) => {
                 const idx = globalIndex++;
                 const marked = isMarked(w);
+                const suggested = !marked && isSuggested(w);
                 const dragging = isDragSelected(idx);
+                const anchorId = suggestionAnchors.get(idx);
                 return (
                   <span
                     key={i}
+                    id={anchorId ? `sug-${anchorId}` : undefined}
                     onMouseDown={(e) => {
                       if (marked) {
                         removeMarkerCovering(w);
@@ -267,7 +292,9 @@ export function TranscriptCutEditor({
                         ? "bg-[#F4D5D0] line-through decoration-[#8A2E1F]/50"
                         : dragging
                           ? "bg-[#FBE0DC]"
-                          : "hover:bg-[#FAFAF8]"
+                          : suggested
+                            ? "bg-[#FFF1C9] underline decoration-dotted decoration-[#8A5300]/60"
+                            : "hover:bg-[#FAFAF8]"
                     }`}
                   >
                     {w.text}{" "}

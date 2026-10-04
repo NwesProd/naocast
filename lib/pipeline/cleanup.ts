@@ -37,7 +37,7 @@ export async function cleanupExportedEpisodeFiles(episodeId: string): Promise<vo
 export async function resetEpisodeToScratch(episodeId: string): Promise<void> {
   await deleteObjectsByPrefix(`rushes/${episodeId}/`);
   // Rendus précédents (exports vidéo et audio).
-  await Promise.all(["final.mp4", "audio.mp3"].map((name) => deleteObject(`episodes/${episodeId}/${name}`).catch(() => {})));
+  await Promise.all(["final.mp4", "audio.mp3", "preview.mp4"].map((name) => deleteObject(`episodes/${episodeId}/${name}`).catch(() => {})));
 
   await prisma.$transaction([
     prisma.rushSource.deleteMany({ where: { episodeId } }),

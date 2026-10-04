@@ -7,7 +7,6 @@ import {
   renderVideo,
   runExportAudio,
   finalVideoPathFor,
-  resetEpisodeWorkDir,
 } from "@/lib/pipeline/render";
 import { runManualTranscribe } from "@/lib/pipeline/manualTranscript";
 import type { ProcessingJob } from "@/app/generated/prisma/client";
@@ -41,12 +40,11 @@ export async function runJob(job: ProcessingJob): Promise<void> {
 
   switch (job.type) {
     case "FETCH_RUSHES": {
-      // Premier job d'un pipeline complet (lancement ou "Relancer le
-      // processus") : repart d'un répertoire de travail vide sur CE disque.
-      // /retry efface bien le sien, mais c'est celui du service web, pas du
-      // worker (autre conteneur), les fichiers intermédiaires tronqués d'une
-      // tentative précédente (OOM...) y restaient donc indéfiniment.
-      await resetEpisodeWorkDir(episodeId);
+      // Pas de remise à zéro du répertoire de travail ici : le corps assemblé
+      // (body.mp4) est réutilisé entre la prévisualisation et le rendu final,
+      // et buildBody le reconstruit tout seul dès que les rushs ont changé ou
+      // que le fichier n'est pas complet (signature body.sig, écriture
+      // atomique), cf. lib/pipeline/render.ts.
       const rushes = await prisma.rushSource.findMany({
         where: { episodeId, selectedForEpisode: true },
       });
@@ -80,6 +78,13 @@ export async function runJob(job: ProcessingJob): Promise<void> {
     case "RENDER": {
       const bodyPath = await buildBody(episodeId);
       await renderVideo(episodeId, bodyPath, onProgress);
+      break;
+    }
+    case "PREVIEW_RENDER": {
+      // Même montage que RENDER (coupes, intro, générique, logo) en basse
+      // définition, sans export : étape "Prévisualisation" du tunnel.
+      const bodyPath = await buildBody(episodeId);
+      await renderVideo(episodeId, bodyPath, onProgress, { preview: true });
       break;
     }
     case "EXPORT_AUDIO": {

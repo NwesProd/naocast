@@ -57,7 +57,15 @@ async function tick(): Promise<boolean> {
   // l'avancement du reste) : il ne doit jamais faire basculer le statut de
   // l'épisode (PROCESSING/READY_FOR_REVIEW/FAILED), qui refléterait alors à
   // tort l'état du pipeline automatique aux yeux de la sidebar/relecture.
-  const affectsEpisodeStatus = job.type !== "MANUAL_TRANSCRIBE";
+  //
+  // Même chose pour la prévisualisation du tunnel (PREVIEW_RENDER et les jobs
+  // qui la préparent) : un épisode encore en DRAFT n'a, par construction, que
+  // des jobs "à côté" (le pipeline complet le passe d'abord en QUEUED, cf.
+  // enqueueEpisodePipeline), ils ne doivent pas le faire passer en
+  // PROCESSING ni en "prêt pour relecture".
+  const episodeNow = await prisma.episode.findUnique({ where: { id: job.episodeId }, select: { status: true } });
+  const affectsEpisodeStatus =
+    job.type !== "MANUAL_TRANSCRIBE" && job.type !== "PREVIEW_RENDER" && episodeNow?.status !== "DRAFT";
 
   await withRetry(() =>
     prisma.processingJob.update({

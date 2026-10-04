@@ -391,6 +391,7 @@ model Episode {
   speakers          EpisodeSpeaker[]
   episodeGuests     EpisodeGuest[]
   introSegments     IntroSegment[]
+  cutSuggestions    CutSuggestion[]
 }
 
 // Un passage du transcript choisi pour le teaser du module "Intro", `order`
@@ -501,6 +502,23 @@ model EpisodeSpeaker {
   @@unique([episodeId, label])
 }
 
+// Passage que l'IA propose de couper (raté, faux départ, reprise, aparté...)
+// à l'étape "Cut" du tunnel de montage : surligné dans le transcript,
+// l'utilisateur l'accepte (il devient un CutMarker) ou le refuse (supprimé).
+// Jamais appliqué au rendu tant qu'il n'est pas accepté.
+model CutSuggestion {
+  id        String   @id @default(cuid())
+  episodeId String
+  episode   Episode  @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  startMs   Int
+  endMs     Int
+  text      String
+  reason    String
+  createdAt DateTime @default(now())
+
+  @@index([episodeId])
+}
+
 enum CutSource {
   AUTOCUT
   MANUAL
@@ -532,6 +550,11 @@ enum JobType {
   // prendre plusieurs minutes (polling), bien trop long pour rester dans le
   // cycle requête/réponse HTTP (cause de 502 Railway sur les épisodes longs).
   MANUAL_TRANSCRIBE
+  // Rendu basse définition rapide (étape "Prévisualisation" du tunnel de
+  // montage), avant le rendu final. Tourne "à côté" du pipeline : un épisode en
+  // DRAFT ne voit jamais son statut changer à cause de ses jobs (cf.
+  // worker/run.ts).
+  PREVIEW_RENDER
 }
 
 enum JobStatus {

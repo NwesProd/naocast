@@ -309,6 +309,9 @@ export interface RenderEpisodeOptions {
   introPath?: string | null;
   outroPath?: string | null;
   logo?: { path: string; position: LogoPosition; enableRangesSec: [number, number][] } | null;
+  // Prévisualisation : 360p, qualité réduite, audio léger. Beaucoup plus rapide
+  // à encoder et à charger que le rendu final, pour valider le montage avant.
+  lowDef?: boolean;
 }
 
 // Assemble en UN SEUL passage ffmpeg ce qui prenait avant jusqu'à 3 passages
@@ -324,7 +327,7 @@ export async function renderEpisodeVideo(
   options: RenderEpisodeOptions,
   onProgress?: (fraction: number) => void
 ): Promise<void> {
-  const { keepRanges, introPath, outroPath, logo } = options;
+  const { keepRanges, introPath, outroPath, logo, lowDef } = options;
   if (keepRanges.length === 0) throw new Error("Toutes les plages sont coupées, il ne reste rien à monter.");
 
   const inputs: string[] = ["-i", bodyPath];
@@ -398,6 +401,13 @@ export async function renderEpisodeVideo(
     outV = "outv";
   }
 
+  // Prévisualisation : réduction à 360 px de haut en fin de graphe (largeur
+  // paire déduite), encodage plus compressé, audio AAC léger.
+  if (lowDef) {
+    filterParts.push(`[${outV}]scale=-2:360[lowv]`);
+    outV = "lowv";
+  }
+
   const args = [
     ...inputs,
     "-filter_complex",
@@ -406,7 +416,9 @@ export async function renderEpisodeVideo(
     `[${outV}]`,
     "-map",
     `[${mainA}]`,
-    ...X264_ENCODE_ARGS,
+    ...(lowDef
+      ? [...X264_ENCODE_ARGS, "-crf", "34", "-c:a", "aac", "-b:a", "64k", "-movflags", "+faststart"]
+      : X264_ENCODE_ARGS),
     outputPath,
   ];
 

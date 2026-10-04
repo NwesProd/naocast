@@ -11,7 +11,13 @@ export default async function MontagePage({ params }: { params: Promise<{ id: st
 
   const episode = await prisma.episode.findUnique({
     where: { id },
-    include: { podcast: true, rushes: { orderBy: { createdAt: "asc" } }, cutMarkers: true },
+    include: {
+      podcast: true,
+      rushes: { orderBy: { createdAt: "asc" } },
+      cutMarkers: true,
+      cutSuggestions: { orderBy: { startMs: "asc" } },
+      _count: { select: { episodeGuests: true } },
+    },
   });
   if (!episode || episode.podcast.userId !== session.user.id) redirect("/dashboard");
 
@@ -52,6 +58,9 @@ export default async function MontagePage({ params }: { params: Promise<{ id: st
         initialEditorChoice={episode.editorChoice}
         initialCameraSetup={episode.cameraSetup}
         initialExpectedSpeakerCount={episode.expectedSpeakerCount}
+        initialGuestCount={episode._count.episodeGuests}
+        initialAutocut={{ enabled: episode.autocutEnabled, silenceMs: episode.autocutSilenceMs }}
+        initialCutSuggestions={episode.cutSuggestions.map((s) => ({ id: s.id, startMs: s.startMs, endMs: s.endMs, text: s.text, reason: s.reason }))}
         initialIntroTeaser={{
           validated: episode.introTeaserValidated,
           choice: episode.introTeaserChoice,

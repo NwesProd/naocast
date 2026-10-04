@@ -31,6 +31,11 @@ export async function enqueueEpisodePipeline(episodeId: string): Promise<void> {
   // pendant le pipeline automatique.
   const types: JobType[] = ["FETCH_RUSHES"];
   if (episode.autocutEnabled) types.push("AUTOCUT");
+  // Autocut désactivé depuis : les silences détectés lors d'une
+  // prévisualisation précédente ne doivent pas rester appliqués au rendu final.
+  const dropStaleAutocut = episode.autocutEnabled
+    ? []
+    : [prisma.cutMarker.deleteMany({ where: { episodeId, source: "AUTOCUT" } })];
   // Découpe + assemblage générique + logo en un seul job (cf.
   // lib/pipeline/render.ts, renderVideo) : un seul passage ffmpeg, plus
   // besoin d'un job APPLY_MANUAL_CUTS séparé pour un artefact intermédiaire
@@ -38,10 +43,48 @@ export async function enqueueEpisodePipeline(episodeId: string): Promise<void> {
   types.push("RENDER");
 
   await prisma.$transaction([
-    prisma.processingJob.deleteMany({ where: { episodeId, status: "PENDING" } }),
+    ...dropStaleAutocut,
+    // Les jobs de la prévisualisation (déjà terminés) n'ont plus rien à faire
+    // dans la liste du pipeline final.
+    prisma.processingJob.deleteMany({
+      where: { episodeId, OR: [{ status: "PENDING" }, { type: { in: ["FETCH_RUSHES", "AUTOCUT", "PREVIEW_RENDER"] }, status: "DONE" }] },
+    }),
     prisma.processingJob.createMany({
       data: types.map((type, i) => ({ episodeId, type, sequence: i })),
     }),
     prisma.episode.update({ where: { id: episodeId }, data: { status: "QUEUED" } }),
   ]);
+}
+
+// Prévisualisation du tunnel de montage (étape "Prévisualisation") : prépare
+// le corps (rapatrie les rushs, assemble), détecte les silences si l'option
+// est activée, puis rend une version basse définition. L'épisode reste en
+// DRAFT (cf. worker/run.ts) ; renvoie l'id du job de rendu à suivre.
+export async function enqueueEpisodePreview(episodeId: string): Promise<string> {
+  const episode = await prisma.episode.findUniqueOrThrow({ where: { id: episodeId } });
+
+  const types: JobType[] = ["FETCH_RUSHES"];
+  if (episode.autocutEnabled) types.push("AUTOCUT");
+  types.push("PREVIEW_RENDER");
+
+  // Repart d'une liste propre : anciens jobs de prévisualisation, en échec ou
+  // en attente (ils bloqueraient les nouveaux, cf. worker/run.ts).
+  await prisma.processingJob.deleteMany({
+    where: {
+      episodeId,
+      status: { not: "RUNNING" },
+      OR: [{ type: { in: ["FETCH_RUSHES", "AUTOCUT", "PREVIEW_RENDER"] } }, { status: "FAILED" }],
+    },
+  });
+  const maxSeq = await prisma.processingJob.aggregate({ where: { episodeId }, _max: { sequence: true } });
+  const base = (maxSeq._max.sequence ?? -1) + 1;
+
+  const ops = [
+    ...(episode.autocutEnabled ? [] : [prisma.cutMarker.deleteMany({ where: { episodeId, source: "AUTOCUT" as const } })]),
+    prisma.processingJob.createMany({ data: types.map((type, i) => ({ episodeId, type, sequence: base + i })) }),
+  ];
+  await prisma.$transaction(ops);
+
+  const render = await prisma.processingJob.findFirstOrThrow({ where: { episodeId, type: "PREVIEW_RENDER" }, orderBy: { createdAt: "desc" } });
+  return render.id;
 }
