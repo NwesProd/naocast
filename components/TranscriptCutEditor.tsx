@@ -59,6 +59,7 @@ export function TranscriptCutEditor({
   cutMarkers,
   suggestions = [],
   onCutMarkersChange,
+  onAssignSpeaker,
 }: {
   episodeId: string;
   transcript: TranscriptSegment[];
@@ -66,6 +67,8 @@ export function TranscriptCutEditor({
   cutMarkers: CutMarker[];
   suggestions?: CutSuggestionRange[];
   onCutMarkersChange: (updater: (markers: CutMarker[]) => CutMarker[]) => void;
+  // Quand fourni (étape "Cut"), chaque prise de parole propose, au survol, de choisir qui parle.
+  onAssignSpeaker?: (segmentId: string, label: string | null) => void;
 }) {
   const [dragAnchorIdx, setDragAnchorIdx] = useState<number | null>(null);
   const [dragEndIdx, setDragEndIdx] = useState<number | null>(null);
@@ -235,8 +238,23 @@ export function TranscriptCutEditor({
           const segStartIdx = globalIndex;
           const segEndIdx = segStartIdx + words.length - 1;
           return (
-            <p key={turn.segments[0].id} className="mb-3">
+            <p key={turn.segments[0].id} className="group relative mb-3">
               <span className="text-text-muted mr-2 text-sm">{formatTime(turn.startMs)}</span>
+              {onAssignSpeaker && speakers.length > 0 && (
+                <select
+                  value={turn.speaker ?? ""}
+                  onChange={(e) => onAssignSpeaker(turn.segments[0].id, e.target.value || null)}
+                  title="Qui parle ? S'applique aussi aux passages suivants, jusqu'au prochain changement"
+                  className="absolute right-0 -top-3 z-10 rounded border border-border bg-white px-1 py-0.5 text-xs text-text-muted opacity-0 shadow-sm transition-opacity focus:opacity-100 group-hover:opacity-100"
+                >
+                  <option value="">Qui parle ?</option>
+                  {speakers.map((sp, i) => (
+                    <option key={sp.id} value={sp.label}>
+                      {sp.displayName || `Locuteur ${i + 1}`}
+                    </option>
+                  ))}
+                </select>
+              )}
               {speakerName && (
                 <span
                   onClick={() => finalizeSelection(segStartIdx, segEndIdx)}

@@ -8,6 +8,7 @@ import { TranscriptCutEditor, type TranscriptSegment, type Speaker, type CutMark
 import { EPISODE_UPDATED_EVENT } from "@/components/SidebarNav";
 import { pollJobUntilDone } from "@/lib/pollJob";
 import { uploadRushDirect } from "@/lib/directUpload";
+import { segmentsToReassign } from "@/lib/speakerAssign";
 import { AUTOCUT_PRESETS, presetForThreshold } from "@/lib/autocutPresets";
 
 const secondaryBtn = "text-sm rounded-[10px] bg-white border border-border text-ink px-3 py-1.5 hover:bg-[#FAFAF8] transition";
@@ -254,6 +255,50 @@ export function EpisodeWizard({
       setCutSuggestions(data.cutSuggestions ?? []);
     } catch {
       setError("Échec du rechargement de l'épisode, réessayez.");
+    }
+  }
+
+  // Locuteur ajouté à la main : la reconnaissance automatique des voix peut ne
+  // rien détecter, l'utilisateur les définit alors lui-même.
+  async function addSpeaker() {
+    const res = await fetch(`/api/episodes/${episodeId}/speakers`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    if (!res.ok) {
+      setError("Impossible d'ajouter le locuteur, réessayez.");
+      return;
+    }
+    const speaker = await res.json();
+    setSpeakers((sp) => [...sp, speaker]);
+  }
+
+  async function removeSpeaker(speakerId: string) {
+    const target = speakers.find((s) => s.id === speakerId);
+    const res = await fetch(`/api/episodes/${episodeId}/speakers/${speakerId}`, { method: "DELETE" });
+    if (!res.ok) {
+      setError("Impossible de retirer le locuteur, réessayez.");
+      return;
+    }
+    setSpeakers((sp) => sp.filter((s) => s.id !== speakerId));
+    if (target) setTranscript((t) => t && t.map((seg) => (seg.speaker === target.label ? { ...seg, speaker: null } : seg)));
+  }
+
+  // Qui parle à partir de cette prise de parole (jusqu'au prochain changement).
+  async function assignSpeaker(segmentId: string, label: string | null) {
+    const current = transcript;
+    if (!current) return;
+    const ids = new Set(segmentsToReassign(current, segmentId));
+    setTranscript(current.map((seg) => (ids.has(seg.id) ? { ...seg, speaker: label } : seg)));
+    const res = await fetch(`/api/episodes/${episodeId}/transcript/speaker`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ segmentId, label }),
+    });
+    if (!res.ok) {
+      setTranscript(current);
+      setError("Impossible d'enregistrer ce locuteur, réessayez.");
     }
   }
 
@@ -1228,25 +1273,41 @@ export function EpisodeWizard({
 
             {transcript && transcript.length > 0 && (
               <div className="space-y-4">
-                {speakers.length > 0 && (
-                  <div className="rounded-md bg-white border border-border p-3 space-y-2">
-                    <p className="text-xs font-medium text-ink">
-                      Locuteurs détectés : donnez-leur un nom pour qu&apos;il apparaisse dans le transcript
+                <div className="rounded-md bg-white border border-border p-3 space-y-2">
+                  <p className="text-xs font-medium text-ink">
+                    Locuteurs : donnez-leur un nom pour qu&apos;il apparaisse dans le transcript
+                  </p>
+                  {speakers.length === 0 && (
+                    <p className="text-xs text-text-muted">
+                      Aucune voix détectée automatiquement. Ajoutez vos locuteurs, puis survolez une prise de parole
+                      dans le transcript pour choisir qui parle : le choix s&apos;applique aux passages suivants,
+                      jusqu&apos;au prochain changement.
                     </p>
-                    {speakers.map((sp, i) => (
-                      <div key={sp.id} className="flex items-center gap-2">
-                        <span className="text-xs text-text-muted w-20 shrink-0">Locuteur {i + 1}</span>
-                        <input
-                          type="text"
-                          defaultValue={sp.displayName || ""}
-                          placeholder="Ex. Animateur, Invité..."
-                          onBlur={(e) => renameSpeaker(sp.id, e.target.value)}
-                          className="flex-1 rounded-md border border-border px-2 py-1 text-sm"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                )}
+                  )}
+                  {speakers.map((sp, i) => (
+                    <div key={sp.id} className="flex items-center gap-2">
+                      <span className="text-xs text-text-muted w-20 shrink-0">Locuteur {i + 1}</span>
+                      <input
+                        type="text"
+                        defaultValue={sp.displayName || ""}
+                        placeholder="Ex. Animateur, Invité..."
+                        onBlur={(e) => renameSpeaker(sp.id, e.target.value)}
+                        className="flex-1 rounded-md border border-border px-2 py-1 text-sm"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeSpeaker(sp.id)}
+                        title="Retirer ce locuteur"
+                        className="text-xs text-text-muted hover:text-[#8A2E1F] shrink-0"
+                      >
+                        Retirer
+                      </button>
+                    </div>
+                  ))}
+                  <button type="button" onClick={addSpeaker} className="text-xs font-semibold text-[#0F6B67] hover:underline">
+                    + Ajouter un locuteur
+                  </button>
+                </div>
 
                 <div className="rounded-md bg-white border border-border p-4 space-y-3">
                   <label className="flex items-center gap-2 text-sm font-medium text-ink">
@@ -1330,6 +1391,7 @@ export function EpisodeWizard({
                   cutMarkers={cutMarkers}
                   suggestions={cutSuggestions}
                   onCutMarkersChange={setCutMarkers}
+                  onAssignSpeaker={assignSpeaker}
                 />
               </div>
             )}
