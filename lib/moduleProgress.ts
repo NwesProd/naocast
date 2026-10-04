@@ -51,6 +51,30 @@ export function displayStatus(state: EpisodeModuleState, releaseDate: Date | nul
   return releaseYmd && releaseYmd <= todayYmd ? "PUBLISHED" : "READY_TO_PUBLISH";
 }
 
+// Date du jour (AAAA-MM-JJ) à Paris, pour comparer à la date de sortie.
+export function todayInParis(): string {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Paris" });
+}
+
+// displayStatus à partir d'un épisode tel que lu en base (+ nombre de phrases
+// de transcript), partagé par la liste d'épisodes et le dashboard du podcast.
+export function episodeDisplayStatus(
+  ep: {
+    title: string | null;
+    status: string;
+    releaseDate: Date | null;
+    introTeaserChoice: "NONE" | "MODULE" | "IMPORT";
+    introTeaserValidated: boolean;
+    introValidatedExternally: boolean;
+    montageValidatedExternally: boolean;
+    guestsCastingValidated: boolean;
+    scriptValidated: boolean;
+  },
+  transcriptSegmentCount: number
+): DisplayStatus {
+  return displayStatus({ ...ep, hasTranscript: transcriptSegmentCount > 0 }, ep.releaseDate, todayInParis());
+}
+
 // Épisode pas encore paramétré (pas de titre) : direction la page d'infos,
 // aucun module n'est déverrouillé avant ça (cf. sidebar : "Sélectionne un
 // épisode pour débloquer les modules"). Sinon, le premier module déverrouillé

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
+import { episodeDisplayStatus } from "@/lib/moduleProgress";
 
 // Tableau de bord du podcast (rythme de publication, dernier épisode,
 // prochaine sortie), accessible en cliquant sur le nom/pochette du podcast
@@ -71,7 +72,10 @@ export default async function PodcastDashboardPage() {
   const podcast = await prisma.podcast.findUnique({ where: { userId: session.user.id } });
   if (!podcast) redirect("/podcast");
 
-  const episodes = await prisma.episode.findMany({ where: { podcastId: podcast.id } });
+  const episodes = await prisma.episode.findMany({
+    where: { podcastId: podcast.id },
+    include: { _count: { select: { transcriptSegments: true } } },
+  });
 
   // Faute de date d'export dédiée, la date de publication d'un épisode
   // validé est sa date de sortie renseignée, ou à défaut la date de la
@@ -82,7 +86,14 @@ export default async function PodcastDashboardPage() {
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
-  const exported = episodes.filter((ep) => ep.status === "EXPORTED");
+  // "Publié" : épisode diffusé (tout validé et date de sortie atteinte, cf.
+  // displayStatus) ou exporté dans naocast sans que tout le reste soit validé
+  // (ancien comportement : un export validé comptait comme publié).
+  const isPublished = (ep: (typeof episodes)[number]) => {
+    const shown = episodeDisplayStatus(ep, ep._count.transcriptSegments);
+    return shown === "PUBLISHED" || shown === "EXPORTED";
+  };
+  const exported = episodes.filter(isPublished);
   const exportedThisMonth = exported.filter((ep) => {
     const d = publishDate(ep);
     return d >= monthStart && d < monthEnd;
@@ -93,7 +104,7 @@ export default async function PodcastDashboardPage() {
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
   const upcoming = episodes
-    .filter((ep) => ep.status !== "EXPORTED" && ep.releaseDate && ep.releaseDate >= startOfToday)
+    .filter((ep) => !isPublished(ep) && ep.releaseDate && ep.releaseDate >= startOfToday)
     .sort((a, b) => a.releaseDate!.getTime() - b.releaseDate!.getTime());
   const nextEpisode = upcoming[0] ?? null;
 
