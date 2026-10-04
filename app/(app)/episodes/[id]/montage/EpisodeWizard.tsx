@@ -207,7 +207,7 @@ export function EpisodeWizard({
   const [previewStatus, setPreviewStatus] = useState<"idle" | "running">("idle");
   const [previewProgress, setPreviewProgress] = useState(0);
   const [previewPhase, setPreviewPhase] = useState("Préparation des rushs...");
-  const [previewModal, setPreviewModal] = useState<{ filename: string; url: string | null } | null>(null);
+  const [previewModal, setPreviewModal] = useState<{ filename: string; url: string | null; original?: boolean } | null>(null);
   const [cutMarkers, setCutMarkers] = useState<CutMarker[]>(initialCutMarkers);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -594,7 +594,7 @@ export function EpisodeWizard({
       return;
     }
     const data = await res.json();
-    setPreviewModal({ filename, url: data.url });
+    setPreviewModal({ filename, url: data.url, original: Boolean(data.original) });
   }
 
   async function saveIntroSource(value: IntroOutroSource) {
@@ -1686,7 +1686,7 @@ export function EpisodeWizard({
             {previewModal.url ? (
               <>
                 <video src={previewModal.url} controls autoPlay className="w-full max-h-[70vh] rounded-md bg-black" />
-                <p className="text-xs text-text-muted">Aperçu limité aux 90 premières secondes.</p>
+                {!previewModal.original && <p className="text-xs text-text-muted">Aperçu limité aux 90 premières secondes.</p>}
               </>
             ) : (
               <p className="text-sm text-text-muted py-8 text-center">Génération de l&apos;aperçu en cours...</p>

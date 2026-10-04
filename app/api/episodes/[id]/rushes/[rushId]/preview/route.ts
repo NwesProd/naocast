@@ -5,8 +5,8 @@ import path from "path";
 import { randomUUID } from "crypto";
 import { prisma } from "@/lib/db";
 import { requireUserId, requireOwnedEpisode } from "@/lib/authz";
-import { getLocalWorkingPath, putLocalFile, getSignedDownloadUrl } from "@/lib/storage";
-import { transcodeForWebPreview } from "@/lib/pipeline/ffmpeg";
+import { getLocalWorkingPath, getLocalPath, putLocalFile, getSignedDownloadUrl, storageMode } from "@/lib/storage";
+import { transcodeForWebPreview, isBrowserPlayable } from "@/lib/pipeline/ffmpeg";
 import { workDirFor } from "@/lib/pipeline/render";
 
 const PREVIEW_MAX_DURATION_SEC = 90;
@@ -34,11 +34,27 @@ export async function GET(
     return NextResponse.json({ url: await getSignedDownloadUrl(rush.previewKey) });
   }
 
+  // Sans télécharger le fichier (plusieurs Go) : ffprobe/ffmpeg lisent l'URL signée
+  // et ne tirent que les octets dont ils ont besoin (quelques secondes de vidéo).
+  const source = storageMode === "s3" ? await getSignedDownloadUrl(rush.storageKey, 1800) : getLocalPath(rush.storageKey);
+
+  // H.264 + AAC : lisible tel quel par le navigateur, aucun transcodage à attendre.
+  const playable = await isBrowserPlayable(source).catch(() => false);
+  if (playable) {
+    return NextResponse.json({ url: await getSignedDownloadUrl(rush.storageKey), original: true });
+  }
+
   const tmpDir = await mkdtemp(path.join(tmpdir(), "podtool-rush-preview-"));
   try {
-    const localPath = await getLocalWorkingPath(rush.storageKey, workDirFor(episodeId));
     const previewPath = path.join(tmpDir, "preview.mp4");
-    await transcodeForWebPreview(localPath, previewPath, PREVIEW_MAX_DURATION_SEC);
+    try {
+      await transcodeForWebPreview(source, previewPath, PREVIEW_MAX_DURATION_SEC);
+    } catch (err) {
+      // Lecture directe impossible (ffmpeg sans https, fichier atypique) : repli sur le fichier rapatrié.
+      console.warn(`[rush-preview] lecture directe impossible pour ${rushId}:`, (err as Error).message);
+      const localPath = await getLocalWorkingPath(rush.storageKey, workDirFor(episodeId));
+      await transcodeForWebPreview(localPath, previewPath, PREVIEW_MAX_DURATION_SEC);
+    }
 
     const previewKey = `rushes/${episodeId}/${randomUUID()}-preview.mp4`;
     await putLocalFile(previewKey, previewPath, "video/mp4");

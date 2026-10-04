@@ -137,6 +137,20 @@ export async function getDurationSec(filePath: string): Promise<number> {
   return parseFloat(out.trim());
 }
 
+// Le navigateur sait-il lire ce fichier tel quel ? (H.264 + AAC/MP3 dans un MP4/MOV :
+// le cas des exports caméra et logiciels courants.) Accepte un chemin ou une URL.
+export async function isBrowserPlayable(input: string): Promise<boolean> {
+  const out = await runFfprobe(["-v", "error", "-show_entries", "stream=codec_type,codec_name", "-of", "csv=p=0", input]);
+  const streams = out
+    .trim()
+    .split("\n")
+    .map((l) => l.trim().split(","))
+    .filter((p) => p.length >= 2);
+  const video = streams.filter((p) => p[1] === "video").map((p) => p[0]);
+  const audio = streams.filter((p) => p[1] === "audio").map((p) => p[0]);
+  return video.length > 0 && video.every((c) => c === "h264") && audio.every((c) => c === "aac" || c === "mp3");
+}
+
 export async function getImageDimensions(filePath: string): Promise<{ width: number; height: number }> {
   const out = await runFfprobe([
     "-v",
