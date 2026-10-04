@@ -15,12 +15,30 @@ import type { Plan } from "@/app/generated/prisma/client";
 // remplacée, épisode supprimé sans nettoyage...) est "non rattaché" : c'est du
 // stockage facturé pour rien.
 
+export type FileKind = "rush" | "rush-preview" | "render-final" | "render-audio" | "render-preview" | "intro" | "outro" | "teaser" | "podcast" | "other";
+
+// - used : référencé en base et encore utile ;
+// - stale : référencé mais devenu inutile (rush d'un épisode dont le montage est validé, hors naocast ou exporté) ;
+// - unreferenced : aucune ligne de la base ne le référence (aperçu perdu, ancien fichier remplacé...).
+export type FileState = "used" | "stale" | "unreferenced";
+
+export interface StoredFile {
+  key: string;
+  size: number;
+  kind: FileKind;
+  state: FileState;
+  episodeId: string | null;
+  episodeTitle: string | null;
+}
+
 export interface UserStorage {
   bytes: number;
   files: number;
   rushes: number; // octets
   episodes: number; // octets : rendus, génériques d'épisode, teaser
   podcast: number; // octets : pochette, génériques et logo du podcast, documents
+  list: StoredFile[];
+  reclaimableBytes: number; // octets des fichiers inutiles (stale + unreferenced)
 }
 
 export interface StorageReport {
@@ -32,7 +50,7 @@ export interface StorageReport {
   orphanKeys: string[];
 }
 
-const EMPTY: UserStorage = { bytes: 0, files: 0, rushes: 0, episodes: 0, podcast: 0 };
+const emptyUser = (): UserStorage => ({ bytes: 0, files: 0, rushes: 0, episodes: 0, podcast: 0, list: [], reclaimableBytes: 0 });
 
 // Lister tout le bucket à chaque affichage du dashboard serait inutilement
 // lent : le résultat est gardé quelques minutes en mémoire.
@@ -43,7 +61,21 @@ async function buildReport(): Promise<StorageReport> {
   const objects = await listAllObjects();
 
   // Requêtes séquentielles (pas de rafale, cf. lib/episode.ts sur P1017).
-  const episodes = await prisma.episode.findMany({ select: { id: true, podcast: { select: { userId: true } } } });
+  const episodes = await prisma.episode.findMany({
+    select: {
+      id: true,
+      title: true,
+      status: true,
+      montageValidatedExternally: true,
+      introKey: true,
+      outroKey: true,
+      introTeaserKey: true,
+      introTeaserImportKey: true,
+      podcast: { select: { userId: true } },
+    },
+  });
+  const rushRows = await prisma.rushSource.findMany({ select: { storageKey: true, previewKey: true } });
+  const exportRows = await prisma.exportAsset.findMany({ select: { storageKey: true } });
   const podcasts = await prisma.podcast.findMany({
     select: {
       userId: true,
@@ -57,7 +89,7 @@ async function buildReport(): Promise<StorageReport> {
     },
   });
 
-  const ownerOfEpisode = new Map(episodes.map((e) => [e.id, e.podcast.userId]));
+  const episodeById = new Map(episodes.map((e) => [e.id, e]));
   const ownerOfPodcastKey = new Map<string, string>();
   for (const p of podcasts) {
     const keys = [p.coverKey, p.introKey, p.outroKey, p.logoKey, p.introPreviewKey, p.outroPreviewKey];
@@ -66,17 +98,45 @@ async function buildReport(): Promise<StorageReport> {
     for (const k of keys) if (k) ownerOfPodcastKey.set(k, p.userId);
   }
 
+  // Tout ce que la base référence encore : un fichier absent de cet ensemble n'est utile à personne.
+  const rushKeys = new Set(rushRows.map((r) => r.storageKey).filter((k): k is string => !!k));
+  const rushPreviewKeys = new Set(rushRows.map((r) => r.previewKey).filter((k): k is string => !!k));
+  const referenced = new Set<string>([...rushKeys, ...rushPreviewKeys, ...exportRows.map((e) => e.storageKey)]);
+  for (const e of episodes) for (const k of [e.introKey, e.outroKey, e.introTeaserKey, e.introTeaserImportKey]) if (k) referenced.add(k);
+
   const report: StorageReport = { totalBytes: 0, totalFiles: 0, byUser: new Map(), orphanBytes: 0, orphanFiles: 0, orphanKeys: [] };
   for (const { key, size } of objects) {
     report.totalBytes += size;
     report.totalFiles += 1;
 
-    const [root, episodeId] = key.split("/");
+    const [root, episodeId, ...rest] = key.split("/");
+    const episode = root === "rushes" || root === "episodes" ? episodeById.get(episodeId) : undefined;
     let owner: string | undefined;
     let category: "rushes" | "episodes" | "podcast" = "podcast";
+    let kind: FileKind = "podcast";
+    let state: FileState = "used";
+
     if (root === "rushes" || root === "episodes") {
-      owner = ownerOfEpisode.get(episodeId);
+      owner = episode?.podcast.userId;
       category = root;
+      const name = rest.join("/");
+      const montageDone = !!episode && (episode.montageValidatedExternally || episode.status === "EXPORTED");
+
+      if (root === "rushes") {
+        kind = rushPreviewKeys.has(key) || name.endsWith("-preview.mp4") ? "rush-preview" : "rush";
+        if (!rushKeys.has(key) && !rushPreviewKeys.has(key)) state = "unreferenced";
+        else if (montageDone) state = "stale";
+      } else if (name === "final.mp4") {
+        kind = "render-final";
+      } else if (name === "audio.mp3") {
+        kind = "render-audio";
+      } else if (name === "preview.mp4") {
+        kind = "render-preview";
+        if (montageDone) state = "stale";
+      } else {
+        kind = name.startsWith("intro-teaser") ? "teaser" : name.startsWith("intro") ? "intro" : name.startsWith("outro") ? "outro" : "other";
+        if (!referenced.has(key)) state = "unreferenced";
+      }
     } else {
       owner = ownerOfPodcastKey.get(key);
     }
@@ -87,13 +147,20 @@ async function buildReport(): Promise<StorageReport> {
       report.orphanKeys.push(key);
       continue;
     }
-    const entry = report.byUser.get(owner) ?? { ...EMPTY };
+    const entry = report.byUser.get(owner) ?? emptyUser();
     entry.bytes += size;
     entry.files += 1;
     entry[category] += size;
+    entry.list.push({ key, size, kind, state, episodeId: episode?.id ?? null, episodeTitle: episode?.title ?? null });
+    if (state !== "used") entry.reclaimableBytes += size;
     report.byUser.set(owner, entry);
   }
   return report;
+}
+
+// Après un nettoyage : le prochain affichage relit le bucket.
+export function invalidateStorageReport(): void {
+  cache = null;
 }
 
 export function getStorageReport(): Promise<StorageReport> {
@@ -110,7 +177,7 @@ export function getStorageReport(): Promise<StorageReport> {
 
 export async function getUserStorage(userId: string): Promise<UserStorage> {
   const report = await getStorageReport();
-  return report.byUser.get(userId) ?? { ...EMPTY };
+  return report.byUser.get(userId) ?? emptyUser();
 }
 
 export interface StorageSummary {

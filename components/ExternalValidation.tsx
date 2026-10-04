@@ -8,7 +8,8 @@ import { EPISODE_UPDATED_EVENT } from "@/components/SidebarNav";
 // qu'elle masque ou ré-affiche le tunnel du module.
 const GateContext = createContext<((validated: boolean) => void) | null>(null);
 
-type Wording = { ask: string; validated: string; button: string };
+// `warning` : conséquence à connaître avant de valider (affichée tant que ce n'est pas validé).
+type Wording = { ask: string; validated: string; button: string; warning?: string };
 
 // Module validé hors naocast : son tunnel est masqué (seule la carte "Retirer la
 // validation" reste) ; la retirer le fait réapparaître. `showCardWhenOpen` garde la
@@ -100,6 +101,7 @@ export function ExternalValidation({
             ? "Le tick vert s'affiche dans la barre latérale. Retirez la validation pour faire réapparaître le tunnel."
             : "Validez-le sans passer par le module : le tick vert s'affichera dans la barre latérale."}
         </p>
+        {!validated && wording.warning && <p className="text-xs text-[#8A5300] mt-1">{wording.warning}</p>}
         {error && <p className="text-xs text-[#8A2E1F] mt-1">{error}</p>}
       </div>
       <button

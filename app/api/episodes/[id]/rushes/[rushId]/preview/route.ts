@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { mkdtemp, rm } from "fs/promises";
 import { tmpdir } from "os";
 import path from "path";
-import { randomUUID } from "crypto";
 import { prisma } from "@/lib/db";
 import { requireUserId, requireOwnedEpisode } from "@/lib/authz";
 import { getLocalWorkingPath, getLocalPath, putLocalFile, getSignedDownloadUrl, storageMode } from "@/lib/storage";
@@ -56,7 +55,8 @@ export async function GET(
       await transcodeForWebPreview(localPath, previewPath, PREVIEW_MAX_DURATION_SEC);
     }
 
-    const previewKey = `rushes/${episodeId}/${randomUUID()}-preview.mp4`;
+    // Clé fixe par rush : deux demandes simultanées écrivent au même endroit, sans laisser de fichier perdu.
+    const previewKey = `rushes/${episodeId}/${rushId}-preview.mp4`;
     await putLocalFile(previewKey, previewPath, "video/mp4");
     await prisma.rushSource.update({ where: { id: rushId }, data: { previewKey } });
 

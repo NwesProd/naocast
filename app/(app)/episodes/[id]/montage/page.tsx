@@ -48,7 +48,7 @@ export default async function MontagePage({ params }: { params: Promise<{ id: st
       <ExternalGate
         episodeId={id}
         field="montageValidatedExternally"
-        wording={{ ask: "Montage géré en dehors de naocast ?", validated: "Montage validé hors naocast.", button: "Valider le montage hors naocast" }}
+        wording={{ ask: "Montage géré en dehors de naocast ?", validated: "Montage validé hors naocast.", button: "Valider le montage hors naocast", warning: "Les rushs importés dans naocast seront supprimés pour libérer de l'espace." }}
         initialValidated={episode.montageValidatedExternally}
       >
         <EpisodeWizard

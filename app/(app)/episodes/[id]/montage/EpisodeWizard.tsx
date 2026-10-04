@@ -1835,7 +1835,7 @@ export function EpisodeWizard({
         <ExternalValidation
           episodeId={episodeId}
           field="montageValidatedExternally"
-          wording={{ ask: "Montage géré en dehors de naocast ?", validated: "Montage validé hors naocast.", button: "Valider le montage hors naocast" }}
+          wording={{ ask: "Montage géré en dehors de naocast ?", validated: "Montage validé hors naocast.", button: "Valider le montage hors naocast", warning: "Les rushs importés dans naocast seront supprimés pour libérer de l'espace." }}
           initialValidated={false}
         />
       )}

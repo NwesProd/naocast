@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import { requireUserId, requireOwnedEpisode, AuthError } from "@/lib/authz";
 import { jsonResponse } from "@/lib/json";
 import { getFullEpisode } from "@/lib/episode";
-import { deleteEpisodeStorage } from "@/lib/pipeline/cleanup";
+import { deleteEpisodeStorage, purgeEpisodeRushes } from "@/lib/pipeline/cleanup";
 import { getUserPlan } from "@/lib/entitlements";
 import { PLAN_LOCKS_VALIDATED_EPISODE_DELETION } from "@/lib/plan";
 import { z } from "zod";
@@ -69,9 +69,10 @@ const patchSchema = z.object({
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   let userId: string;
+  let existing: Awaited<ReturnType<typeof requireOwnedEpisode>>;
   try {
     userId = await requireUserId();
-    await requireOwnedEpisode(userId, id);
+    existing = await requireOwnedEpisode(userId, id);
   } catch (err) {
     return errorResponse(err);
   }
@@ -81,6 +82,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (!parsed.success) return NextResponse.json({ error: "Formulaire invalide." }, { status: 400 });
 
   const episode = await prisma.episode.update({ where: { id }, data: parsed.data });
+
+  // Montage validé hors naocast : les rushs importés ne servent plus à rien, on libère le stockage
+  // (sauf si un traitement ou un monteur naocast. travaille dessus).
+  if (parsed.data.montageValidatedExternally === true && !existing.montageValidatedExternally && existing.status === "DRAFT") {
+    const paidRequest = await prisma.editingRequest.findFirst({ where: { episodeId: id, status: "PAID" }, select: { id: true } });
+    if (!paidRequest) {
+      await purgeEpisodeRushes(id).catch((err) => console.warn(`[episode] purge des rushs échouée pour ${id}:`, err));
+    }
+  }
   return jsonResponse(episode);
 }
 

@@ -28,6 +28,20 @@ export async function cleanupExportedEpisodeFiles(episodeId: string): Promise<vo
   });
 }
 
+// Montage validé hors naocast (ou rushs devenus inutiles) : les rushs importés et leurs
+// aperçus ne servent plus à personne mais sont facturés. On les supprime (fichiers,
+// lignes, découpes et propositions de coupe qui s'y rapportaient). Le transcript, l'intro
+// et les informations de l'épisode restent.
+export async function purgeEpisodeRushes(episodeId: string): Promise<void> {
+  await deleteObjectsByPrefix(`rushes/${episodeId}/`);
+  await prisma.$transaction([
+    prisma.rushSource.deleteMany({ where: { episodeId } }),
+    prisma.cutMarker.deleteMany({ where: { episodeId } }),
+    prisma.cutSuggestion.deleteMany({ where: { episodeId } }),
+    prisma.episode.update({ where: { id: episodeId }, data: { transcriptRushId: null } }),
+  ]);
+}
+
 // "Recommencer le montage à zéro" (avant validation) : le tunnel repart du
 // début, l'utilisateur réimporte ses rushs. On supprime donc les rushs
 // (fichiers, aperçus, lignes), les découpes, les jobs et les rendus précédents.

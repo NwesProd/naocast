@@ -4,10 +4,37 @@ import { requireAdminPage } from "@/lib/admin";
 import { prisma } from "@/lib/db";
 import { PLAN_MODULES, BUILT_MODULES } from "@/lib/plan";
 import { getStorageReport, type UserStorage } from "@/lib/storageStats";
-import { PlanPill, StatusPill, formatBytes, formatDate, formatDateTime } from "../../ui";
+import { Pill, PlanPill, StatusPill, formatBytes, formatDate, formatDateTime } from "../../ui";
+import { StorageCleanup } from "./StorageCleanup";
+import type { FileKind, FileState } from "@/lib/storageStats";
 import { EmailLogTable } from "../../EmailLogTable";
 import { ModulesCard } from "./ModulesCard";
 import { UserActions } from "./UserActions";
+
+const KIND_LABEL: Record<FileKind, string> = {
+  rush: "Rush importé",
+  "rush-preview": "Aperçu de rush",
+  "render-final": "Export vidéo final",
+  "render-audio": "Export audio final",
+  "render-preview": "Prévisualisation (basse définition)",
+  intro: "Générique de début (épisode)",
+  outro: "Générique de fin (épisode)",
+  teaser: "Teaser d'intro",
+  podcast: "Fichier du podcast",
+  other: "Autre",
+};
+
+// Nom lisible : sans le dossier ni l'identifiant aléatoire ajouté devant à l'import.
+function fileLabel(key: string): string {
+  const name = key.split("/").pop() ?? key;
+  return name.replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-/i, "").replace(/^c[a-z0-9]{24}-preview\.mp4$/, "aperçu.mp4");
+}
+
+function StatePill({ state }: { state: FileState }) {
+  if (state === "used") return <Pill tone="success">Utilisé</Pill>;
+  if (state === "stale") return <Pill tone="orange">Inutile : montage validé</Pill>;
+  return <Pill tone="danger">Non rattaché</Pill>;
+}
 
 export default async function AdminUserPage({ params }: { params: Promise<{ id: string }> }) {
   await requireAdminPage();
@@ -33,7 +60,7 @@ export default async function AdminUserPage({ params }: { params: Promise<{ id: 
 
   let storage: UserStorage | null = null;
   try {
-    storage = (await getStorageReport()).byUser.get(id) ?? { bytes: 0, files: 0, rushes: 0, episodes: 0, podcast: 0 };
+    storage = (await getStorageReport()).byUser.get(id) ?? { bytes: 0, files: 0, rushes: 0, episodes: 0, podcast: 0, list: [], reclaimableBytes: 0 };
   } catch {
     storage = null;
   }
@@ -134,6 +161,58 @@ export default async function AdminUserPage({ params }: { params: Promise<{ id: 
 
       <section className="admin-section">
         <UserActions userId={user.id} email={user.email} currentPlan={user.plan} hasActiveSubscription={hasActiveSubscription} />
+      </section>
+
+      <section className="admin-section">
+        <h2 className="admin-section-title">fichiers stockés ({storage?.files ?? 0})</h2>
+        {storage ? (
+          <>
+            <StorageCleanup
+              userId={user.id}
+              files={storage.list.filter((f) => f.state !== "used").length}
+              bytes={storage.reclaimableBytes}
+            />
+            <div className="admin-table-wrap">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Fichier</th>
+                    <th>Type</th>
+                    <th>Épisode</th>
+                    <th className="num">Taille</th>
+                    <th>État</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {storage.list.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="admin-empty">
+                        Aucun fichier stocké.
+                      </td>
+                    </tr>
+                  )}
+                  {[...storage.list]
+                    .sort((a, b) => b.size - a.size)
+                    .map((f) => (
+                      <tr key={f.key}>
+                        <td title={f.key} style={{ wordBreak: "break-all" }}>
+                          {fileLabel(f.key)}
+                        </td>
+                        <td>{KIND_LABEL[f.kind]}</td>
+                        <td>{f.episodeTitle ?? (f.episodeId ? "Épisode supprimé" : "Podcast")}</td>
+                        <td className="num">{formatBytes(f.size)}</td>
+                        <td>
+                          <StatePill state={f.state} />
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        ) : (
+          <p className="admin-message error">Stockage indisponible pour le moment.</p>
+        )}
       </section>
 
       <section className="admin-section">
