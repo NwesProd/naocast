@@ -4,7 +4,7 @@ import type { Plan } from "@/app/generated/prisma/client";
 // affiché (les Price IDs Stripe réels vivent dans les variables d'env, cf.
 // lib/stripe.ts, jamais en dur ici pour pouvoir changer d'environnement
 // Stripe test/live sans toucher au code).
-export type ModuleKey = "script" | "invites" | "tournage" | "intro" | "montage" | "transcript" | "extraits" | "miniature" | "diffusion" | "lead-magnet" | "sponsoring";
+export type ModuleKey = "script" | "invites" | "tournage" | "intro" | "montage" | "transcript" | "extraits" | "miniature" | "diffusion" | "lead-magnet" | "sponsoring" | "mcp";
 
 const BASE_MODULES: ModuleKey[] = ["intro", "montage", "transcript"];
 const ALL_MODULES: ModuleKey[] = [
@@ -19,6 +19,7 @@ const ALL_MODULES: ModuleKey[] = [
   "diffusion",
   "lead-magnet",
   "sponsoring",
+  "mcp",
 ];
 
 export type EpisodeLimit = { type: "total" | "monthly"; count: number } | { type: "unlimited" };
@@ -76,6 +77,7 @@ export const BUILT_MODULES: { key: ModuleKey; label: string }[] = [
   { key: "intro", label: "Intro" },
   { key: "montage", label: "Montage" },
   { key: "transcript", label: "Transcript" },
+  { key: "mcp", label: "Connecteur Claude" },
 ];
 
 // `extraModules` : modules activés à la main pour cet utilisateur, en plus de

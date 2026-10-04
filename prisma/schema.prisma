@@ -62,6 +62,7 @@ model User {
   extraModules String[] @default([])
 
   loginTokens LoginToken[]
+  apiTokens   ApiToken[]
 }
 
 enum EmailStatus {
@@ -645,4 +646,22 @@ model EditingRequest {
 
   @@index([status, createdAt])
   @@index([episodeId])
+}
+
+// Clé personnelle du connecteur Claude (serveur MCP, cf. app/api/mcp) : l'utilisateur
+// la crée dans Paramètres et la colle dans son Claude. Seule l'empreinte (SHA-256)
+// est stockée, la clé complète n'est montrée qu'une fois à la création.
+model ApiToken {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name       String
+  tokenHash  String    @unique
+  // Début de la clé, pour la reconnaître dans la liste.
+  prefix     String
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
 }
