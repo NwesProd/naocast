@@ -25,6 +25,14 @@ const MODULE_STATUS_LABEL: Record<string, string> = {
   FAILED: "Échec",
 };
 
+// Une fois intro, montage et transcript validés, le statut du montage laisse la place
+// à "Prêt à diffuser" (cf. displayStatus), comme sur la carte de l'épisode.
+function nextEpisodeStatusLabel(shown: string): string {
+  if (shown === "READY_TO_PUBLISH") return "Prêt à diffuser";
+  if (shown === "PUBLISHED") return "Diffusé";
+  return `Montage · ${MODULE_STATUS_LABEL[shown] || shown}`;
+}
+
 // Même logique de routage que EpisodeCard.tsx (liste des épisodes) : le
 // premier module non cadenassé de la sidebar une fois l'épisode paramétré.
 function episodeHref(ep: { id: string; title: string | null; status: string }): string {
@@ -186,7 +194,7 @@ export default async function PodcastDashboardPage() {
               {daysUntilLabel(daysUntil(nextEpisode.releaseDate!))}
             </span>
             <span className="rounded-pill bg-butter-ink text-white text-xs font-semibold px-3.5 py-1.5 whitespace-nowrap">
-              Montage · {MODULE_STATUS_LABEL[nextEpisode.status] || nextEpisode.status}
+              {nextEpisodeStatusLabel(episodeDisplayStatus(nextEpisode, nextEpisode._count.transcriptSegments))}
             </span>
           </div>
         </Link>
