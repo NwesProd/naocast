@@ -12,8 +12,11 @@
     },
     {
       "name": "podtool-web",
-      "runtimeExecutable": "npx",
+      "runtimeExecutable": "env",
       "runtimeArgs": [
+        "NEXTAUTH_URL=http://localhost:3100",
+        "AUTH_URL=http://localhost:3100",
+        "npx",
         "next",
         "dev",
         "-p",

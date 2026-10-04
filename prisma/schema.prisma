@@ -63,6 +63,7 @@ model User {
 
   loginTokens LoginToken[]
   apiTokens   ApiToken[]
+  oauthCodes  OAuthCode[]
 }
 
 enum EmailStatus {
@@ -662,6 +663,44 @@ model ApiToken {
   lastUsedAt DateTime?
   revokedAt  DateTime?
   createdAt  DateTime  @default(now())
+
+  // Connexion créée via OAuth (claude.ai : bouton "Autoriser") plutôt que collée à la
+  // main : le jeton d'accès expire vite et se renouvelle avec le jeton de rafraîchissement
+  // (rotation sur la même ligne). Vides pour une clé personnelle classique.
+  clientId         String?
+  client           OAuthClient? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  expiresAt        DateTime?
+  refreshHash      String?      @unique
+  refreshExpiresAt DateTime?
+
+  @@index([userId])
+}
+
+// Client OAuth enregistré dynamiquement (RFC 7591) par un connecteur MCP comme
+// claude.ai. Client public (PKCE obligatoire, aucun secret).
+model OAuthClient {
+  id           String   @id @default(cuid())
+  name         String
+  redirectUris String[]
+  createdAt    DateTime @default(now())
+
+  codes  OAuthCode[]
+  tokens ApiToken[]
+}
+
+// Code d'autorisation à usage unique (5 minutes), échangé contre un jeton d'accès.
+model OAuthCode {
+  id            String      @id @default(cuid())
+  codeHash      String      @unique
+  clientId      String
+  client        OAuthClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  redirectUri   String
+  codeChallenge String
+  expiresAt     DateTime
+  usedAt        DateTime?
+  createdAt     DateTime    @default(now())
 
   @@index([userId])
 }

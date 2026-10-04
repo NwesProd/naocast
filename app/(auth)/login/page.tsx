@@ -25,7 +25,10 @@ export default function LoginPage() {
       setError("Email ou mot de passe incorrect.");
       return;
     }
-    router.push("/podcast/dashboard");
+    // Retour à la page demandée avant la connexion (chemin interne uniquement, jamais un autre site).
+    const next = new URLSearchParams(window.location.search).get("next");
+    const safeNext = next && next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/\\") ? next : null;
+    router.push(safeNext ?? "/podcast/dashboard");
     router.refresh();
   }
 

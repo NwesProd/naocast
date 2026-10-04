@@ -49,10 +49,12 @@ export default auth((req) => {
 
   if (!req.auth && !PUBLIC_PATHS.includes(pathname)) {
     const loginUrl = new URL("/login", req.nextUrl.origin);
+    // Reprend la page demandée après la connexion (ex. consentement OAuth du connecteur Claude).
+    if (req.method === "GET" && pathname !== "/") loginUrl.searchParams.set("next", `${pathname}${req.nextUrl.search}`);
     return NextResponse.redirect(loginUrl);
   }
 });
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|api).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|api|\\.well-known).*)"],
 };

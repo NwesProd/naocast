@@ -112,8 +112,19 @@ export function McpConnector({ hasAccess, mcpUrl, initialTokens }: { hasAccess: 
         <p className="text-sm rounded-md bg-peach p-3 text-peach-ink">Le connecteur Claude est réservé à naocast infinity et naocast lifetime.</p>
       ) : (
         <>
+          <div className="rounded-md border border-border bg-[#FAFAF8] p-3 space-y-2">
+            <p className="text-sm font-medium text-ink">Dans claude.ai ou l&apos;app Claude (le plus simple)</p>
+            <ol className="list-decimal pl-5 text-sm text-text-muted space-y-1">
+              <li>Ouvrez Paramètres, puis Connecteurs, puis « Ajouter un connecteur personnalisé ».</li>
+              <li>Donnez-lui le nom « naocast » et collez l&apos;adresse du serveur ci-dessous.</li>
+              <li>Cliquez sur « Connecter » : une page naocast vous demande d&apos;autoriser l&apos;accès, sans clé à copier.</li>
+            </ol>
+            <CopyBlock label="Adresse du serveur" value={mcpUrl} />
+          </div>
+
           {error && <p className="text-sm text-[#8A2E1F]">{error}</p>}
 
+          <p className="text-sm font-medium text-ink pt-2">Connexions et clés personnelles</p>
           <form onSubmit={create} className="flex items-end gap-2">
             <div className="flex-1">
               <label htmlFor="mcp-name" className="block text-xs font-medium text-text-muted mb-1">
@@ -157,13 +168,12 @@ export function McpConnector({ hasAccess, mcpUrl, initialTokens }: { hasAccess: 
           )}
 
           <div className="space-y-3">
-            <p className="text-sm font-medium text-ink">Brancher votre Claude</p>
-            <CopyBlock label="Adresse du serveur" value={mcpUrl} />
+            <p className="text-sm font-medium text-ink">Autres façons de brancher (avec une clé)</p>
             <CopyBlock label="Claude Code (terminal)" value={claudeCode} />
             <CopyBlock label="Claude Desktop (fichier claude_desktop_config.json, nécessite Node.js)" value={claudeDesktop} />
             <p className="text-xs text-text-muted">
-              Créez d&apos;abord une clé : elle est insérée automatiquement dans les commandes ci-dessus. Une clé révoquée cesse de fonctionner
-              immédiatement.
+              Créez d&apos;abord une clé : elle est insérée automatiquement dans les commandes ci-dessus. Une connexion ou une clé révoquée
+              cesse de fonctionner immédiatement.
             </p>
           </div>
         </>

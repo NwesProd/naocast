@@ -5,10 +5,10 @@ import { hasModuleAccess } from "@/lib/plan";
 // Clés personnelles du connecteur Claude (serveur MCP). Format "nao_" + 32 octets
 // aléatoires : impossible à deviner, et seule leur empreinte SHA-256 est stockée
 // (suffisant pour un secret de cette entropie, inutile de le saler).
-const TOKEN_PREFIX = "nao_";
+export const TOKEN_PREFIX = "nao_";
 const MAX_ACTIVE_TOKENS = 10;
 
-function hashToken(token: string): string {
+export function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
@@ -25,7 +25,7 @@ export async function createApiToken(userId: string, name: string): Promise<{ id
 
 export type McpAuthResult =
   | { ok: true; userId: string; extraModules: string[]; plan: import("@/app/generated/prisma/client").Plan }
-  | { ok: false; status: 401 | 403; message: string };
+  | { ok: false; status: 401 | 403; message: string; expired?: boolean };
 
 // Identifie l'utilisateur à partir de l'en-tête "Authorization: Bearer nao_...",
 // et vérifie que son forfait (ou un déblocage manuel testeur) donne accès au connecteur.
@@ -39,6 +39,8 @@ export async function authenticateMcpRequest(req: Request): Promise<McpAuthResul
     include: { user: { select: { id: true, plan: true, extraModules: true } } },
   });
   if (!row || row.revokedAt) return { ok: false, status: 401, message: "Clé manquante ou invalide." };
+  // Jeton d'accès OAuth expiré : le client doit le renouveler avec son jeton de rafraîchissement.
+  if (row.expiresAt && row.expiresAt.getTime() < Date.now()) return { ok: false, status: 401, message: "Jeton expiré.", expired: true };
 
   if (!hasModuleAccess(row.user.plan, "mcp", row.user.extraModules)) {
     return { ok: false, status: 403, message: "Le connecteur Claude est réservé à naocast infinity et naocast lifetime." };
