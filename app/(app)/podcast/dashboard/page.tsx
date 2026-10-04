@@ -2,7 +2,10 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
-import { episodeDisplayStatus } from "@/lib/moduleProgress";
+import { episodeDisplayStatus, EPISODE_COUNTS_SELECT } from "@/lib/moduleProgress";
+import { getUserAccess } from "@/lib/entitlements";
+import { hasModuleAccess } from "@/lib/plan";
+import { statusLabel } from "@/components/StatusBadge";
 
 // Tableau de bord du podcast (rythme de publication, dernier épisode,
 // prochaine sortie), accessible en cliquant sur le nom/pochette du podcast
@@ -14,24 +17,6 @@ import { episodeDisplayStatus } from "@/lib/moduleProgress";
 // semblant d'avoir des chiffres, on l'indique clairement plutôt que
 // d'inventer des données.
 const STATS_UNAVAILABLE = "Bientôt disponible";
-
-const MODULE_STATUS_LABEL: Record<string, string> = {
-  DRAFT: "Pas commencé",
-  QUEUED: "En traitement",
-  PROCESSING: "En traitement",
-  READY_FOR_REVIEW: "Attente de validation",
-  EXPORTED: "Validé",
-  HUMAN_EDITOR_REQUESTED: "Chez le monteur",
-  FAILED: "Échec",
-};
-
-// Une fois intro, montage et transcript validés, le statut du montage laisse la place
-// à "Prêt à diffuser" (cf. displayStatus), comme sur la carte de l'épisode.
-function nextEpisodeStatusLabel(shown: string): string {
-  if (shown === "READY_TO_PUBLISH") return "Prêt à diffuser";
-  if (shown === "PUBLISHED") return "Diffusé";
-  return `Montage · ${MODULE_STATUS_LABEL[shown] || shown}`;
-}
 
 // Même logique de routage que EpisodeCard.tsx (liste des épisodes) : le
 // premier module non cadenassé de la sidebar une fois l'épisode paramétré.
@@ -80,9 +65,13 @@ export default async function PodcastDashboardPage() {
   const podcast = await prisma.podcast.findUnique({ where: { userId: session.user.id } });
   if (!podcast) redirect("/podcast");
 
+  const access = await getUserAccess(session.user.id);
+  // La phase "Prod" n'existe que pour les forfaits qui ont Script ou Invités.
+  const prodEnabled = hasModuleAccess(access.plan, "script", access.extraModules) || hasModuleAccess(access.plan, "invites", access.extraModules);
+
   const episodes = await prisma.episode.findMany({
     where: { podcastId: podcast.id },
-    include: { _count: { select: { transcriptSegments: true } } },
+    include: { _count: { select: EPISODE_COUNTS_SELECT } },
   });
 
   // Faute de date d'export dédiée, la date de publication d'un épisode
@@ -98,8 +87,7 @@ export default async function PodcastDashboardPage() {
   // displayStatus) ou exporté dans naocast sans que tout le reste soit validé
   // (ancien comportement : un export validé comptait comme publié).
   const isPublished = (ep: (typeof episodes)[number]) => {
-    const shown = episodeDisplayStatus(ep, ep._count.transcriptSegments);
-    return shown === "PUBLISHED" || shown === "EXPORTED";
+    return episodeDisplayStatus(ep, ep._count, prodEnabled) === "PUBLISHED";
   };
   const exported = episodes.filter(isPublished);
   const exportedThisMonth = exported.filter((ep) => {
@@ -194,7 +182,7 @@ export default async function PodcastDashboardPage() {
               {daysUntilLabel(daysUntil(nextEpisode.releaseDate!))}
             </span>
             <span className="rounded-pill bg-butter-ink text-white text-xs font-semibold px-3.5 py-1.5 whitespace-nowrap">
-              {nextEpisodeStatusLabel(episodeDisplayStatus(nextEpisode, nextEpisode._count.transcriptSegments))}
+              {statusLabel(episodeDisplayStatus(nextEpisode, nextEpisode._count, prodEnabled))}
             </span>
           </div>
         </Link>

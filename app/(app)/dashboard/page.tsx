@@ -6,7 +6,9 @@ import { NewEpisodeButton } from "./NewEpisodeButton";
 import { EpisodeCard } from "./EpisodeCard";
 import { PlanUsageBanner } from "./PlanUsageBanner";
 import { PLAN_LOCKS_VALIDATED_EPISODE_DELETION } from "@/lib/plan";
-import { episodeDisplayStatus } from "@/lib/moduleProgress";
+import { episodeDisplayStatus, EPISODE_COUNTS_SELECT } from "@/lib/moduleProgress";
+import { getUserAccess } from "@/lib/entitlements";
+import { hasModuleAccess } from "@/lib/plan";
 
 export default async function DashboardPage() {
   const session = await auth();
@@ -16,6 +18,9 @@ export default async function DashboardPage() {
   if (!podcast) redirect("/podcast");
 
   const usage = await getEpisodeUsage(session.user.id);
+  const access = await getUserAccess(session.user.id);
+  // La phase "Prod" n'existe que pour les forfaits qui ont Script ou Invités.
+  const prodEnabled = hasModuleAccess(access.plan, "script", access.extraModules) || hasModuleAccess(access.plan, "invites", access.extraModules);
 
   // Le plus gros SxEx en premier (S2 avant S1, E5 avant E3 au sein d'une même
   // saison), les épisodes sans saison/numéro renseignés (brouillon tout
@@ -28,7 +33,7 @@ export default async function DashboardPage() {
       { episodeNumber: { sort: "desc", nulls: "last" } },
       { createdAt: "desc" },
     ],
-    include: { _count: { select: { transcriptSegments: true } } },
+    include: { _count: { select: EPISODE_COUNTS_SELECT } },
   });
 
   return (
@@ -53,7 +58,7 @@ export default async function DashboardPage() {
               id={ep.id}
               title={ep.title}
               status={ep.status}
-              displayStatus={episodeDisplayStatus(ep, ep._count.transcriptSegments)}
+              displayStatus={episodeDisplayStatus(ep, ep._count, prodEnabled)}
               season={ep.season}
               episodeNumber={ep.episodeNumber}
               releaseDateLabel={ep.releaseDate ? ep.releaseDate.toLocaleDateString("fr-FR") : null}

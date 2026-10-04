@@ -2,7 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { groupBySpeaker } from "@/lib/transcriptGrouping";
-import { episodeDisplayStatus } from "@/lib/moduleProgress";
+import { episodeDisplayStatus, EPISODE_COUNTS_SELECT } from "@/lib/moduleProgress";
 import { normalizeTags } from "@/lib/guestRelevance";
 import { hasModuleAccess, PLAN_LABELS, type ModuleKey } from "@/lib/plan";
 import type { Plan } from "@/app/generated/prisma/client";
@@ -48,6 +48,8 @@ async function speakerNames(episodeId: string): Promise<Map<string, string>> {
 export function createNaocastMcpServer(user: McpUser): McpServer {
   const server = new McpServer({ name: "naocast", version: "1.0.0" });
 
+  const prodEnabled = hasModuleAccess(user.plan, "script", user.extraModules) || hasModuleAccess(user.plan, "invites", user.extraModules);
+
   const locked = (module: ModuleKey, label: string): ToolResult | null =>
     hasModuleAccess(user.plan, module, user.extraModules) ? null : fail(`Le module « ${label} » n'est pas inclus dans ton forfait (${PLAN_LABELS[user.plan]}).`);
 
@@ -78,7 +80,7 @@ export function createNaocastMcpServer(user: McpUser): McpServer {
       const episodes = await prisma.episode.findMany({
         where: { podcastId: podcast.id },
         orderBy: [{ season: { sort: "desc", nulls: "last" } }, { episodeNumber: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
-        include: { _count: { select: { transcriptSegments: true } } },
+        include: { _count: { select: EPISODE_COUNTS_SELECT } },
       });
       return json(
         episodes.map((e) => ({
@@ -86,7 +88,7 @@ export function createNaocastMcpServer(user: McpUser): McpServer {
           title: e.title,
           season: e.season,
           episodeNumber: e.episodeNumber,
-          status: episodeDisplayStatus(e, e._count.transcriptSegments),
+          status: episodeDisplayStatus(e, e._count, prodEnabled),
           releaseDate: e.releaseDate ? e.releaseDate.toISOString().slice(0, 10) : null,
           hasTranscript: e._count.transcriptSegments > 0,
         }))
@@ -107,7 +109,12 @@ export function createNaocastMcpServer(user: McpUser): McpServer {
       if (!episode) return fail("Épisode introuvable.");
       const guests = await prisma.episodeGuest.findMany({ where: { episodeId }, include: { guest: true }, orderBy: { order: "asc" } });
       const names = await speakerNames(episodeId);
-      const count = await prisma.transcriptSegment.count({ where: { episodeId } });
+      const [transcriptSegments, rushes, introSegments] = await Promise.all([
+        prisma.transcriptSegment.count({ where: { episodeId } }),
+        prisma.rushSource.count({ where: { episodeId } }),
+        prisma.introSegment.count({ where: { episodeId } }),
+      ]);
+      const count = transcriptSegments;
       return json({
         id: episode.id,
         podcast: episode.podcast.title,
@@ -115,7 +122,7 @@ export function createNaocastMcpServer(user: McpUser): McpServer {
         season: episode.season,
         episodeNumber: episode.episodeNumber,
         releaseDate: episode.releaseDate ? episode.releaseDate.toISOString().slice(0, 10) : null,
-        status: episodeDisplayStatus(episode, count),
+        status: episodeDisplayStatus(episode, { transcriptSegments, rushes, episodeGuests: guests.length, introSegments }, prodEnabled),
         script: { draft: episode.scriptDraft, angleIdeas: episode.scriptAngleIdeas, validated: episode.scriptValidated },
         guests: guests.map((g) => ({ id: g.guest.id, name: g.guest.name, media: g.guest.mediaName, tags: g.guest.tags, socialLinks: g.guest.socialLinks })),
         speakers: [...names.values()],

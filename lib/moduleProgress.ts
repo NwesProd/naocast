@@ -32,23 +32,46 @@ export function isMontageDone(state: Pick<EpisodeModuleState, "status" | "montag
   return state.montageValidatedExternally || state.status === "EXPORTED";
 }
 
-// Statut affiché sur la carte de l'épisode. Une fois la post-production
-// complète (intro, montage et transcript validés, dans naocast ou hors
-// naocast), l'épisode est "Prêt à diffuser" tant que sa date de sortie est à
-// venir (ou absente), et "Diffusé" dès le jour de sortie. Les statuts en cours
-// de route (traitement, échec, chez le monteur) priment toujours : tant que le
-// pipeline travaille, on n'affiche pas "prêt". `todayYmd` : date du jour au
+// Statut affiché (carte de l'épisode, dashboard du podcast), calculé et jamais stocké.
+// Du plus avancé au moins avancé :
+// - DIFFUSÉ : montage validé et date de sortie atteinte ;
+// - PRÊT À DIFFUSER : montage validé (date à venir ou absente) ;
+// - POST-PROD : intro, montage ou transcript commencé ;
+// - PROD : script ou invités commencé (uniquement pour les forfaits qui ont ces modules) ;
+// - BROUILLON : rien de commencé.
+// Les statuts "en cours de route" (traitement, échec, chez le monteur) priment toujours :
+// tant que le pipeline travaille, on affiche son état réel. `todayYmd` : date du jour au
 // format AAAA-MM-JJ, dans le fuseau de l'utilisateur.
 export type DisplayStatus = string;
 
-export function displayStatus(state: EpisodeModuleState, releaseDate: Date | null, todayYmd: string): DisplayStatus {
-  const settled = state.status === "DRAFT" || state.status === "READY_FOR_REVIEW" || state.status === "EXPORTED";
-  const allDone = isIntroDone(state) && isMontageDone(state) && state.hasTranscript;
-  if (!settled || !allDone) return state.status;
+// Ce qui permet de dire qu'un module est "commencé" (tick vert = validé, c'est autre chose).
+export interface ProgressSignals {
+  // Le forfait (ou un déblocage manuel) donne accès à Script ou Invités : sans eux, pas de phase Prod.
+  prodEnabled: boolean;
+  scriptStarted: boolean;
+  guestsStarted: boolean;
+  introStarted: boolean;
+  montageStarted: boolean;
+  transcriptStarted: boolean;
+}
 
-  // La date de sortie est stockée à minuit UTC du jour choisi.
-  const releaseYmd = releaseDate ? releaseDate.toISOString().slice(0, 10) : null;
-  return releaseYmd && releaseYmd <= todayYmd ? "PUBLISHED" : "READY_TO_PUBLISH";
+export function displayStatus(
+  state: EpisodeModuleState,
+  releaseDate: Date | null,
+  todayYmd: string,
+  signals: ProgressSignals
+): DisplayStatus {
+  const settled = state.status === "DRAFT" || state.status === "READY_FOR_REVIEW" || state.status === "EXPORTED";
+  if (!settled) return state.status;
+
+  if (isMontageDone(state)) {
+    // La date de sortie est stockée à minuit UTC du jour choisi.
+    const releaseYmd = releaseDate ? releaseDate.toISOString().slice(0, 10) : null;
+    return releaseYmd && releaseYmd <= todayYmd ? "PUBLISHED" : "READY_TO_PUBLISH";
+  }
+  if (signals.introStarted || signals.montageStarted || signals.transcriptStarted) return "POST_PROD";
+  if (signals.prodEnabled && (signals.scriptStarted || signals.guestsStarted)) return "PROD";
+  return "DRAFT";
 }
 
 // Date du jour (AAAA-MM-JJ) à Paris, pour comparer à la date de sortie.
@@ -56,23 +79,45 @@ export function todayInParis(): string {
   return new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Paris" });
 }
 
-// displayStatus à partir d'un épisode tel que lu en base (+ nombre de phrases
-// de transcript), partagé par la liste d'épisodes et le dashboard du podcast.
+// Compteurs à demander à Prisma (`_count`) pour calculer le statut affiché d'une liste d'épisodes.
+export const EPISODE_COUNTS_SELECT = { transcriptSegments: true, rushes: true, episodeGuests: true, introSegments: true } as const;
+
+export interface EpisodeCounts {
+  transcriptSegments: number;
+  rushes: number;
+  episodeGuests: number;
+  introSegments: number;
+}
+
+// displayStatus à partir d'un épisode tel que lu en base (+ compteurs), partagé par la
+// liste d'épisodes, le dashboard du podcast et le connecteur Claude.
 export function episodeDisplayStatus(
   ep: {
     title: string | null;
     status: string;
     releaseDate: Date | null;
+    editorChoice: string | null;
     introTeaserChoice: "NONE" | "MODULE" | "IMPORT";
     introTeaserValidated: boolean;
     introValidatedExternally: boolean;
     montageValidatedExternally: boolean;
     guestsCastingValidated: boolean;
     scriptValidated: boolean;
+    scriptDraft: string | null;
+    scriptAngleIdeas: unknown;
   },
-  transcriptSegmentCount: number
+  counts: EpisodeCounts,
+  prodEnabled: boolean
 ): DisplayStatus {
-  return displayStatus({ ...ep, hasTranscript: transcriptSegmentCount > 0 }, ep.releaseDate, todayInParis());
+  const hasIdeas = Array.isArray(ep.scriptAngleIdeas) && ep.scriptAngleIdeas.length > 0;
+  return displayStatus({ ...ep, hasTranscript: counts.transcriptSegments > 0 }, ep.releaseDate, todayInParis(), {
+    prodEnabled,
+    scriptStarted: ep.scriptValidated || !!ep.scriptDraft?.trim() || hasIdeas,
+    guestsStarted: ep.guestsCastingValidated || counts.episodeGuests > 0,
+    introStarted: ep.introValidatedExternally || ep.introTeaserValidated || ep.introTeaserChoice !== "NONE" || counts.introSegments > 0,
+    montageStarted: ep.status !== "DRAFT" || ep.editorChoice !== null || counts.rushes > 0,
+    transcriptStarted: counts.transcriptSegments > 0,
+  });
 }
 
 // Épisode pas encore paramétré (pas de titre) : direction la page d'infos,

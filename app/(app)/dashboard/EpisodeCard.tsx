@@ -12,6 +12,8 @@ import { firstOpenModuleHref } from "@/lib/moduleProgress";
 // le seul indicateur précis du statut exact.
 const ZONE_CLASSES: Record<string, { bg: string; text: string; muted: string }> = {
   DRAFT: { bg: "bg-peach", text: "text-peach-ink", muted: "text-peach-muted" },
+  PROD: { bg: "bg-butter", text: "text-butter-ink", muted: "text-butter-ink/70" },
+  POST_PROD: { bg: "bg-sky", text: "text-sky-ink", muted: "text-sky-ink/70" },
   QUEUED: { bg: "bg-butter", text: "text-butter-ink", muted: "text-butter-ink/70" },
   PROCESSING: { bg: "bg-butter", text: "text-butter-ink", muted: "text-butter-ink/70" },
   HUMAN_EDITOR_REQUESTED: { bg: "bg-sky", text: "text-sky-ink", muted: "text-sky-ink/70" },
