@@ -157,7 +157,6 @@ export function EpisodeWizard({
   initialCutSuggestions,
   initialIntroTeaser,
   initialGenerics,
-  initialMontageValidatedExternally,
   initialEditorNotes,
 }: {
   episodeId: string;
@@ -173,7 +172,6 @@ export function EpisodeWizard({
   initialAutocut: { enabled: boolean; silenceMs: number | null };
   initialCutSuggestions: CutSuggestionItem[];
   initialIntroTeaser: { validated: boolean; choice: IntroTeaserChoice; hasImport: boolean };
-  initialMontageValidatedExternally: boolean;
   initialEditorNotes: string;
   initialGenerics: {
     introSource: IntroOutroSource;
@@ -1809,7 +1807,7 @@ export function EpisodeWizard({
           episodeId={episodeId}
           field="montageValidatedExternally"
           wording={{ ask: "Montage géré en dehors de naocast ?", validated: "Montage validé hors naocast.", button: "Valider le montage hors naocast" }}
-          initialValidated={initialMontageValidatedExternally}
+          initialValidated={false}
         />
       )}
 

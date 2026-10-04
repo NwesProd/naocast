@@ -1,8 +1,48 @@
 "use client";
 
-import { useState } from "react";
+import { createContext, useContext, useState } from "react";
 import { useRouter } from "next/navigation";
 import { EPISODE_UPDATED_EVENT } from "@/components/SidebarNav";
+
+// Contexte de ExternalGate : prévient la porte quand la validation change, pour
+// qu'elle masque ou ré-affiche le tunnel du module.
+const GateContext = createContext<((validated: boolean) => void) | null>(null);
+
+type Wording = { ask: string; validated: string; button: string };
+
+// Module validé hors naocast : son tunnel est masqué (seule la carte "Retirer la
+// validation" reste) ; la retirer le fait réapparaître. `showCardWhenOpen` garde la
+// carte sous le tunnel (Intro) ; sinon c'est le tunnel qui l'affiche lui-même (Montage).
+export function ExternalGate({
+  episodeId,
+  field,
+  wording,
+  initialValidated,
+  showCardWhenOpen = false,
+  children,
+}: {
+  episodeId: string;
+  field: "introValidatedExternally" | "montageValidatedExternally";
+  wording: Wording;
+  initialValidated: boolean;
+  showCardWhenOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [validated, setValidated] = useState(initialValidated);
+
+  return (
+    <GateContext.Provider value={setValidated}>
+      {validated ? (
+        <ExternalValidation key="validated" episodeId={episodeId} field={field} wording={wording} initialValidated />
+      ) : (
+        <>
+          {children}
+          {showCardWhenOpen && <ExternalValidation key="open" episodeId={episodeId} field={field} wording={wording} initialValidated={false} />}
+        </>
+      )}
+    </GateContext.Provider>
+  );
+}
 
 // Pour qui fait une partie de sa post-production en dehors de naocast :
 // "valider hors naocast" allume simplement le tick vert du module dans la
@@ -17,10 +57,11 @@ export function ExternalValidation({
   episodeId: string;
   field: "introValidatedExternally" | "montageValidatedExternally";
   // Libellés accordés au module (intro : féminin, montage : masculin).
-  wording: { ask: string; validated: string; button: string };
+  wording: Wording;
   initialValidated: boolean;
 }) {
   const router = useRouter();
+  const gate = useContext(GateContext);
   const [validated, setValidated] = useState(initialValidated);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,6 +77,7 @@ export function ExternalValidation({
       });
       if (!res.ok) throw new Error("Impossible d'enregistrer, réessayez.");
       setValidated(!validated);
+      gate?.(!validated);
       // La sidebar garde son propre état de l'épisode : ce signal lui fait
       // recharger l'épisode pour afficher (ou retirer) le tick tout de suite.
       window.dispatchEvent(new Event(EPISODE_UPDATED_EVENT));
@@ -55,7 +97,7 @@ export function ExternalValidation({
         </p>
         <p className="text-xs text-text-muted mt-0.5">
           {validated
-            ? "Le tick vert s'affiche dans la barre latérale."
+            ? "Le tick vert s'affiche dans la barre latérale. Retirez la validation pour faire réapparaître le tunnel."
             : "Validez-le sans passer par le module : le tick vert s'affichera dans la barre latérale."}
         </p>
         {error && <p className="text-xs text-[#8A2E1F] mt-1">{error}</p>}

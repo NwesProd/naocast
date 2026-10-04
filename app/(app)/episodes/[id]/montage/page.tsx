@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
+import { ExternalGate } from "@/components/ExternalValidation";
 import { EpisodeWizard } from "./EpisodeWizard";
 
 export default async function MontagePage({ params }: { params: Promise<{ id: string }> }) {
@@ -44,47 +45,53 @@ export default async function MontagePage({ params }: { params: Promise<{ id: st
 
   return (
     <main className="p-8 max-w-4xl w-full">
-      <EpisodeWizard
+      <ExternalGate
         episodeId={id}
-        initialRushes={rushes}
-        initialCutMarkers={episode.cutMarkers}
-        podcastLogo={{
-          hasLogo: !!episode.podcast.logoKey,
-          hasIntro: !!episode.podcast.introKey,
-          hasOutro: !!episode.podcast.outroKey,
-        }}
-        initialLogoSettings={{
-          logoEnabled: episode.logoEnabled,
-          logoOnIntro: episode.logoOnIntro,
-          logoOnOutro: episode.logoOnOutro,
-          logoPosition: episode.logoPosition,
-        }}
-        initialEditorChoice={episode.editorChoice}
-        initialMontageValidatedExternally={episode.montageValidatedExternally}
-        initialEditorNotes={pendingRequest?.notes ?? ""}
-        initialCameraSetup={episode.cameraSetup}
-        initialExpectedSpeakerCount={episode.expectedSpeakerCount}
-        initialGuestCount={episode._count.episodeGuests}
-        initialAutocut={{ enabled: episode.autocutEnabled, silenceMs: episode.autocutSilenceMs }}
-        initialCutSuggestions={episode.cutSuggestions.map((s) => ({ id: s.id, startMs: s.startMs, endMs: s.endMs, text: s.text, reason: s.reason }))}
-        initialIntroTeaser={{
-          validated: episode.introTeaserValidated,
-          choice: episode.introTeaserChoice,
-          hasImport: !!episode.introTeaserImportKey,
-        }}
-        initialGenerics={{
-          introSource: episode.introSource,
-          hasEpisodeIntro: !!episode.introKey,
-          introCreationMode: episode.introCreationMode,
-          introCustomMode: episode.introCustomMode,
-          introCustomDescription: episode.introCustomDescription || "",
-          outroSource: episode.outroSource,
-          hasEpisodeOutro: !!episode.outroKey,
-          outroCreationMode: episode.outroCreationMode,
-          outroCustomMode: episode.outroCustomMode,
-          outroCustomDescription: episode.outroCustomDescription || "",
-        }}
-      />
+        field="montageValidatedExternally"
+        wording={{ ask: "Montage géré en dehors de naocast ?", validated: "Montage validé hors naocast.", button: "Valider le montage hors naocast" }}
+        initialValidated={episode.montageValidatedExternally}
+      >
+        <EpisodeWizard
+          episodeId={id}
+          initialRushes={rushes}
+          initialCutMarkers={episode.cutMarkers}
+          podcastLogo={{
+            hasLogo: !!episode.podcast.logoKey,
+            hasIntro: !!episode.podcast.introKey,
+            hasOutro: !!episode.podcast.outroKey,
+          }}
+          initialLogoSettings={{
+            logoEnabled: episode.logoEnabled,
+            logoOnIntro: episode.logoOnIntro,
+            logoOnOutro: episode.logoOnOutro,
+            logoPosition: episode.logoPosition,
+          }}
+          initialEditorChoice={episode.editorChoice}
+          initialEditorNotes={pendingRequest?.notes ?? ""}
+          initialCameraSetup={episode.cameraSetup}
+          initialExpectedSpeakerCount={episode.expectedSpeakerCount}
+          initialGuestCount={episode._count.episodeGuests}
+          initialAutocut={{ enabled: episode.autocutEnabled, silenceMs: episode.autocutSilenceMs }}
+          initialCutSuggestions={episode.cutSuggestions.map((s) => ({ id: s.id, startMs: s.startMs, endMs: s.endMs, text: s.text, reason: s.reason }))}
+          initialIntroTeaser={{
+            validated: episode.introTeaserValidated,
+            choice: episode.introTeaserChoice,
+            hasImport: !!episode.introTeaserImportKey,
+          }}
+          initialGenerics={{
+            introSource: episode.introSource,
+            hasEpisodeIntro: !!episode.introKey,
+            introCreationMode: episode.introCreationMode,
+            introCustomMode: episode.introCustomMode,
+            introCustomDescription: episode.introCustomDescription || "",
+            outroSource: episode.outroSource,
+            hasEpisodeOutro: !!episode.outroKey,
+            outroCreationMode: episode.outroCreationMode,
+            outroCustomMode: episode.outroCustomMode,
+            outroCustomDescription: episode.outroCustomDescription || "",
+          }}
+        />
+      </ExternalGate>
     </main>
   );
 }

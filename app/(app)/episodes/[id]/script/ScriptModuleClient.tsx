@@ -90,20 +90,20 @@ export function ScriptModuleClient({
     }
   }
 
-  async function validateScript() {
+  async function validateScript(next = true) {
     setValidating(true);
     setError(null);
     try {
       const res = await fetch(`/api/episodes/${episodeId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scriptDraft, scriptValidated: true }),
+        body: JSON.stringify({ scriptDraft, scriptValidated: next }),
       });
       if (!res.ok) throw new Error();
-      setValidated(true);
+      setValidated(next);
       window.dispatchEvent(new Event(EPISODE_UPDATED_EVENT));
     } catch {
-      setError("Échec de la validation du script.");
+      setError(next ? "Échec de la validation du script." : "Impossible de retirer la validation.");
     } finally {
       setValidating(false);
     }
@@ -117,16 +117,23 @@ export function ScriptModuleClient({
           <p className="text-sm text-text-muted">Idées d&apos;angles et de thèmes pour cet épisode, basées sur la bible du podcast.</p>
         </div>
         {hasBible && (
-          <button
-            type="button"
-            onClick={validateScript}
-            disabled={validating}
-            className={`shrink-0 text-sm font-semibold rounded-[10px] px-4 py-2 transition disabled:opacity-50 ${
-              validated ? "bg-accent-teal text-white" : "bg-primary-button text-white hover:brightness-110"
-            }`}
-          >
-            {validating ? "..." : validated ? "✓ Script validé" : "Valider mon script"}
-          </button>
+          <div className="shrink-0 flex flex-col items-end gap-1">
+            <button
+              type="button"
+              onClick={() => !validated && validateScript(true)}
+              disabled={validating}
+              className={`text-sm font-semibold rounded-[10px] px-4 py-2 transition disabled:opacity-50 ${
+                validated ? "bg-accent-teal text-white cursor-default" : "bg-primary-button text-white hover:brightness-110"
+              }`}
+            >
+              {validating ? "..." : validated ? "✓ Script validé" : "Valider mon script"}
+            </button>
+            {validated && (
+              <button type="button" onClick={() => validateScript(false)} disabled={validating} className="text-xs text-text-muted underline disabled:opacity-50">
+                Retirer la validation
+              </button>
+            )}
+          </div>
         )}
       </div>
 
@@ -143,65 +150,68 @@ export function ScriptModuleClient({
         </div>
       ) : (
         <>
-          <div className="rounded-xl bg-mint p-5 space-y-4">
-            {guestNames.length > 0 && (
-              <p className="text-xs text-mint-ink">
-                Basé sur la bible du podcast et {guestNames.length > 1 ? "les invités" : "l'invité"} de cet
-                épisode : {guestNames.join(", ")}.
-              </p>
-            )}
+          {!validated && (
+            <div className="rounded-xl bg-mint p-5 space-y-4">
+              {guestNames.length > 0 && (
+                <p className="text-xs text-mint-ink">
+                  Basé sur la bible du podcast et {guestNames.length > 1 ? "les invités" : "l'invité"} de cet
+                  épisode : {guestNames.join(", ")}.
+                </p>
+              )}
 
-            <button
-              type="button"
-              onClick={() => requestIdeas(undefined, setGenerating)}
-              disabled={generating}
-              className="text-sm font-semibold rounded-[10px] bg-primary-button text-white px-4 py-2 disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {generating
-                ? `Génération en cours... ${progress}%`
-                : ideas.length > 0
-                  ? "Régénérer des idées"
-                  : "Proposer des idées"}
-            </button>
-
-            {ideas.length > 0 && (
-              <ul className="space-y-2">
-                {ideas.map((idea, i) => {
-                  if (!showAllIdeas && selectedIdea !== null && i !== selectedIdea) return null;
-                  const [title, ...rest] = idea.split(":");
-                  const description = rest.join(":").trim();
-                  const selected = selectedIdea === i;
-                  return (
-                    <li key={i}>
-                      <button
-                        type="button"
-                        onClick={() => selectIdea(i)}
-                        className={`w-full text-left rounded-md border p-3 transition ${
-                          selected ? "border-primary-button bg-peach/40" : "border-border bg-white hover:bg-[#FAFAF8]"
-                        }`}
-                      >
-                        <p className="text-sm font-semibold text-ink">{description ? title.trim() : idea}</p>
-                        {description && <p className="text-sm text-text-muted mt-0.5">{description}</p>}
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-
-            {!showAllIdeas && selectedIdea !== null && (
-              <button type="button" onClick={() => setShowAllIdeas(true)} className={pillBtn}>
-                Voir les autres idées
+              <button
+                type="button"
+                onClick={() => requestIdeas(undefined, setGenerating)}
+                disabled={generating}
+                className="text-sm font-semibold rounded-[10px] bg-primary-button text-white px-4 py-2 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {generating
+                  ? `Génération en cours... ${progress}%`
+                  : ideas.length > 0
+                    ? "Régénérer des idées"
+                    : "Proposer des idées"}
               </button>
-            )}
-          </div>
+
+              {ideas.length > 0 && (
+                <ul className="space-y-2">
+                  {ideas.map((idea, i) => {
+                    if (!showAllIdeas && selectedIdea !== null && i !== selectedIdea) return null;
+                    const [title, ...rest] = idea.split(":");
+                    const description = rest.join(":").trim();
+                    const selected = selectedIdea === i;
+                    return (
+                      <li key={i}>
+                        <button
+                          type="button"
+                          onClick={() => selectIdea(i)}
+                          className={`w-full text-left rounded-md border p-3 transition ${
+                            selected ? "border-primary-button bg-peach/40" : "border-border bg-white hover:bg-[#FAFAF8]"
+                          }`}
+                        >
+                          <p className="text-sm font-semibold text-ink">{description ? title.trim() : idea}</p>
+                          {description && <p className="text-sm text-text-muted mt-0.5">{description}</p>}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+
+              {!showAllIdeas && selectedIdea !== null && (
+                <button type="button" onClick={() => setShowAllIdeas(true)} className={pillBtn}>
+                  Voir les autres idées
+                </button>
+              )}
+            </div>
+          )}
 
           <div className="rounded-xl bg-white border border-border p-5 space-y-3">
             <div>
               <label className="block text-sm font-medium mb-1.5 text-ink">Écrire mon script</label>
               <p className="text-xs text-text-muted mb-2">
-                Clique une idée ci-dessus pour l&apos;envoyer ici, puis étoffe-la : script complet, questions pour les
-                invités, simples notes...
+                {validated
+                  ? "Script validé : retire la validation pour proposer de nouvelles idées."
+                  : "Clique une idée ci-dessus pour l'envoyer ici, puis étoffe-la : script complet, questions pour les invités, simples notes..."}
               </p>
               <textarea
                 value={scriptDraft}
@@ -212,16 +222,18 @@ export function ScriptModuleClient({
                 className={inputClass}
               />
             </div>
-            <button
-              type="button"
-              onClick={() => requestIdeas(scriptDraft, setGeneratingFromDraft)}
-              disabled={generatingFromDraft || !scriptDraft.trim()}
-              className={pillBtn}
-            >
-              {generatingFromDraft
-                ? `Génération en cours... ${progressFromDraft}%`
-                : "Générer des angles à partir des idées"}
-            </button>
+            {!validated && (
+              <button
+                type="button"
+                onClick={() => requestIdeas(scriptDraft, setGeneratingFromDraft)}
+                disabled={generatingFromDraft || !scriptDraft.trim()}
+                className={pillBtn}
+              >
+                {generatingFromDraft
+                  ? `Génération en cours... ${progressFromDraft}%`
+                  : "Générer des angles à partir des idées"}
+              </button>
+            )}
           </div>
         </>
       )}
