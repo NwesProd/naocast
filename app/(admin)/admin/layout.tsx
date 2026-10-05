@@ -1,11 +1,16 @@
 import type { Metadata } from "next";
-import { Montserrat } from "next/font/google";
+import localFont from "next/font/local";
 import "./admin.css";
 
-const montserrat = Montserrat({
+// Police hébergée avec l'app (cf. app/fonts) : voir app/layout.tsx.
+const montserrat = localFont({
   variable: "--font-montserrat",
-  weight: ["400", "500", "700"],
-  subsets: ["latin"],
+  src: [
+    { path: "../../fonts/montserrat-latin-400-normal.woff2", weight: "400", style: "normal" },
+    { path: "../../fonts/montserrat-latin-500-normal.woff2", weight: "500", style: "normal" },
+    { path: "../../fonts/montserrat-latin-700-normal.woff2", weight: "700", style: "normal" },
+  ],
+  display: "swap",
 });
 
 export const metadata: Metadata = {

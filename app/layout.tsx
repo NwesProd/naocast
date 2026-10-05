@@ -1,17 +1,28 @@
 import type { Metadata } from "next";
-import { Space_Grotesk, Plus_Jakarta_Sans } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 
-const spaceGrotesk = Space_Grotesk({
+// Polices hébergées avec l'app (sous-ensemble latin, licence SIL OFL, cf. app/fonts) plutôt que
+// téléchargées depuis Google Fonts au build : un accroc réseau chez Google faisait échouer le
+// déploiement entier.
+const spaceGrotesk = localFont({
   variable: "--font-space-grotesk",
-  weight: ["500", "700"],
-  subsets: ["latin"],
+  src: [
+    { path: "./fonts/space-grotesk-latin-500-normal.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/space-grotesk-latin-700-normal.woff2", weight: "700", style: "normal" },
+  ],
+  display: "swap",
 });
 
-const plusJakartaSans = Plus_Jakarta_Sans({
+const plusJakartaSans = localFont({
   variable: "--font-plus-jakarta-sans",
-  weight: ["400", "500", "600", "700"],
-  subsets: ["latin"],
+  src: [
+    { path: "./fonts/plus-jakarta-sans-latin-400-normal.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/plus-jakarta-sans-latin-500-normal.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/plus-jakarta-sans-latin-600-normal.woff2", weight: "600", style: "normal" },
+    { path: "./fonts/plus-jakarta-sans-latin-700-normal.woff2", weight: "700", style: "normal" },
+  ],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
