@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireUserId } from "@/lib/authz";
 import { stripe } from "@/lib/stripe";
+import { requestOrigin } from "@/lib/requestOrigin";
 
 // Portail de facturation Stripe (changer de carte, résilier, voir les
 // factures) : rien de tout ça n'est réimplémenté dans naocast., Stripe le
@@ -14,7 +15,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Aucun abonnement à gérer pour le moment." }, { status: 400 });
   }
 
-  const base = process.env.NEXTAUTH_URL || req.headers.get("origin") || "http://localhost:3000";
+  const base = requestOrigin(req);
   const session = await stripe.billingPortal.sessions.create({
     customer: user.stripeCustomerId,
     return_url: `${base}/billing`,

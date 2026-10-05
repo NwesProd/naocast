@@ -8,6 +8,7 @@ import { TranscriptCutEditor, type TranscriptSegment, type Speaker, type CutMark
 import { EPISODE_UPDATED_EVENT } from "@/components/SidebarNav";
 import { pollJobUntilDone } from "@/lib/pollJob";
 import { uploadRushDirect } from "@/lib/directUpload";
+import { goExternal } from "@/lib/goExternal";
 import { segmentsToReassign } from "@/lib/speakerAssign";
 import { ExternalValidation } from "@/components/ExternalValidation";
 import { AUTOCUT_PRESETS, presetForThreshold } from "@/lib/autocutPresets";
@@ -804,7 +805,7 @@ export function EpisodeWizard({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.url) throw new Error(data.error || "Impossible de lancer le paiement, réessayez.");
-      window.location.href = data.url;
+      goExternal(data.url);
     } catch (e) {
       setError((e as Error).message);
       setSubmitting(false);

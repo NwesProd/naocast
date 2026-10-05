@@ -1,5 +1,6 @@
 "use client";
 
+import { goExternal } from "@/lib/goExternal";
 import { useState } from "react";
 import type { EpisodeUsage } from "@/lib/entitlements";
 
@@ -70,7 +71,7 @@ export function BillingClient({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Impossible de démarrer le paiement.");
-      window.location.assign(data.url);
+      goExternal(data.url);
     } catch (err) {
       setError((err as Error).message);
       setLoadingKey(null);
@@ -84,7 +85,7 @@ export function BillingClient({
       const res = await fetch("/api/stripe/portal", { method: "POST" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Impossible d'ouvrir le portail.");
-      window.location.assign(data.url);
+      goExternal(data.url);
     } catch (err) {
       setError((err as Error).message);
       setLoadingKey(null);

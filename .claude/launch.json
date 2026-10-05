@@ -16,6 +16,7 @@
       "runtimeArgs": [
         "NEXTAUTH_URL=http://localhost:3100",
         "AUTH_URL=http://localhost:3100",
+        "EMBED_HOST=naocast-app.test",
         "npx",
         "next",
         "dev",

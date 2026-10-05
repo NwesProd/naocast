@@ -4,14 +4,11 @@ import { requireUserId } from "@/lib/authz";
 import { stripe, PRICE_ID_BY_PLAN, isLifetimeKey, type PaidPlanKey } from "@/lib/stripe";
 import { LIFETIME_SEATS_LIMIT } from "@/lib/plan";
 import { z } from "zod";
+import { requestOrigin } from "@/lib/requestOrigin";
 
 const bodySchema = z.object({
   planKey: z.enum(["BASIC_MONTH", "BASIC_YEAR", "INFINITY_MONTH", "INFINITY_YEAR", "LIFETIME"]),
 });
-
-function appUrl(req: Request): string {
-  return process.env.NEXTAUTH_URL || req.headers.get("origin") || "http://localhost:3000";
-}
 
 // Crée une session Stripe Checkout pour souscrire (Basic/Infinity, mode
 // "subscription") ou acheter (Lifetime, mode "payment" unique) un forfait.
@@ -44,7 +41,7 @@ export async function POST(req: Request) {
     await prisma.user.update({ where: { id: userId }, data: { stripeCustomerId: customerId } });
   }
 
-  const base = appUrl(req);
+  const base = requestOrigin(req);
   const session = await stripe.checkout.sessions.create({
     customer: customerId,
     mode: lifetime ? "payment" : "subscription",

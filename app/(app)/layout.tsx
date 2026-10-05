@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { auth, signOut } from "@/auth";
 import { prisma } from "@/lib/db";
 import { getSignedDownloadUrl } from "@/lib/storage";
@@ -32,7 +33,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <form
             action={async () => {
               "use server";
-              await signOut({ redirectTo: "/login" });
+              // Sans redirection de NextAuth (calculée à partir de NEXTAUTH_URL) : on reste sur le domaine courant, utile dans le cadre du back office nwes.
+              await signOut({ redirect: false });
+              redirect("/login");
             }}
             className="px-3 pb-5 shrink-0"
           >

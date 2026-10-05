@@ -23,9 +23,30 @@ function adminFrameAncestors(): string {
   return `'self' ${process.env.ADMIN_FRAME_ANCESTORS || "https://app.nwes.fr"}`;
 }
 
+// Domaine dédié à l'app naocast affichée dans un cadre du back office nwes (EMBED_HOST, ex.
+// naocast-app.nwes.fr, sous-domaine de nwes.fr pour que le cookie de connexion tienne dans le
+// cadre). Sur ce domaine UNIQUEMENT, les pages peuvent être affichées par app.nwes.fr ;
+// partout ailleurs (app.naocast.com...), elles restent interdites de cadre (anti-clickjacking).
+const FRAME_DENY = "frame-ancestors 'none'";
+
 export default auth((req) => {
   const { pathname } = req.nextUrl;
   const isAdminPath = pathname === "/admin" || pathname.startsWith("/admin/");
+  const embedHost = process.env.EMBED_HOST?.toLowerCase();
+  const requestHost = (req.headers.get("x-forwarded-host") || req.headers.get("host") || "").toLowerCase();
+  const onEmbedHost = !!embedHost && requestHost === embedHost;
+  const proto = req.headers.get("x-forwarded-proto") || "https";
+
+  // Pose la politique de cadre sur la réponse d'une page.
+  function withFrameRules(res: NextResponse): NextResponse {
+    if (onEmbedHost) {
+      res.headers.set("Content-Security-Policy", `frame-ancestors ${adminFrameAncestors()}`);
+    } else {
+      res.headers.set("Content-Security-Policy", FRAME_DENY);
+      res.headers.set("X-Frame-Options", "DENY");
+    }
+    return res;
+  }
 
   // Domaine dédié à l'admin : n'y sert que l'admin, jamais l'app des
   // utilisateurs (connexion, dashboard...).
@@ -34,7 +55,6 @@ export default auth((req) => {
   if (adminHost && host === adminHost && !isAdminPath) {
     // Reste sur le domaine d'origine (nextUrl.origin est recalculé à partir de
     // NEXTAUTH_URL, il renverrait sur app.naocast.com et sortirait du cadre).
-    const proto = req.headers.get("x-forwarded-proto") || "https";
     return NextResponse.redirect(new URL("/admin", `${proto}://${host}`));
   }
 
@@ -48,11 +68,15 @@ export default auth((req) => {
   }
 
   if (!req.auth && !PUBLIC_PATHS.includes(pathname)) {
-    const loginUrl = new URL("/login", req.nextUrl.origin);
+    // Origine de la requête et non nextUrl.origin (recalculé à partir de NEXTAUTH_URL) : sur le
+    // domaine embarqué, la connexion doit rester dans le cadre.
+    const loginUrl = new URL("/login", onEmbedHost ? `${proto}://${requestHost}` : req.nextUrl.origin);
     // Reprend la page demandée après la connexion (ex. consentement OAuth du connecteur Claude).
     if (req.method === "GET" && pathname !== "/") loginUrl.searchParams.set("next", `${pathname}${req.nextUrl.search}`);
     return NextResponse.redirect(loginUrl);
   }
+
+  return withFrameRules(NextResponse.next());
 });
 
 export const config = {

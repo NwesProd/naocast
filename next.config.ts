@@ -7,20 +7,8 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.join(__dirname),
   },
-  // Aucune page de l'app ne peut être affichée dans le cadre d'un autre site
-  // (anti-clickjacking). Exception : /admin, affiché dans le back office nwes,
-  // dont la CSP est posée à l'exécution dans proxy.ts (liste configurable).
-  async headers() {
-    return [
-      {
-        source: "/((?!admin).*)",
-        headers: [
-          { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
-          { key: "X-Frame-Options", value: "DENY" },
-        ],
-      },
-    ];
-  },
+  // Politique de cadre (anti-clickjacking) : posée à l'exécution dans proxy.ts, car elle dépend du
+  // domaine (interdite partout, sauf EMBED_HOST et /admin pour le back office nwes).
 };
 
 export default nextConfig;

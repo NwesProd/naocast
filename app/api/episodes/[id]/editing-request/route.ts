@@ -4,16 +4,13 @@ import { prisma } from "@/lib/db";
 import { requireUserId, requireOwnedEpisode } from "@/lib/authz";
 import { stripe } from "@/lib/stripe";
 import { EDITING_PRICE_ID } from "@/lib/editingRequest";
+import { requestOrigin } from "@/lib/requestOrigin";
 
 // Étape "Envoi" du tunnel "J'ai besoin d'un monteur" : enregistre la demande avec
 // les remarques de l'utilisateur et l'envoie vers le paiement Stripe. La demande
 // n'est transmise à l'équipe (email + back office) qu'une fois le paiement
 // confirmé (cf. lib/editingRequest.ts, finalizeEditingRequest).
 const bodySchema = z.object({ notes: z.string().max(5000).optional() });
-
-function appUrl(req: Request): string {
-  return process.env.NEXTAUTH_URL || req.headers.get("origin") || "http://localhost:3000";
-}
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const userId = await requireUserId();
@@ -57,7 +54,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   // Prestation ponctuelle ("payment"), ou abonnement si le prix Stripe est récurrent.
   const price = await stripe.prices.retrieve(EDITING_PRICE_ID);
-  const base = appUrl(req);
+  const base = requestOrigin(req);
   const session = await stripe.checkout.sessions.create({
     customer: customerId,
     mode: price.recurring ? "subscription" : "payment",
