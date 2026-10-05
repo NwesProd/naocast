@@ -161,6 +161,7 @@ export default async function PodcastDashboardPage() {
     },
   ];
   const nextStep = steps.find((st) => !st.done);
+  const allStepsDone = !nextStep;
 
   return (
     <main className="p-8 max-w-5xl w-full space-y-6">
@@ -189,8 +190,13 @@ export default async function PodcastDashboardPage() {
         upgradeable={usage.plan === "FREE" || usage.plan === "BASIC"}
       />
       <FeedbackBanner />
-      <Checklist steps={steps} />
-      {!steps.every((st) => st.done) && <HowItWorks />}
+      {/* Une fois les six étapes cochées ("Podcasteur pro"), la checklist et le mode d'emploi disparaissent. */}
+      {!allStepsDone && (
+        <>
+          <Checklist steps={steps} />
+          <HowItWorks />
+        </>
+      )}
 
       <div className="grid grid-cols-3 gap-4 items-stretch">
         <div className="col-span-2 rounded-xl bg-mint p-6 flex flex-col">
