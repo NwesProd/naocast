@@ -162,11 +162,6 @@ export function ReviewClient({
     setValidating(false);
   }
 
-  async function requestHumanEditor() {
-    await fetch(`/api/episodes/${episodeId}/human-editor`, { method: "POST" });
-    router.refresh();
-  }
-
   async function retryProcessing() {
     setRetrying(true);
     await fetch(`/api/episodes/${episodeId}/retry`, { method: "POST" });
@@ -325,9 +320,6 @@ export function ReviewClient({
           <Button onClick={retryProcessing} disabled={retrying} className="!text-sm !px-4 !py-2">
             {retrying ? "Relance en cours..." : "Relancer le processus"}
           </Button>
-          <button onClick={requestHumanEditor} className={secondaryBtn}>
-            Faire appel à un monteur à la place
-          </button>
         </div>
       </div>
     );
