@@ -52,7 +52,8 @@ export default auth((req) => {
   // utilisateurs (connexion, dashboard...).
   const adminHost = process.env.ADMIN_HOST?.toLowerCase();
   const host = (req.headers.get("x-forwarded-host") || req.headers.get("host") || "").toLowerCase();
-  if (adminHost && host === adminHost && !isAdminPath) {
+  // (Sauf si ce domaine sert aussi l'app embarquée : EMBED_HOST identique à ADMIN_HOST.)
+  if (adminHost && host === adminHost && host !== embedHost && !isAdminPath) {
     // Reste sur le domaine d'origine (nextUrl.origin est recalculé à partir de
     // NEXTAUTH_URL, il renverrait sur app.naocast.com et sortirait du cadre).
     return NextResponse.redirect(new URL("/admin", `${proto}://${host}`));
