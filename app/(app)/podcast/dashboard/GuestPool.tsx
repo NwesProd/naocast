@@ -126,9 +126,7 @@ export function GuestPool({ initialGuests, hasAccess }: { initialGuests: PoolGue
           <p className="mt-1 text-2xl font-bold text-sky-ink">
             {guests.length} <span className="text-base font-medium">invité{guests.length > 1 ? "s" : ""} en réserve</span>
           </p>
-          {hasAccess ? (
-            <p className="mt-1 text-sm text-sky-muted">Garde sous la main ceux que tu voudrais recevoir, avec leurs mots clés.</p>
-          ) : (
+          {!hasAccess && (
             <p className="mt-1 text-sm text-sky-muted">
               Réservé à naocast infinity et lifetime.{" "}
               <Link href="/billing" className="font-semibold underline">

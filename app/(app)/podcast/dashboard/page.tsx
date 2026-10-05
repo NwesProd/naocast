@@ -215,8 +215,6 @@ export default async function PodcastDashboardPage() {
         </>
       )}
 
-      <GuestPool initialGuests={poolGuests} hasAccess={hasGuestsModule} />
-
       <div className="grid grid-cols-3 gap-4 items-stretch">
         <div className="col-span-2 rounded-xl bg-mint p-6 flex flex-col">
           <div className="flex items-center gap-3">
@@ -297,6 +295,8 @@ export default async function PodcastDashboardPage() {
           </div>
         </div>
       )}
+
+      <GuestPool initialGuests={poolGuests} hasAccess={hasGuestsModule} />
     </main>
   );
 }
