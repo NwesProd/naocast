@@ -8,6 +8,7 @@ import { hasModuleAccess } from "@/lib/plan";
 import { statusLabel } from "@/components/StatusBadge";
 import { getEpisodeUsage } from "@/lib/entitlements";
 import { isMontageDone } from "@/lib/moduleProgress";
+import { GuestPool } from "./GuestPool";
 import { Checklist, FeedbackBanner, HowItWorks, PlanStrip, type ChecklistStep } from "./OnboardingSections";
 
 // Tableau de bord du podcast (rythme de publication, dernier épisode,
@@ -161,6 +162,22 @@ export default async function PodcastDashboardPage() {
     },
   ];
   const nextStep = steps.find((st) => !st.done);
+
+  // Pool d'invités du podcast (module Invités : forfaits qui l'incluent ou testeurs).
+  const guestRows = await prisma.guest.findMany({
+    where: { podcastId: podcast.id },
+    orderBy: { name: "asc" },
+    include: { _count: { select: { episodeGuests: true } } },
+  });
+  const poolGuests = guestRows.map((g) => ({
+    id: g.id,
+    name: g.name,
+    mediaName: g.mediaName,
+    tags: g.tags,
+    socialLinks: (g.socialLinks as { platform: string; url: string }[] | null) ?? [],
+    episodeCount: g._count.episodeGuests,
+  }));
+  const hasGuestsModule = hasModuleAccess(access.plan, "invites", access.extraModules);
   const allStepsDone = !nextStep;
 
   return (
@@ -197,6 +214,8 @@ export default async function PodcastDashboardPage() {
           <HowItWorks />
         </>
       )}
+
+      <GuestPool initialGuests={poolGuests} hasAccess={hasGuestsModule} />
 
       <div className="grid grid-cols-3 gap-4 items-stretch">
         <div className="col-span-2 rounded-xl bg-mint p-6 flex flex-col">

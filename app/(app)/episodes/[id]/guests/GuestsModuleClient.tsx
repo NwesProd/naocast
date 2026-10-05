@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FaInstagram, FaLinkedin, FaYoutube } from "react-icons/fa6";
-import type { IconType } from "react-icons";
 import { useSimulatedProgress } from "@/lib/useSimulatedProgress";
 import { EPISODE_UPDATED_EVENT } from "@/components/SidebarNav";
+import { SocialBadge, SOCIAL_PLATFORMS } from "@/components/SocialBadge";
+import { TagInput } from "@/components/TagInput";
 
 interface SocialLink {
   platform: string;
@@ -35,49 +35,6 @@ const pillBtn =
   "text-xs font-semibold rounded-pill bg-white border border-border px-3 py-1.5 hover:bg-[#FAFAF8] transition disabled:opacity-50 disabled:cursor-not-allowed";
 const inputCls = "w-full rounded-md border border-border bg-white px-3 py-2 text-sm";
 const labelCls = "block text-xs font-medium text-text-muted mb-1";
-
-// Réseaux proposés pour les liens d'un invité, liste fermée volontairement
-// courte (les plus utiles en pratique) plutôt qu'un champ libre par lien.
-const SOCIAL_PLATFORMS: { key: string; label: string }[] = [
-  { key: "instagram", label: "Instagram" },
-  { key: "linkedin", label: "LinkedIn" },
-  { key: "youtube", label: "YouTube" },
-];
-
-// Vraies icônes de marque (react-icons/fa6) plutôt que des tracés dessinés à
-// la main, netteté garantie à toutes les tailles, contrairement à des SVG
-// approximatifs reconstruits de mémoire.
-const SOCIAL_ICON_COMPONENTS: Record<string, IconType> = {
-  instagram: FaInstagram,
-  linkedin: FaLinkedin,
-  youtube: FaYoutube,
-};
-const SOCIAL_ICON_COLORS: Record<string, string> = {
-  instagram: "#E1306C",
-  linkedin: "#0A66C2",
-  youtube: "#FF0000",
-};
-
-function SocialBadge({ platformKey, size = "sm" }: { platformKey: string; size?: "sm" | "md" }) {
-  const platform = SOCIAL_PLATFORMS.find((p) => p.key === platformKey);
-  const Icon = SOCIAL_ICON_COMPONENTS[platformKey];
-  const dim = size === "sm" ? 20 : 24;
-  return (
-    <span
-      className="inline-flex shrink-0 items-center justify-center"
-      style={{ width: dim, height: dim }}
-      title={platform?.label || platformKey}
-    >
-      {Icon ? (
-        <Icon size={dim} color={SOCIAL_ICON_COLORS[platformKey]} />
-      ) : (
-        <span className="h-full w-full flex items-center justify-center bg-white border border-border text-[10px] font-bold text-ink rounded-md">
-          ?
-        </span>
-      )}
-    </span>
-  );
-}
 
 function formatDate(iso: string | null): string {
   if (!iso) return "Jamais apparu";
@@ -714,66 +671,6 @@ function MessageCard({
           </button>
         </div>
       )}
-    </div>
-  );
-}
-
-// Champ de mots clés en bulles : une virgule (ou Entrée) valide la bulle, la
-// croix la retire, Retour arrière sur un champ vide retire la dernière.
-function TagInput({ tags, onChange }: { tags: string[]; onChange: (tags: string[]) => void }) {
-  const [draft, setDraft] = useState("");
-
-  function commit(value: string) {
-    const parts = value
-      .split(",")
-      .map((t) => t.trim())
-      .filter(Boolean);
-    if (parts.length === 0) return;
-    const next = [...tags];
-    for (const part of parts) {
-      if (!next.some((t) => t.toLowerCase() === part.toLowerCase())) next.push(part.slice(0, 40));
-    }
-    if (next.length !== tags.length) onChange(next);
-  }
-
-  return (
-    <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-border bg-white px-2 py-1.5">
-      {tags.map((t) => (
-        <span key={t} className="inline-flex items-center gap-1 rounded-full bg-sky px-2.5 py-0.5 text-xs text-sky-ink">
-          {t}
-          <button type="button" onClick={() => onChange(tags.filter((x) => x !== t))} className="text-sky-muted hover:text-[#8A2E1F]" title="Retirer ce mot clé" aria-label={`Retirer ${t}`}>
-            ×
-          </button>
-        </span>
-      ))}
-      <input
-        type="text"
-        value={draft}
-        onChange={(e) => {
-          const v = e.target.value;
-          if (v.includes(",")) {
-            commit(v);
-            setDraft("");
-          } else {
-            setDraft(v);
-          }
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            commit(draft);
-            setDraft("");
-          } else if (e.key === "Backspace" && !draft && tags.length > 0) {
-            onChange(tags.slice(0, -1));
-          }
-        }}
-        onBlur={() => {
-          commit(draft);
-          setDraft("");
-        }}
-        placeholder={tags.length === 0 ? "Ex. entrepreneuriat, IA, marketing" : ""}
-        className="min-w-[8rem] flex-1 bg-transparent py-0.5 text-sm outline-none"
-      />
     </div>
   );
 }

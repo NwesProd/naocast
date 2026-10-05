@@ -44,3 +44,18 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ guestI
 
   return jsonResponse(guest);
 }
+
+// Retire un invité du pool : il disparaît aussi des épisodes auxquels il était rattaché.
+export async function DELETE(_req: Request, { params }: { params: Promise<{ guestId: string }> }) {
+  const userId = await requireUserId();
+  const podcast = await requirePodcast(userId);
+  const { guestId } = await params;
+
+  const existing = await prisma.guest.findUnique({ where: { id: guestId } });
+  if (!existing || existing.podcastId !== podcast.id) {
+    return NextResponse.json({ error: "Invité introuvable." }, { status: 404 });
+  }
+
+  await prisma.guest.delete({ where: { id: guestId } });
+  return NextResponse.json({ ok: true });
+}
