@@ -7,7 +7,7 @@ import { escapeHtml } from "@/lib/editingRequest";
 
 // Module "Feedback" (en bas à droite de l'app) : enregistre le retour de l'utilisateur,
 // consultable dans l'onglet Support du back office, et prévient l'équipe par email.
-const FEEDBACK_EMAIL = process.env.FEEDBACK_EMAIL || "contact@nwes.fr";
+const FEEDBACK_EMAIL = process.env.FEEDBACK_EMAIL || "contact@naocast.com";
 const KIND_LABEL = { BUG: "Bug", IDEA: "Idée", OTHER: "Autre" } as const;
 
 const bodySchema = z.object({

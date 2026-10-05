@@ -263,32 +263,11 @@ export function ReviewClient({
         </div>
       );
     }
+    // Le paiement a eu lieu dans le tunnel : il ne reste qu'à confirmer la prise en charge.
     return (
-      <div className="space-y-4 max-w-2xl">
-        <div className="rounded-xl bg-sky p-6 space-y-3">
-          <h1 className="text-lg font-bold text-sky-ink">Envoyé à un monteur</h1>
-          <p className="text-sm text-sky-ink/70">
-            Cet épisode sera monté par un professionnel. Tarif : 380€ l&apos;épisode à l&apos;unité, ou 330€
-            l&apos;épisode par pack de 5.
-          </p>
-          <a href="mailto:contact@nwes.fr?subject=Montage%20podcast" className="inline-block">
-            <Button>Nous contacter pour la suite</Button>
-          </a>
-        </div>
-
-        <div className="rounded-xl bg-peach p-5">
-          <button onClick={() => setConfirmingRestart(true)} className={`${pillBtn} text-[#8A2E1F]`}>
-            Recommencer le montage à zéro
-          </button>
-        </div>
-
-        {confirmingRestart && (
-          <RestartConfirmModal
-            restarting={restarting}
-            onCancel={() => setConfirmingRestart(false)}
-            onConfirm={restartTunnel}
-          />
-        )}
+      <div className="rounded-xl bg-sky p-6 space-y-2 max-w-2xl">
+        <h1 className="text-lg font-bold text-sky-ink">Nous prenons en charge votre montage.</h1>
+        <p className="text-sm text-sky-ink/70">Livraison sous 7 jours.</p>
       </div>
     );
   }
@@ -346,14 +325,6 @@ export function ReviewClient({
           <Button onClick={retryProcessing} disabled={retrying} className="!text-sm !px-4 !py-2">
             {retrying ? "Relance en cours..." : "Relancer le processus"}
           </Button>
-          <a
-            href={`mailto:contact@nwes.fr?subject=Échec%20de%20traitement&body=Épisode%20${episodeId}%20:%20${encodeURIComponent(
-              failed ? `${JOB_LABELS[failed.type]} : ${failed.errorMessage}` : ""
-            )}`}
-            className={secondaryBtn}
-          >
-            Contacter le support
-          </a>
           <button onClick={requestHumanEditor} className={secondaryBtn}>
             Faire appel à un monteur à la place
           </button>

@@ -9,7 +9,7 @@ import { appUrl, sendEmail } from "@/lib/email";
 
 // Prix Stripe de la prestation (modifiable par variable d'environnement).
 export const EDITING_PRICE_ID = process.env.STRIPE_PRICE_EDITING || "price_1UI6eBGVMsyYVgruJCXlCArk";
-export const EDITING_REQUEST_EMAIL = process.env.EDITING_REQUEST_EMAIL || "contact@nwes.fr";
+export const EDITING_REQUEST_EMAIL = process.env.EDITING_REQUEST_EMAIL || "contact@naocast.com";
 
 export function escapeHtml(value: string): string {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
