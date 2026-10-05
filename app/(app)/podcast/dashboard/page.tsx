@@ -8,9 +8,9 @@ import { hasModuleAccess } from "@/lib/plan";
 import { statusLabel } from "@/components/StatusBadge";
 
 // Tableau de bord du podcast (rythme de publication, dernier épisode,
-// prochaine sortie), accessible en cliquant sur le nom/pochette du podcast
-// en haut de la sidebar. Distinct de /podcast, qui reste le formulaire de
-// configuration.
+// prochaine sortie), accessible via "Mon podcast" dans la sidebar. Distinct de
+// /podcast (paramètres du podcast), qu'on ouvre en cliquant sur le nom du
+// podcast tout en haut de la sidebar.
 
 // Les vues/écoutes nécessitent une intégration externe (YouTube Analytics,
 // Spotify for Podcasters...) qui n'existe pas encore : on ne fait pas

@@ -7,7 +7,7 @@ import { hasModuleAccess, type ModuleKey } from "@/lib/plan";
 import type { Plan } from "@/app/generated/prisma/client";
 
 const LINKS = [
-  { href: "/podcast", label: "Mon podcast" },
+  { href: "/podcast/dashboard", label: "Mon podcast" },
   { href: "/dashboard", label: "Épisodes" },
 ];
 
@@ -322,14 +322,14 @@ export function SidebarNav({
 
   return (
     <nav className="flex-1 min-h-0 px-3 flex flex-col">
-      {/* Fixe en haut : podcast + Mon podcast/Épisodes, jamais affecté par le défilement des modules. */}
+      {/* Fixe en haut : nom du podcast (paramètres du podcast), Mon podcast (dashboard) et Épisodes, jamais affecté par le défilement des modules. */}
       <div className="shrink-0 space-y-1">
         {podcastHeader && (
           <>
             <Link
-              href="/podcast/dashboard"
+              href="/podcast"
               className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold truncate ${
-                pathname === "/podcast/dashboard" ? "bg-primary-button text-white" : "text-peach-ink hover:bg-white/40"
+                pathname === "/podcast" ? "bg-primary-button text-white" : "text-peach-ink hover:bg-white/40"
               }`}
               title={podcastHeader.title}
             >
