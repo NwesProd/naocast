@@ -64,6 +64,7 @@ model User {
   loginTokens LoginToken[]
   apiTokens   ApiToken[]
   oauthCodes  OAuthCode[]
+  feedbacks   Feedback[]
 }
 
 enum EmailStatus {
@@ -702,5 +703,30 @@ model OAuthCode {
   usedAt        DateTime?
   createdAt     DateTime    @default(now())
 
+  @@index([userId])
+}
+
+// Retour envoyé par un utilisateur depuis le petit module "Feedback" (en bas à droite de
+// l'app) : un bug, une idée ou autre chose. La page d'où il écrit est jointe
+// automatiquement. Consultable dans l'onglet Support du back office.
+enum FeedbackKind {
+  BUG
+  IDEA
+  OTHER
+}
+
+model Feedback {
+  id        String       @id @default(cuid())
+  userId    String
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Copie de l'email : le retour reste lisible même si le compte est supprimé plus tard.
+  userEmail String
+  kind      FeedbackKind
+  message   String
+  pageUrl   String?
+  handled   Boolean      @default(false)
+  createdAt DateTime     @default(now())
+
+  @@index([handled, createdAt])
   @@index([userId])
 }

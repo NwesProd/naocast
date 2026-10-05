@@ -6,6 +6,9 @@ import { episodeDisplayStatus, EPISODE_COUNTS_SELECT } from "@/lib/moduleProgres
 import { getUserAccess } from "@/lib/entitlements";
 import { hasModuleAccess } from "@/lib/plan";
 import { statusLabel } from "@/components/StatusBadge";
+import { getEpisodeUsage } from "@/lib/entitlements";
+import { isMontageDone } from "@/lib/moduleProgress";
+import { Checklist, FeedbackBanner, HowItWorks, PlanStrip, type ChecklistStep } from "./OnboardingSections";
 
 // Tableau de bord du podcast (rythme de publication, dernier épisode,
 // prochaine sortie), accessible via "Mon podcast" dans la sidebar. Distinct de
@@ -104,18 +107,90 @@ export default async function PodcastDashboardPage() {
     .sort((a, b) => a.releaseDate!.getTime() - b.releaseDate!.getTime());
   const nextEpisode = upcoming[0] ?? null;
 
+  // Checklist de démarrage : chaque étape se coche toute seule d'après ce que l'utilisateur a déjà fait.
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: session.user.id }, select: { email: true } });
+  const firstName = user.email.split("@")[0].split(/[._-]/)[0];
+  const greetingName = firstName.charAt(0).toUpperCase() + firstName.slice(1);
+  const usage = await getEpisodeUsage(session.user.id);
+
+  // Épisode sur lequel pointent les boutons : le plus récent encore en cours, sinon le plus récent.
+  const focusEpisode = episodes.find((ep) => ep.status !== "EXPORTED" && !ep.montageValidatedExternally) ?? episodes[0] ?? null;
+  const focusHref = focusEpisode ? episodeHref(focusEpisode) : "/dashboard";
+  const steps: ChecklistStep[] = [
+    {
+      key: "customize",
+      title: "Personnalise ton podcast",
+      description: "Pochette, générique, logo : ils sont incrustés automatiquement sur chaque épisode.",
+      done: !!(podcast.coverKey || podcast.introKey || podcast.outroKey || podcast.logoKey),
+      cta: { label: "Configurer", href: "/podcast" },
+    },
+    {
+      key: "episode",
+      title: "Crée ton premier épisode",
+      description: "Un titre, une date de sortie : en deux minutes l'épisode est prêt à accueillir tes rushs.",
+      done: episodes.length > 0,
+      cta: { label: "Créer mon épisode", createEpisode: true },
+    },
+    {
+      key: "import",
+      title: "Importe ton enregistrement",
+      description: "Dépose ton fichier : naocast le transcrit et repère tes silences et tes ratés.",
+      done: episodes.some((ep) => ep._count.rushes > 0 || ep._count.transcriptSegments > 0 || ep.status !== "DRAFT" || ep.montageValidatedExternally),
+      cta: { label: "Importer", href: focusHref },
+    },
+    {
+      key: "montage",
+      title: "Lance ton montage",
+      description: "Accepte ou refuse les coupes proposées, choisis tes génériques, regarde l'aperçu.",
+      done: episodes.some((ep) => ep.status !== "DRAFT" || ep.montageValidatedExternally),
+      cta: { label: "Monter", href: focusHref },
+    },
+    {
+      key: "validate",
+      title: "Valide ton premier montage",
+      description: "Relis le rendu, puis télécharge la vidéo et l'audio finaux.",
+      done: episodes.some((ep) => isMontageDone(ep)),
+      cta: { label: "Relire", href: focusHref },
+    },
+    {
+      key: "schedule",
+      title: "Programme ta sortie",
+      description: "Renseigne une date : ton dashboard te dit combien de jours il te reste.",
+      done: episodes.some((ep) => ep.releaseDate),
+      cta: { label: "Choisir une date", href: focusEpisode ? `/episodes/${focusEpisode.id}/new` : "/dashboard" },
+    },
+  ];
+  const nextStep = steps.find((st) => !st.done);
+
   return (
     <main className="p-8 max-w-5xl w-full space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold">{podcast.title}</h1>
-          <p className="text-sm text-text-muted">Aperçu de ton podcast</p>
+          <h1 className="text-2xl font-bold">
+            Salut {greetingName} <span aria-hidden="true">👋</span>
+          </h1>
+          <p className="text-sm text-text-muted">
+            {nextStep ? `Prochaine étape : ${nextStep.title.charAt(0).toLowerCase()}${nextStep.title.slice(1)}.` : `${podcast.title} tourne à plein régime.`}
+          </p>
         </div>
         <div className="text-right shrink-0">
           <p className="text-2xl font-bold text-ink">{episodes.length}</p>
           <p className="text-xs text-text-muted">épisode{episodes.length > 1 ? "s" : ""} au total</p>
         </div>
       </div>
+
+      <PlanStrip
+        planLabel={usage.planLabel}
+        usageText={
+          usage.limit === null
+            ? "épisodes illimités"
+            : `${usage.used}/${usage.limit} épisode${usage.limit > 1 ? "s" : ""} ${usage.periodLabel}`
+        }
+        upgradeable={usage.plan === "FREE" || usage.plan === "BASIC"}
+      />
+      <FeedbackBanner />
+      <Checklist steps={steps} />
+      {!steps.every((st) => st.done) && <HowItWorks />}
 
       <div className="grid grid-cols-3 gap-4 items-stretch">
         <div className="col-span-2 rounded-xl bg-mint p-6 flex flex-col">

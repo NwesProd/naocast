@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { getSignedDownloadUrl } from "@/lib/storage";
 import { getEpisodeUsage } from "@/lib/entitlements";
 import { SidebarNav } from "@/components/SidebarNav";
+import { FeedbackWidget } from "@/components/FeedbackWidget";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -43,6 +44,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <p className="px-3 pb-4 text-[11px] text-peach-muted/60 shrink-0">From Naoned with 🧡</p>
       </aside>
       <div className="flex-1 bg-background">{children}</div>
+      {session?.user && <FeedbackWidget />}
     </div>
   );
 }

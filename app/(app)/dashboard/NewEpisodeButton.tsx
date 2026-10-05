@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/Button";
 import { EPISODE_UPDATED_EVENT } from "@/components/SidebarNav";
 
-export function NewEpisodeButton() {
+export function NewEpisodeButton({ label = "+ Ajouter un épisode", align = "end" }: { label?: string; align?: "start" | "end" } = {}) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,12 +36,12 @@ export function NewEpisodeButton() {
   }
 
   return (
-    <div className="flex flex-col items-end gap-2">
+    <div className={`flex flex-col gap-2 ${align === "end" ? "items-end" : "items-start"}`}>
       <Button onClick={handleClick} disabled={loading}>
-        {loading ? "..." : "+ Ajouter un épisode"}
+        {loading ? "..." : label}
       </Button>
       {error && (
-        <p className="text-xs text-[#8A2E1F] max-w-xs text-right">
+        <p className={`text-xs text-[#8A2E1F] max-w-xs ${align === "end" ? "text-right" : ""}`}>
           {error} <a href="/billing" className="underline font-semibold">Voir les forfaits</a>
         </p>
       )}
