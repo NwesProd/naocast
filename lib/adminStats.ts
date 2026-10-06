@@ -73,7 +73,7 @@ export async function getDashboardStats() {
     prisma.user.findMany({ where: { ...realUserWhere, createdAt: { gte: since30 } }, select: { createdAt: true } }),
     prisma.episode.count({ where: episodeOfRealUser }),
   ]);
-  const [episodesByStatusRaw, recentEpisodes, podcastCount, subscribers, lifetimeCount] = await Promise.all([
+  const [episodesByStatusRaw, recentEpisodes, podcastCount, subscribers, lifetimePaidCount, lifetimeManualCount] = await Promise.all([
     prisma.episode.groupBy({ by: ["status"], where: episodeOfRealUser, _count: { _all: true } }),
     prisma.episode.findMany({ where: { ...episodeOfRealUser, createdAt: { gte: since30 } }, select: { createdAt: true } }),
     prisma.podcast.count({ where: ofRealUser }),
@@ -81,7 +81,11 @@ export async function getDashboardStats() {
       where: { ...realUserWhere, stripePriceId: { not: null }, subscriptionStatus: { in: ["active", "trialing", "past_due"] } },
       select: { stripePriceId: true },
     }),
-    prisma.user.count({ where: { ...realUserWhere, plan: "LIFETIME" } }),
+    // Lifetime acheté via Stripe (le webhook enregistre le client Stripe) :
+    // seul celui-ci compte comme encaissé.
+    prisma.user.count({ where: { ...realUserWhere, plan: "LIFETIME", stripeCustomerId: { not: null } } }),
+    // Lifetime attribué à la main (geste commercial, testeur) : pas de facturation.
+    prisma.user.count({ where: { ...realUserWhere, plan: "LIFETIME", stripeCustomerId: null } }),
   ]);
   const latestUsers = await prisma.user.findMany({
     where: realUserWhere,
@@ -115,8 +119,9 @@ export async function getDashboardStats() {
     podcastCount,
     payingSubscribers: subscribers.length,
     mrrEur: Math.round(mrr * 100) / 100,
-    lifetimeCount,
-    lifetimeRevenueEur: lifetimeCount * LIFETIME_PRICE_EUR,
+    lifetimePaidCount,
+    lifetimeManualCount,
+    lifetimeRevenueEur: lifetimePaidCount * LIFETIME_PRICE_EUR,
     latestUsers,
   };
 }

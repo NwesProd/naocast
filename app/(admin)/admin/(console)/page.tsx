@@ -52,7 +52,8 @@ export default async function AdminDashboardPage() {
             <div className="admin-card-label">Revenu récurrent estimé (TTC)</div>
             <div className="admin-figure">{formatEuro(stats.mrrEur)}</div>
             <div className="admin-card-detail">
-              {stats.payingSubscribers} abonné{stats.payingSubscribers > 1 ? "s" : ""} payant{stats.payingSubscribers > 1 ? "s" : ""} par mois, {stats.lifetimeCount} lifetime ({formatEuro(stats.lifetimeRevenueEur)} encaissés)
+              {stats.payingSubscribers} abonné{stats.payingSubscribers > 1 ? "s" : ""} payant{stats.payingSubscribers > 1 ? "s" : ""} par mois, {stats.lifetimePaidCount} lifetime payé{stats.lifetimePaidCount > 1 ? "s" : ""} ({formatEuro(stats.lifetimeRevenueEur)} encaissés)
+              {stats.lifetimeManualCount > 0 && <>, {stats.lifetimeManualCount} lifetime manuel{stats.lifetimeManualCount > 1 ? "s" : ""} (non facturé{stats.lifetimeManualCount > 1 ? "s" : ""})</>}
             </div>
           </div>
         </div>
