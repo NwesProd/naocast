@@ -22,22 +22,29 @@ export function GlassModal({
   width?: string;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
+  // onClose change à chaque rendu du parent : on le lit via une ref pour que l'effet ne
+  // se relance (et ne reprenne le focus) qu'à l'ouverture, pas à chaque lettre tapée.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
 
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") onCloseRef.current();
     };
     window.addEventListener("keydown", onKey);
     // Pas de défilement de la page derrière la fenêtre.
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    panelRef.current?.focus();
+    // Ne vole pas le focus à un champ déjà focalisé (autoFocus des enfants).
+    if (!panelRef.current?.contains(document.activeElement)) panelRef.current?.focus();
     return () => {
       window.removeEventListener("keydown", onKey);
       document.body.style.overflow = previous;
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 
