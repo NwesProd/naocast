@@ -11,16 +11,16 @@ import { firstOpenModuleHref } from "@/lib/moduleProgress";
 // validé) plutôt qu'un fond unique, le badge (toujours en ton plein) reste
 // le seul indicateur précis du statut exact.
 const ZONE_CLASSES: Record<string, { bg: string; text: string; muted: string }> = {
-  DRAFT: { bg: "bg-peach", text: "text-peach-ink", muted: "text-peach-muted" },
+  DRAFT: { bg: "bg-[#EEEAE4]", text: "text-[#57524B]", muted: "text-[#57524B]/70" },
   PROD: { bg: "bg-butter", text: "text-butter-ink", muted: "text-butter-ink/70" },
-  POST_PROD: { bg: "bg-sky", text: "text-sky-ink", muted: "text-sky-ink/70" },
+  POST_PROD: { bg: "bg-[#DCEBE9]", text: "text-[#0F4F4C]", muted: "text-[#0F4F4C]/70" },
   QUEUED: { bg: "bg-butter", text: "text-butter-ink", muted: "text-butter-ink/70" },
   PROCESSING: { bg: "bg-butter", text: "text-butter-ink", muted: "text-butter-ink/70" },
   HUMAN_EDITOR_REQUESTED: { bg: "bg-sky", text: "text-sky-ink", muted: "text-sky-ink/70" },
   READY_FOR_REVIEW: { bg: "bg-mint", text: "text-mint-ink", muted: "text-mint-muted" },
-  EXPORTED: { bg: "bg-mint", text: "text-mint-ink", muted: "text-mint-muted" },
-  READY_TO_PUBLISH: { bg: "bg-mint", text: "text-mint-ink", muted: "text-mint-muted" },
-  PUBLISHED: { bg: "bg-mint", text: "text-mint-ink", muted: "text-mint-muted" },
+  EXPORTED: { bg: "bg-[#E3E7E9]", text: "text-[#1F2A2E]", muted: "text-[#1F2A2E]/70" },
+  READY_TO_PUBLISH: { bg: "bg-[#DDEFE3]", text: "text-[#1F5C3A]", muted: "text-[#1F5C3A]/70" },
+  PUBLISHED: { bg: "bg-[#E3E7E9]", text: "text-[#1F2A2E]", muted: "text-[#1F2A2E]/70" },
   FAILED: { bg: "bg-[#FBEAE7]", text: "text-[#8A2E1F]", muted: "text-[#8A2E1F]/70" },
 };
 const DEFAULT_ZONE = ZONE_CLASSES.DRAFT;
