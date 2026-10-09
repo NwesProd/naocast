@@ -70,7 +70,7 @@ export default async function PodcastPage() {
     : undefined;
 
   return (
-    <main className="p-8 max-w-4xl w-full">
+    <main className="p-8 w-full">
       <h1 className="text-2xl font-bold mb-1">Mon podcast</h1>
       <p className="text-sm text-text-muted mb-6">
         Ces éléments sont réutilisés automatiquement sur chaque épisode.

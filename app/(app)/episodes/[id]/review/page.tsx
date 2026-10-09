@@ -55,7 +55,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
     : null;
 
   return (
-    <main className="p-8 max-w-5xl w-full">
+    <main className="p-8 w-full">
       <ReviewClient
         episodeId={id}
         status={episode.status}

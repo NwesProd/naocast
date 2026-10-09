@@ -34,7 +34,7 @@ export default async function IntroPage({ params }: { params: Promise<{ id: stri
   const teaserUrl = episode.introTeaserKey ? await getSignedDownloadUrl(episode.introTeaserKey) : null;
 
   return (
-    <main className="p-8 max-w-5xl w-full">
+    <main className="p-8 w-full">
       <ExternalGate
         episodeId={id}
         field="introValidatedExternally"

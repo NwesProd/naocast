@@ -18,7 +18,7 @@ export default async function BillingPage() {
   ]);
 
   return (
-    <main className="p-8 max-w-5xl w-full">
+    <main className="p-8 w-full">
       <h1 className="text-2xl font-bold mb-1">Abonnement</h1>
       <p className="text-sm text-text-muted mb-6">Choisissez le forfait adapté à votre rythme de publication.</p>
 

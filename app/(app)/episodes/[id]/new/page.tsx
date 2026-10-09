@@ -43,7 +43,7 @@ export default async function NewEpisodePage({ params }: { params: Promise<{ id:
   }
 
   return (
-    <main className="p-8 max-w-lg w-full">
+    <main className="p-8 max-w-lg w-full mx-auto">
       <h1 className="text-2xl font-bold mb-6">{episode.title ? "Informations de l'épisode" : "Nouvel épisode"}</h1>
       <EpisodeInfoForm episodeId={id} initialInfo={initialInfo} suggestedInfo={suggestedInfo} />
     </main>

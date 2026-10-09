@@ -21,7 +21,7 @@ export default async function TranscriptPage({ params }: { params: Promise<{ id:
     .map((r) => ({ id: r.id, originalFilename: r.originalFilename, type: r.type }));
 
   return (
-    <main className="p-8 max-w-4xl w-full">
+    <main className="p-8 w-full">
       <TranscriptModuleClient
         episodeId={id}
         rushes={rushes}

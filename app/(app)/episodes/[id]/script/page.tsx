@@ -26,14 +26,14 @@ export default async function ScriptPage({ params }: { params: Promise<{ id: str
   const access = await getUserAccess(session.user.id);
   if (!hasModuleAccess(access.plan, "script", access.extraModules)) {
     return (
-      <main className="p-8 max-w-4xl w-full">
+      <main className="p-8 w-full">
         <PlanLockedNotice moduleLabel="Script" />
       </main>
     );
   }
 
   return (
-    <main className="p-8 max-w-4xl w-full">
+    <main className="p-8 w-full">
       <ScriptModuleClient
         episodeId={id}
         hasBible={!!episode.podcast.bible}

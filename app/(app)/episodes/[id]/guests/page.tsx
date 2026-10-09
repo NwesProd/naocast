@@ -27,14 +27,14 @@ export default async function GuestsPage({ params }: { params: Promise<{ id: str
   const access = await getUserAccess(session.user.id);
   if (!hasModuleAccess(access.plan, "invites", access.extraModules)) {
     return (
-      <main className="p-8 max-w-5xl w-full">
+      <main className="p-8 w-full">
         <PlanLockedNotice moduleLabel="Invités" />
       </main>
     );
   }
 
   return (
-    <main className="p-8 max-w-5xl w-full">
+    <main className="p-8 w-full">
       <GuestsModuleClient
         episodeId={id}
         initialEpisodeGuests={episode.episodeGuests.map((eg) => ({

@@ -181,7 +181,7 @@ export default async function PodcastDashboardPage() {
   const allStepsDone = !nextStep;
 
   return (
-    <main className="p-8 max-w-5xl w-full space-y-6">
+    <main className="p-8 w-full space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">

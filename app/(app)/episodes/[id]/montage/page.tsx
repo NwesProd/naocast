@@ -44,7 +44,7 @@ export default async function MontagePage({ params }: { params: Promise<{ id: st
   }));
 
   return (
-    <main className="p-8 max-w-4xl w-full">
+    <main className="p-8 w-full">
       <ExternalGate
         episodeId={id}
         field="montageValidatedExternally"
