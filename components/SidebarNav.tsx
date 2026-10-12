@@ -260,6 +260,9 @@ export function SidebarNav({
   // indique la position réelle).
   const insideMontage =
     (!!montageHref && pathname.startsWith(montageHref)) || (!!reviewHref && pathname.startsWith(reviewHref));
+  // Sur n'importe quel module (Script, Invités, Intro, Montage, Transcript), seul le module est
+  // surligné : "Épisodes" ne l'est que sur la liste et la page d'infos d'un épisode.
+  const insideModule = insideMontage || /^\/episodes\/[^/]+\/(script|guests|intro|transcript)(\/|$)/.test(pathname);
   const label =
     episode &&
     [episode.season != null ? `S${episode.season}` : null, episode.episodeNumber != null ? `E${episode.episodeNumber}` : null]
@@ -353,7 +356,7 @@ export function SidebarNav({
 
         {LINKS.map((link) => {
           const active =
-            pathname === link.href || (link.href === "/dashboard" && pathname.startsWith("/episodes") && !insideMontage);
+            pathname === link.href || (link.href === "/dashboard" && pathname.startsWith("/episodes") && !insideModule);
           return (
             <Link
               key={link.href}
