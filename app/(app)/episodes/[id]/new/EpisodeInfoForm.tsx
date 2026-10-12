@@ -76,7 +76,7 @@ export function EpisodeInfoForm({
 
     window.dispatchEvent(new Event(EPISODE_UPDATED_EVENT));
     if (isNew) {
-      router.push(`/episodes/${episodeId}/montage`);
+      router.push(`/episodes/${episodeId}/start`);
       return;
     }
     setSaved(true);

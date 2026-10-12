@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { StatusBadge } from "@/components/StatusBadge";
 import { EPISODE_UPDATED_EVENT } from "@/components/SidebarNav";
-import { firstOpenModuleHref } from "@/lib/moduleProgress";
 
 // Couleurs de zone selon la catégorie de statut (brouillon / en traitement /
 // validé) plutôt qu'un fond unique, le badge (toujours en ton plein) reste
@@ -64,13 +63,6 @@ interface EpisodeCardProps {
   episodeNumber: number | null;
   releaseDateLabel: string | null;
   fallbackLabel: string;
-  introTeaserChoice: "NONE" | "MODULE" | "IMPORT";
-  introTeaserValidated: boolean;
-  introValidatedExternally: boolean;
-  montageValidatedExternally: boolean;
-  guestsCastingValidated: boolean;
-  hasTranscript: boolean;
-  scriptValidated: boolean;
   // Free et basic : un épisode validé ne peut plus être supprimé (cf. lib/plan.ts).
   deletionLockedWhenValidated: boolean;
 }
@@ -84,13 +76,6 @@ export function EpisodeCard({
   episodeNumber,
   releaseDateLabel,
   fallbackLabel,
-  introTeaserChoice,
-  introTeaserValidated,
-  introValidatedExternally,
-  montageValidatedExternally,
-  guestsCastingValidated,
-  hasTranscript,
-  scriptValidated,
   deletionLockedWhenValidated,
 }: EpisodeCardProps) {
   const router = useRouter();
@@ -104,21 +89,9 @@ export function EpisodeCard({
     .filter(Boolean)
     .join("");
 
-  // Épisode déjà paramétré (titre renseigné) : on va directement au premier
-  // module non verrouillé de la sidebar qui n'est pas encore validé (même
-  // ordre et même notion de "terminé" que components/SidebarNav.tsx, cf.
-  // lib/moduleProgress.ts). Sans titre : direction la page d'infos.
-  const href = firstOpenModuleHref(id, {
-    title,
-    status,
-    introTeaserChoice,
-    introTeaserValidated,
-    introValidatedExternally,
-    montageValidatedExternally,
-    guestsCastingValidated,
-    hasTranscript,
-    scriptValidated,
-  });
+  // Ouvre le premier module non validé auquel le forfait donne accès : la décision se prend
+  // côté serveur (cf. app/(app)/episodes/[id]/start/page.tsx), avec le forfait de l'utilisateur.
+  const href = `/episodes/${id}/start`;
 
   async function handleDelete() {
     setDeleting(true);

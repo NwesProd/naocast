@@ -63,13 +63,6 @@ export default async function DashboardPage() {
               episodeNumber={ep.episodeNumber}
               releaseDateLabel={ep.releaseDate ? ep.releaseDate.toLocaleDateString("fr-FR") : null}
               fallbackLabel={`Épisode du ${ep.createdAt.toLocaleDateString("fr-FR")}`}
-              introTeaserChoice={ep.introTeaserChoice}
-              introTeaserValidated={ep.introTeaserValidated}
-              introValidatedExternally={ep.introValidatedExternally}
-              montageValidatedExternally={ep.montageValidatedExternally}
-              guestsCastingValidated={ep.guestsCastingValidated}
-              hasTranscript={ep._count.transcriptSegments > 0}
-              scriptValidated={ep.scriptValidated}
               deletionLockedWhenValidated={PLAN_LOCKS_VALIDATED_EPISODE_DELETION[usage.plan]}
             />
           ))}

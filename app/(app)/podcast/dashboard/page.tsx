@@ -22,12 +22,10 @@ import { Checklist, FeedbackBanner, HowItWorks, PlanStrip, type ChecklistStep } 
 // d'inventer des données.
 const STATS_UNAVAILABLE = "Bientôt disponible";
 
-// Même logique de routage que EpisodeCard.tsx (liste des épisodes) : le
-// premier module non cadenassé de la sidebar une fois l'épisode paramétré.
-function episodeHref(ep: { id: string; title: string | null; status: string }): string {
-  if (!ep.title) return `/episodes/${ep.id}/new`;
-  if (ep.status === "DRAFT") return `/episodes/${ep.id}/montage`;
-  return `/episodes/${ep.id}/review`;
+// Même porte d'entrée que la liste des épisodes : le premier module non validé auquel le forfait
+// donne accès (cf. app/(app)/episodes/[id]/start/page.tsx).
+function episodeHref(ep: { id: string }): string {
+  return `/episodes/${ep.id}/start`;
 }
 
 function episodeLabel(ep: { title: string | null; season: number | null; episodeNumber: number | null }): string {

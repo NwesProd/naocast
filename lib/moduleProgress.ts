@@ -126,14 +126,23 @@ export function episodeDisplayStatus(
 // (Script/Tournage/Extraits/Miniature/Distri restent verrouillés, jamais
 // proposés) qui n'est pas encore "terminé" ; si tous le sont, direction le
 // tunnel de montage/relecture (page centrale de l'épisode).
-export function firstOpenModuleHref(episodeId: string, state: EpisodeModuleState): string {
+export function firstOpenModuleHref(
+  episodeId: string,
+  state: EpisodeModuleState,
+  // Sans accès à Script/Invités (free, basic), on commence à Intro : jamais un module verrouillé.
+  opts: { prodEnabled?: boolean } = {}
+): string {
   if (!state.title) return `/episodes/${episodeId}/new`;
 
   const montageHref = state.status === "DRAFT" ? `/episodes/${episodeId}/montage` : `/episodes/${episodeId}/review`;
 
   const modules: { done: boolean; href: string }[] = [
-    { done: state.scriptValidated, href: `/episodes/${episodeId}/script` },
-    { done: state.guestsCastingValidated, href: `/episodes/${episodeId}/guests` },
+    ...(opts.prodEnabled === false
+      ? []
+      : [
+          { done: state.scriptValidated, href: `/episodes/${episodeId}/script` },
+          { done: state.guestsCastingValidated, href: `/episodes/${episodeId}/guests` },
+        ]),
     { done: isIntroDone(state), href: `/episodes/${episodeId}/intro` },
     { done: isMontageDone(state), href: montageHref },
     { done: state.hasTranscript, href: `/episodes/${episodeId}/transcript` },

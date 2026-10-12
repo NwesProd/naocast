@@ -89,7 +89,7 @@ export function NewEpisodeButton({ label = "+ Ajouter un épisode", align = "end
 
       // La sidebar a son propre état (compteur du forfait, épisode sélectionné) : on la prévient.
       window.dispatchEvent(new Event(EPISODE_UPDATED_EVENT));
-      router.push(`/episodes/${id}/montage`);
+      router.push(`/episodes/${id}/start`);
     } catch (err) {
       setError((err as Error).message);
       setSaving(false);
