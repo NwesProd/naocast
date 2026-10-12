@@ -26,6 +26,76 @@ interface ExistingPodcast {
   logo: FileRef | null;
 }
 
+// Petite poubelle posée sur un média déjà enregistré : un clic demande confirmation sur place
+// (pas de boîte de dialogue du navigateur), puis supprime le média du podcast et du stockage.
+function DeleteMediaButton({ field, label }: { field: "cover" | "logo" | "intro" | "outro"; label: string }) {
+  const router = useRouter();
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  async function remove() {
+    setBusy(true);
+    setFailed(false);
+    try {
+      const res = await fetch("/api/podcast/media", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ field }),
+      });
+      if (!res.ok) throw new Error();
+      router.refresh();
+    } catch {
+      setFailed(true);
+      setBusy(false);
+    }
+  }
+
+  if (confirming) {
+    return (
+      <div className="flex items-center gap-2 text-xs">
+        <span className="text-text-muted">{failed ? "Échec, réessaie." : `Supprimer ${label} ?`}</span>
+        <button
+          type="button"
+          onClick={remove}
+          disabled={busy}
+          className="rounded-pill bg-[#8A2E1F] px-2.5 py-1 font-semibold text-white disabled:opacity-50"
+        >
+          {busy ? "..." : "Supprimer"}
+        </button>
+        <button
+          type="button"
+          onClick={() => setConfirming(false)}
+          disabled={busy}
+          className="rounded-pill border border-border bg-white px-2.5 py-1 font-semibold text-ink"
+        >
+          Annuler
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => setConfirming(true)}
+      aria-label={`Supprimer ${label}`}
+      title={`Supprimer ${label}`}
+      className="flex h-7 w-7 items-center justify-center rounded-full border border-border bg-white text-[#8A2E1F] shadow-sm transition hover:bg-[#FBEAE7]"
+    >
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path
+          d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 002 2h6a2 2 0 002-2l1-12M9 7V4h6v3"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </button>
+  );
+}
+
 function ImagePreview({ file }: { file: FileRef }) {
   return (
     // eslint-disable-next-line @next/next/no-img-element -- fichier utilisateur servi dynamiquement (local ou signé), pas un asset buildé
@@ -186,7 +256,12 @@ export function PodcastForm({ existing }: { existing?: ExistingPodcast }) {
         <div>
           <label className="block text-sm font-medium mb-1.5 text-ink">Pochette</label>
           <div className="space-y-2">
-            {existing?.cover && <ImagePreview file={existing.cover} />}
+            {existing?.cover && (
+              <div className="flex items-start gap-2">
+                <ImagePreview file={existing.cover} />
+                <DeleteMediaButton field="cover" label="la pochette" />
+              </div>
+            )}
             <input name="cover" type="file" accept="image/*" className={fileInputClass} />
           </div>
         </div>
@@ -195,7 +270,12 @@ export function PodcastForm({ existing }: { existing?: ExistingPodcast }) {
           <label className="block text-sm font-medium mb-1.5 text-ink">Logo permanent</label>
           <p className="text-xs text-text-muted mb-2">Incrusté en superposition sur chaque épisode monté.</p>
           <div className="space-y-2">
-            {existing?.logo && <ImagePreview file={existing.logo} />}
+            {existing?.logo && (
+              <div className="flex items-start gap-2">
+                <ImagePreview file={existing.logo} />
+                <DeleteMediaButton field="logo" label="le logo" />
+              </div>
+            )}
             <input name="logo" type="file" accept="image/*" className={fileInputClass} />
           </div>
         </div>
@@ -205,7 +285,12 @@ export function PodcastForm({ existing }: { existing?: ExistingPodcast }) {
         <div>
           <label className="block text-sm font-medium mb-1.5 text-ink">Générique de début</label>
           <div className="space-y-2">
-            {existing?.intro && <MediaPreview file={existing.intro} />}
+            {existing?.intro && (
+              <div className="space-y-2">
+                <MediaPreview file={existing.intro} />
+                <DeleteMediaButton field="intro" label="le générique de début" />
+              </div>
+            )}
             <input name="intro" type="file" accept="video/*,audio/*" className={fileInputClass} />
           </div>
         </div>
@@ -213,7 +298,12 @@ export function PodcastForm({ existing }: { existing?: ExistingPodcast }) {
         <div>
           <label className="block text-sm font-medium mb-1.5 text-ink">Générique de fin</label>
           <div className="space-y-2">
-            {existing?.outro && <MediaPreview file={existing.outro} />}
+            {existing?.outro && (
+              <div className="space-y-2">
+                <MediaPreview file={existing.outro} />
+                <DeleteMediaButton field="outro" label="le générique de fin" />
+              </div>
+            )}
             <input name="outro" type="file" accept="video/*,audio/*" className={fileInputClass} />
           </div>
         </div>
