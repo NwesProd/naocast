@@ -61,10 +61,11 @@ model User {
   // l'onglet Utilisateurs du back office.
   extraModules String[] @default([])
 
-  loginTokens LoginToken[]
-  apiTokens   ApiToken[]
-  oauthCodes  OAuthCode[]
-  feedbacks   Feedback[]
+  loginTokens    LoginToken[]
+  apiTokens      ApiToken[]
+  oauthCodes     OAuthCode[]
+  feedbacks      Feedback[]
+  episodeCredits EpisodeCredit[]
 }
 
 enum EmailStatus {
@@ -729,4 +730,20 @@ model Feedback {
 
   @@index([handled, createdAt])
   @@index([userId])
+}
+
+// Épisode(s) offert(s) à un utilisateur depuis son profil dans le back office : s'ajoute à la limite
+// d'épisodes de son forfait (au total, ou pour le mois en cours si la limite est mensuelle), sans
+// paiement. Chaque ligne est une entrée de l'historique : qui l'a offert, quand, pourquoi.
+model EpisodeCredit {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount         Int      @default(1)
+  reason         String?
+  // Copie de l'email de l'admin : l'historique reste lisible même si son compte change.
+  createdByEmail String
+  createdAt      DateTime @default(now())
+
+  @@index([userId, createdAt])
 }

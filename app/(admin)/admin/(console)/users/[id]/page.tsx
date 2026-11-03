@@ -10,6 +10,7 @@ import type { FileKind, FileState } from "@/lib/storageStats";
 import { EmailLogTable } from "../../EmailLogTable";
 import { ModulesCard } from "./ModulesCard";
 import { UserActions } from "./UserActions";
+import { EpisodeCreditCard } from "./EpisodeCreditCard";
 
 const KIND_LABEL: Record<FileKind, string> = {
   rush: "Rush importé",
@@ -57,6 +58,8 @@ export default async function AdminUserPage({ params }: { params: Promise<{ id: 
     orderBy: { createdAt: "desc" },
     take: 20,
   });
+
+  const episodeCredits = await prisma.episodeCredit.findMany({ where: { userId: id }, orderBy: { createdAt: "desc" } });
 
   let storage: UserStorage | null = null;
   try {
@@ -157,6 +160,20 @@ export default async function AdminUserPage({ params }: { params: Promise<{ id: 
             )}
           </div>
         </div>
+      </section>
+
+      <section className="admin-section">
+        <EpisodeCreditCard
+          userId={user.id}
+          total={episodeCredits.reduce((n, c) => n + c.amount, 0)}
+          credits={episodeCredits.map((c) => ({
+            id: c.id,
+            amount: c.amount,
+            reason: c.reason,
+            by: c.createdByEmail,
+            date: formatDateTime(c.createdAt),
+          }))}
+        />
       </section>
 
       <section className="admin-section">

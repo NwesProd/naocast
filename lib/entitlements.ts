@@ -47,11 +47,18 @@ export async function getEpisodeUsage(userId: string): Promise<EpisodeUsage> {
 
   const used = await prisma.episode.count({ where });
 
+  // Épisodes offerts depuis le back office (cf. EpisodeCredit) : tous comptent pour une limite
+  // "au total", seuls ceux du mois en cours pour une limite mensuelle.
+  const credits = await prisma.episodeCredit.aggregate({
+    where: { userId, ...(limit.type === "monthly" ? { createdAt: { gte: startOfMonth() } } : {}) },
+    _sum: { amount: true },
+  });
+
   return {
     plan: user.plan,
     planLabel: PLAN_LABELS[user.plan],
     used,
-    limit: limit.count,
+    limit: limit.count + (credits._sum.amount ?? 0),
     periodLabel: limit.type === "total" ? "au total" : "ce mois-ci",
   };
 }
