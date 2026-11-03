@@ -122,6 +122,10 @@ export async function sendWelcomeEmail(to: string): Promise<void> {
   await sendEmail({ to, kind: "welcome", ...renderTemplate(await getTemplateFields("welcome"), `${appUrl()}/podcast`) });
 }
 
+export async function sendEpisodeCreditEmail(to: string): Promise<void> {
+  await sendEmail({ to, kind: "episode_credit", ...renderTemplate(await getTemplateFields("episode_credit"), `${appUrl()}/dashboard`) });
+}
+
 export async function sendMagicLinkEmail(to: string, loginUrl: string): Promise<void> {
   await sendEmail({ to, kind: "magic_link", ...renderTemplate(await getTemplateFields("magic_link"), loginUrl) });
 }

@@ -41,7 +41,7 @@ ${footerHtml ? `<p style="max-width:560px;color:${MUTED};font-size:12px;font-fam
 // stockée en base (EmailTemplate) et remplace ces valeurs champ par champ.
 // Le lien du bouton reste, lui, toujours généré par l'app (jeton propre à
 // chaque envoi) : seul son libellé se modifie.
-export type TemplateKey = "welcome" | "password_reset" | "magic_link";
+export type TemplateKey = "welcome" | "password_reset" | "magic_link" | "episode_credit";
 
 export interface TemplateFields {
   subject: string;
@@ -56,7 +56,7 @@ export interface TemplateFields {
 // Nature d'un mail envoyé, pour le journal d'emails du back office.
 export type EmailKind = TemplateKey | "news" | "test" | "other";
 
-export const TEMPLATE_KEYS: TemplateKey[] = ["welcome", "password_reset", "magic_link"];
+export const TEMPLATE_KEYS: TemplateKey[] = ["welcome", "password_reset", "magic_link", "episode_credit"];
 
 export const TEMPLATE_DEFS: Record<TemplateKey, { label: string; trigger: string; linkHelp: string; defaults: TemplateFields }> = {
   welcome: {
@@ -93,6 +93,18 @@ export const TEMPLATE_DEFS: Record<TemplateKey, { label: string; trigger: string
       body: "Utilisez ce lien pour vous connecter sans mot de passe.",
       buttonLabel: "Me connecter",
       note: "Ce lien est à usage unique et expire dans 30 minutes. Si vous n'avez rien demandé, ignorez cet email.",
+    },
+  },
+  episode_credit: {
+    label: "Épisode offert",
+    trigger: "Quand un épisode gratuit est crédité depuis la fiche utilisateur",
+    linkHelp: "Le bouton ouvre la liste des épisodes.",
+    defaults: {
+      subject: "Un épisode gratuit a été ajouté à votre compte naocast.",
+      heading: "Un épisode vous est offert",
+      body: "Bonne nouvelle : un épisode gratuit vient d'être crédité sur votre compte naocast. Vous pouvez dès maintenant créer un nouvel épisode.",
+      buttonLabel: "Créer un épisode",
+      note: "Une question ? Répondez simplement à cet email.",
     },
   },
 };

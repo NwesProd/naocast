@@ -15,6 +15,7 @@ const KIND_LABELS: Record<string, string> = {
   welcome: "Bienvenue",
   password_reset: "Mot de passe oublié",
   magic_link: "Magic link",
+  episode_credit: "Épisode offert",
   news: "Actualité",
   test: "Test",
   other: "Autre",

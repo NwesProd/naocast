@@ -30,7 +30,11 @@ export function EpisodeCreditCard({ userId, credits, total }: { userId: string; 
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Le crédit a échoué.");
       setReason("");
-      setMessage({ type: "success", text: "Un épisode gratuit a été crédité." });
+      setMessage(
+        data.emailSent === false
+          ? { type: "error", text: "Épisode crédité, mais l'email de prévenance n'a pas pu partir." }
+          : { type: "success", text: "Un épisode gratuit a été crédité, l'utilisateur est prévenu par email." }
+      );
       router.refresh();
     } catch (err) {
       setMessage({ type: "error", text: (err as Error).message });
@@ -43,7 +47,7 @@ export function EpisodeCreditCard({ userId, credits, total }: { userId: string; 
     <div className="admin-card">
       <h2 className="admin-section-title">épisodes offerts</h2>
       <p className="admin-help" style={{ marginTop: -4, marginBottom: 12 }}>
-        Chaque crédit s&apos;ajoute à la limite d&apos;épisodes du forfait, sans paiement. Total offert : {total}.
+        Chaque crédit s&apos;ajoute à la limite d&apos;épisodes du forfait, sans paiement, et prévient l&apos;utilisateur par email. Total offert : {total}.
       </p>
 
       {message && (
