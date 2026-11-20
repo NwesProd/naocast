@@ -29,9 +29,6 @@ export default async function EpisodeStartPage({ params }: { params: Promise<{ i
       {
         title: episode.title,
         status: episode.status,
-        introTeaserChoice: episode.introTeaserChoice,
-        introTeaserValidated: episode.introTeaserValidated,
-        introValidatedExternally: episode.introValidatedExternally,
         montageValidatedExternally: episode.montageValidatedExternally,
         guestsCastingValidated: episode.guestsCastingValidated,
         hasTranscript: episode._count.transcriptSegments > 0,

@@ -11,8 +11,7 @@ function exportKeepSet(episodeId: string, exportKeys: string[]): Set<string> {
 // retour en arrière" dans /restart-tunnel), seuls l'export vidéo et l'export
 // audio finaux servent encore (à télécharger) : tout le reste est supprimé du
 // stockage R2/B2, que l'utilisateur paie sinon indéfiniment pour rien :
-// rushs bruts et leurs aperçus, génériques propres à l'épisode, teaser
-// d'intro. Les métadonnées (RushSource...) restent en base comme historique,
+// rushs bruts et leurs aperçus, génériques propres à l'épisode. Les métadonnées (RushSource...) restent en base comme historique,
 // leurs clés sont simplement vidées.
 export async function cleanupExportedEpisodeFiles(episodeId: string): Promise<void> {
   const exportAssets = await prisma.exportAsset.findMany({ where: { episodeId }, select: { storageKey: true } });
@@ -24,13 +23,13 @@ export async function cleanupExportedEpisodeFiles(episodeId: string): Promise<vo
   await prisma.rushSource.updateMany({ where: { episodeId }, data: { storageKey: null, previewKey: null } });
   await prisma.episode.update({
     where: { id: episodeId },
-    data: { introKey: null, outroKey: null, introTeaserKey: null, introTeaserImportKey: null },
+    data: { introKey: null, outroKey: null },
   });
 }
 
 // Montage validé hors naocast (ou rushs devenus inutiles) : les rushs importés et leurs
 // aperçus ne servent plus à personne mais sont facturés. On les supprime (fichiers,
-// lignes, découpes et propositions de coupe qui s'y rapportaient). Le transcript, l'intro
+// lignes, découpes et propositions de coupe qui s'y rapportaient). Le transcript
 // et les informations de l'épisode restent.
 export async function purgeEpisodeRushes(episodeId: string): Promise<void> {
   await deleteObjectsByPrefix(`rushes/${episodeId}/`);
@@ -45,9 +44,8 @@ export async function purgeEpisodeRushes(episodeId: string): Promise<void> {
 // "Recommencer le montage à zéro" (avant validation) : le tunnel repart du
 // début, l'utilisateur réimporte ses rushs. On supprime donc les rushs
 // (fichiers, aperçus, lignes), les découpes, les jobs et les rendus précédents.
-// Restent : le transcript (phrases et locuteurs, long à produire), l'intro
-// (passages choisis, teaser compilé et sa validation), les informations de
-// l'épisode, les invités, le script et les génériques choisis.
+// Restent : le transcript (phrases et locuteurs, long à produire), les informations
+// de l'épisode, les invités, le script et les génériques choisis.
 export async function resetEpisodeToScratch(episodeId: string): Promise<void> {
   await deleteObjectsByPrefix(`rushes/${episodeId}/`);
   // Rendus précédents (exports vidéo et audio).
@@ -64,7 +62,7 @@ export async function resetEpisodeToScratch(episodeId: string): Promise<void> {
 }
 
 // Supprime tous les fichiers stockés propres à un épisode (rushs + leurs
-// aperçus, générique sur-mesure de l'épisode, teaser d'intro, exports vidéo/
+// aperçus, générique sur-mesure de l'épisode, exports vidéo/
 // audio) avant sa suppression en base : la cascade Prisma (onDelete: Cascade)
 // efface bien les lignes, mais jamais les objets R2/B2 qu'elles référencent,
 // qui resteraient orphelins (et facturés) indéfiniment sinon.
@@ -80,8 +78,6 @@ export async function deleteEpisodeStorage(episodeId: string): Promise<void> {
     ...exportAssets.map((e) => e.storageKey),
     episode?.introKey,
     episode?.outroKey,
-    episode?.introTeaserKey,
-    episode?.introTeaserImportKey,
   ].filter((k): k is string => !!k);
 
   await Promise.all(keys.map((key) => deleteObject(key).catch(() => {})));

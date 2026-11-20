@@ -8,24 +8,11 @@
 export interface EpisodeModuleState {
   title: string | null;
   status: string;
-  introTeaserChoice: "NONE" | "MODULE" | "IMPORT";
-  introTeaserValidated: boolean;
-  // Validés à la main par l'utilisateur, post-production faite hors naocast.
-  introValidatedExternally: boolean;
+  // Validé à la main par l'utilisateur, post-production faite hors naocast.
   montageValidatedExternally: boolean;
   guestsCastingValidated: boolean;
   hasTranscript: boolean;
   scriptValidated: boolean;
-}
-
-export function isIntroDone(
-  state: Pick<EpisodeModuleState, "introTeaserChoice" | "introTeaserValidated" | "introValidatedExternally">
-): boolean {
-  return (
-    state.introValidatedExternally ||
-    state.introTeaserChoice === "IMPORT" ||
-    (state.introTeaserChoice === "MODULE" && state.introTeaserValidated)
-  );
 }
 
 export function isMontageDone(state: Pick<EpisodeModuleState, "status" | "montageValidatedExternally">): boolean {
@@ -36,7 +23,7 @@ export function isMontageDone(state: Pick<EpisodeModuleState, "status" | "montag
 // Du plus avancé au moins avancé :
 // - DIFFUSÉ : montage validé et date de sortie atteinte ;
 // - PRÊT À DIFFUSER : montage validé (date à venir ou absente) ;
-// - POST-PROD : intro, montage ou transcript commencé ;
+// - POST-PROD : montage ou transcript commencé ;
 // - PROD : script ou invités commencé (uniquement pour les forfaits qui ont ces modules) ;
 // - BROUILLON : rien de commencé.
 // Les statuts "en cours de route" (traitement, échec, chez le monteur) priment toujours :
@@ -50,7 +37,6 @@ export interface ProgressSignals {
   prodEnabled: boolean;
   scriptStarted: boolean;
   guestsStarted: boolean;
-  introStarted: boolean;
   montageStarted: boolean;
   transcriptStarted: boolean;
 }
@@ -69,7 +55,7 @@ export function displayStatus(
     const releaseYmd = releaseDate ? releaseDate.toISOString().slice(0, 10) : null;
     return releaseYmd && releaseYmd <= todayYmd ? "PUBLISHED" : "READY_TO_PUBLISH";
   }
-  if (signals.introStarted || signals.montageStarted || signals.transcriptStarted) return "POST_PROD";
+  if (signals.montageStarted || signals.transcriptStarted) return "POST_PROD";
   if (signals.prodEnabled && (signals.scriptStarted || signals.guestsStarted)) return "PROD";
   return "DRAFT";
 }
@@ -80,13 +66,12 @@ export function todayInParis(): string {
 }
 
 // Compteurs à demander à Prisma (`_count`) pour calculer le statut affiché d'une liste d'épisodes.
-export const EPISODE_COUNTS_SELECT = { transcriptSegments: true, rushes: true, episodeGuests: true, introSegments: true } as const;
+export const EPISODE_COUNTS_SELECT = { transcriptSegments: true, rushes: true, episodeGuests: true } as const;
 
 export interface EpisodeCounts {
   transcriptSegments: number;
   rushes: number;
   episodeGuests: number;
-  introSegments: number;
 }
 
 // displayStatus à partir d'un épisode tel que lu en base (+ compteurs), partagé par la
@@ -97,9 +82,6 @@ export function episodeDisplayStatus(
     status: string;
     releaseDate: Date | null;
     editorChoice: string | null;
-    introTeaserChoice: "NONE" | "MODULE" | "IMPORT";
-    introTeaserValidated: boolean;
-    introValidatedExternally: boolean;
     montageValidatedExternally: boolean;
     guestsCastingValidated: boolean;
     scriptValidated: boolean;
@@ -114,7 +96,6 @@ export function episodeDisplayStatus(
     prodEnabled,
     scriptStarted: ep.scriptValidated || !!ep.scriptDraft?.trim() || hasIdeas,
     guestsStarted: ep.guestsCastingValidated || counts.episodeGuests > 0,
-    introStarted: ep.introValidatedExternally || ep.introTeaserValidated || ep.introTeaserChoice !== "NONE" || counts.introSegments > 0,
     montageStarted: ep.status !== "DRAFT" || ep.editorChoice !== null || counts.rushes > 0,
     transcriptStarted: counts.transcriptSegments > 0,
   });
@@ -129,7 +110,7 @@ export function episodeDisplayStatus(
 export function firstOpenModuleHref(
   episodeId: string,
   state: EpisodeModuleState,
-  // Sans accès à Script/Invités (free, basic), on commence à Intro : jamais un module verrouillé.
+  // Sans accès à Script/Invités (free, basic), on commence au Montage : jamais un module verrouillé.
   opts: { prodEnabled?: boolean } = {}
 ): string {
   if (!state.title) return `/episodes/${episodeId}/new`;
@@ -143,7 +124,6 @@ export function firstOpenModuleHref(
           { done: state.scriptValidated, href: `/episodes/${episodeId}/script` },
           { done: state.guestsCastingValidated, href: `/episodes/${episodeId}/guests` },
         ]),
-    { done: isIntroDone(state), href: `/episodes/${episodeId}/intro` },
     { done: isMontageDone(state), href: montageHref },
     { done: state.hasTranscript, href: `/episodes/${episodeId}/transcript` },
   ];

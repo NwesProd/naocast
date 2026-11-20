@@ -120,10 +120,9 @@ export function createNaocastMcpServer(user: McpUser): McpServer {
       if (!episode) return fail("Épisode introuvable.");
       const guests = await prisma.episodeGuest.findMany({ where: { episodeId }, include: { guest: true }, orderBy: { order: "asc" } });
       const names = await speakerNames(episodeId);
-      const [transcriptSegments, rushes, introSegments] = await Promise.all([
+      const [transcriptSegments, rushes] = await Promise.all([
         prisma.transcriptSegment.count({ where: { episodeId } }),
         prisma.rushSource.count({ where: { episodeId } }),
-        prisma.introSegment.count({ where: { episodeId } }),
       ]);
       const count = transcriptSegments;
       return json({
@@ -133,7 +132,7 @@ export function createNaocastMcpServer(user: McpUser): McpServer {
         season: episode.season,
         episodeNumber: episode.episodeNumber,
         releaseDate: episode.releaseDate ? episode.releaseDate.toISOString().slice(0, 10) : null,
-        status: episodeDisplayStatus(episode, { transcriptSegments, rushes, episodeGuests: guests.length, introSegments }, prodEnabled),
+        status: episodeDisplayStatus(episode, { transcriptSegments, rushes, episodeGuests: guests.length }, prodEnabled),
         script: { draft: scriptToPlainText(episode.scriptDraft), angleIdeas: episode.scriptAngleIdeas, validated: episode.scriptValidated },
         guests: guests.map((g) => ({ id: g.guest.id, name: g.guest.name, media: g.guest.mediaName, tags: g.guest.tags, socialLinks: g.guest.socialLinks })),
         speakers: [...names.values()],

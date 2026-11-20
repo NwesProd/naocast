@@ -17,8 +17,8 @@ enum ProfileType {
   AUTRE
 }
 
-// naocast free : Intro/Montage/Transcript, 1 épisode au total.
-// naocast basic : Intro/Montage/Transcript, 10 épisodes/mois, 1 podcast.
+// naocast free : Montage/Transcript, 1 épisode au total.
+// naocast basic : Montage/Transcript, 10 épisodes/mois, 1 podcast.
 // naocast infinity : tous les modules, illimité, multi-podcast (abonnement).
 // naocast lifetime : tous les modules, illimité, multi-podcast (paiement
 // unique, offre limitée à 50 utilisateurs).
@@ -279,17 +279,6 @@ enum GenericCustomMode {
   OWN_IDEA // idée décrite en texte libre par le podcasteur
 }
 
-// Étape "Intro" du tunnel : quel teaser (s'il y en a un) diffuser avant le
-// générique de début. MODULE ne s'active que si introTeaserValidated est vrai
-// (un brouillon construit dans le module mais jamais validé n'est jamais
-// utilisé dans le rendu) ; IMPORT court-circuite le module avec un fichier
-// déjà prêt (cf. introTeaserImportKey).
-enum IntroTeaserChoice {
-  NONE
-  MODULE
-  IMPORT
-}
-
 model Episode {
   id        String  @id @default(cuid())
   podcastId String
@@ -332,21 +321,6 @@ model Episode {
   outroSource IntroOutroSource @default(PODCAST)
   outroKey    String?
 
-  // Module "Intro" (étape 7 du tunnel, à part du générique de début) : teaser
-  // compilé à partir de passages du transcript choisis et ordonnés par
-  // l'utilisateur (cf. IntroSegment ci-dessous), diffusé AVANT le générique de
-  // début. introTeaserKey est le clip déjà assemblé (ffmpeg), régénéré à
-  // chaque changement de sélection/ordre, null tant qu'aucun teaser n'a
-  // encore été construit (l'étape est optionnelle). Un brouillon reconstruit
-  // n'est utilisé dans le rendu qu'une fois validé (introTeaserValidated),
-  // sinon on pourrait diffuser un teaser encore à moitié composé.
-  introTeaserKey       String?
-  introTeaserValidated Boolean           @default(false)
-  // Alternative à la construction dans le module : un fichier importé
-  // directement (court-circuite entièrement le module et sa validation).
-  introTeaserImportKey String?
-  introTeaserChoice    IntroTeaserChoice @default(NONE)
-
   // Générique sur-mesure (source EPISODE + monteur humain impliqué) : soit un
   // fichier importé (IMPORT, cf. introKey/outroKey ci-dessus), soit des
   // indications textuelles pour le monteur (CUSTOM), qui compile lui-même les
@@ -354,9 +328,6 @@ model Episode {
   introCreationMode      GenericCreationMode?
   introCustomMode        GenericCustomMode?
   introCustomDescription String?
-  // Étape "Intro" avec un monteur naocast. : remarques du podcasteur pour le teaser
-  // des meilleures punchlines que le monteur réalise.
-  introEditorNotes       String?
   outroCreationMode      GenericCreationMode?
   outroCustomMode        GenericCustomMode?
   outroCustomDescription String?
@@ -412,7 +383,6 @@ model Episode {
   // "valider hors naocast" affiche simplement le tick vert du module dans la
   // sidebar, sans passer par le module ni changer le statut de l'épisode
   // (pas d'export, pas de verrouillage).
-  introValidatedExternally   Boolean @default(false)
   montageValidatedExternally Boolean @default(false)
 
   createdAt DateTime @default(now())
@@ -425,32 +395,8 @@ model Episode {
   exports            ExportAsset[]
   speakers           EpisodeSpeaker[]
   episodeGuests      EpisodeGuest[]
-  introSegments      IntroSegment[]
   cutSuggestions     CutSuggestion[]
   editingRequests    EditingRequest[]
-}
-
-// Un passage du transcript choisi pour le teaser du module "Intro", `order`
-// contrôle sa place dans la séquence finale, indépendamment de l'ordre
-// chronologique d'origine dans l'épisode (l'utilisateur peut réordonner
-// librement, cf. app/(app)/episodes/[id]/intro).
-model IntroSegment {
-  id        String   @id @default(cuid())
-  episodeId String
-  episode   Episode  @relation(fields: [episodeId], references: [id], onDelete: Cascade)
-  startMs   Int
-  endMs     Int
-  text      String
-  order     Int
-  createdAt DateTime @default(now())
-
-  // Sous-plages (en ms, mêmes coordonnées que startMs/endMs) retirées à
-  // l'intérieur du passage, mode "cut" appliqué phrase par phrase dans le
-  // module Intro (retirer quelques mots sans retirer toute la phrase).
-  // Format : [{ "startMs": number, "endMs": number }, ...].
-  removedRanges Json?
-
-  @@index([episodeId, order])
 }
 
 // Rattachement d'un invité (du pool du podcast, cf. Guest) à un épisode

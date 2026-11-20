@@ -23,7 +23,7 @@ export function ExternalGate({
   children,
 }: {
   episodeId: string;
-  field: "introValidatedExternally" | "montageValidatedExternally";
+  field: "montageValidatedExternally";
   wording: Wording;
   initialValidated: boolean;
   showCardWhenOpen?: boolean;
@@ -56,7 +56,7 @@ export function ExternalValidation({
   initialValidated,
 }: {
   episodeId: string;
-  field: "introValidatedExternally" | "montageValidatedExternally";
+  field: "montageValidatedExternally";
   // Libellés accordés au module (intro : féminin, montage : masculin).
   wording: Wording;
   initialValidated: boolean;

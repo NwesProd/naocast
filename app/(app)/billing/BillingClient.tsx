@@ -19,14 +19,14 @@ const PLAN_CARDS: PlanCard[] = [
   {
     key: "FREE",
     name: "naocast free",
-    modules: "Intro, Montage, Transcript",
+    modules: "Montage, Transcript",
     priceLabel: "0€",
     note: "Limité à 1 épisode au total.",
   },
   {
     key: "BASIC",
     name: "naocast basic",
-    modules: "Intro, Montage, Transcript",
+    modules: "Montage, Transcript",
     priceLabel: "22,80€ TTC / mois",
     monthlyCheckoutKey: "BASIC_MONTH",
     yearlyCheckoutKey: "BASIC_YEAR",

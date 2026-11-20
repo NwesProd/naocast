@@ -17,7 +17,6 @@ const LINKS = [
 const MODULE_KEY_BY_LABEL: Record<string, ModuleKey> = {
   Script: "script",
   Invités: "invites",
-  Intro: "intro",
   Montage: "montage",
   Transcript: "transcript",
 };
@@ -141,9 +140,6 @@ interface SelectedEpisode {
   season: number | null;
   episodeNumber: number | null;
   status: string;
-  introTeaserValidated: boolean;
-  introTeaserChoice: "NONE" | "MODULE" | "IMPORT";
-  introValidatedExternally: boolean;
   montageValidatedExternally: boolean;
   guestsCastingValidated: boolean;
   transcriptSegments: unknown[];
@@ -247,7 +243,6 @@ export function SidebarNav({
 
   const montageHref = episode ? `/episodes/${candidateId}/montage` : null;
   const reviewHref = episode ? `/episodes/${candidateId}/review` : null;
-  const introHref = episode ? `/episodes/${candidateId}/intro` : null;
   const transcriptHref = episode ? `/episodes/${candidateId}/transcript` : null;
   const guestsHref = episode ? `/episodes/${candidateId}/guests` : null;
   const scriptHref = episode ? `/episodes/${candidateId}/script` : null;
@@ -260,38 +255,30 @@ export function SidebarNav({
   // indique la position réelle).
   const insideMontage =
     (!!montageHref && pathname.startsWith(montageHref)) || (!!reviewHref && pathname.startsWith(reviewHref));
-  // Sur n'importe quel module (Script, Invités, Intro, Montage, Transcript), seul le module est
+  // Sur n'importe quel module (Script, Invités, Montage, Transcript), seul le module est
   // surligné : "Épisodes" ne l'est que sur la liste et la page d'infos d'un épisode.
-  const insideModule = insideMontage || /^\/episodes\/[^/]+\/(script|guests|intro|transcript)(\/|$)/.test(pathname);
+  const insideModule = insideMontage || /^\/episodes\/[^/]+\/(script|guests|transcript)(\/|$)/.test(pathname);
   const label =
     episode &&
     [episode.season != null ? `S${episode.season}` : null, episode.episodeNumber != null ? `E${episode.episodeNumber}` : null]
       .filter(Boolean)
       .join("");
 
-  // Un module est "terminé" quand son résultat est effectivement celui qui
-  // sera utilisé : pour l'Intro, un teaser validé dans le module OU un
-  // fichier importé directement (les deux court-circuitent également un
-  // brouillon jamais validé, cf. Episode.introTeaserChoice) ; pour le
-  // Montage, l'épisode a été exporté (le tunnel + la relecture qu'il couvre
-  // sont bien allés jusqu'au bout, pas seulement soumis au traitement).
-  const introDone =
-    !!episode &&
-    (episode.introValidatedExternally ||
-      episode.introTeaserChoice === "IMPORT" ||
-      (episode.introTeaserChoice === "MODULE" && episode.introTeaserValidated));
-  // Validés "hors naocast" (post-production faite ailleurs) : même tick, sans
+  // Un module est "terminé" quand son résultat est effectivement celui qui sera utilisé : pour le
+  // Montage, l'épisode a été exporté (le tunnel + la relecture qu'il couvre sont bien allés
+  // jusqu'au bout, pas seulement soumis au traitement).
+  // Validé "hors naocast" (post-production faite ailleurs) : même tick, sans
   // avoir fait le module.
   const montageDone = !!episode && (episode.montageValidatedExternally || episode.status === "EXPORTED");
   const guestsDone = !!episode && episode.guestsCastingValidated;
-  // Pas de notion de "validation" dédiée pour le transcript (contrairement à
-  // l'intro ou au casting) : la présence d'un transcript suffit à le
+  // Pas de notion de "validation" dédiée pour le transcript (contrairement au
+  // casting) : la présence d'un transcript suffit à le
   // considérer terminé.
   const transcriptDone = !!episode && episode.transcriptSegments.length > 0;
   const scriptDone = !!episode && episode.scriptValidated;
 
-  // Modules du parcours épisode, groupés par phase de production. "Montage",
-  // "Intro" et "Transcript" sont construits (déverrouillés une fois un
+  // Modules du parcours épisode, groupés par phase de production. "Montage"
+  // et "Transcript" sont construits (déverrouillés une fois un
   // épisode sélectionné), les autres sont des emplacements réservés, à
   // coder plus tard.
   const MODULE_GROUPS: { label: string; modules: { label: string; href: string | null; done?: boolean }[] }[] = [
@@ -306,7 +293,6 @@ export function SidebarNav({
     {
       label: "Post-prod",
       modules: [
-        { label: "Intro", href: introHref, done: introDone },
         { label: "Montage", href: montageHref, done: montageDone },
         { label: "Transcript", href: transcriptHref, done: transcriptDone },
         { label: "Extraits", href: null },
@@ -420,7 +406,6 @@ export function SidebarNav({
                     planLocked
                       ? "Réservé à naocast infinity et naocast lifetime"
                       : mod.label === "Montage" ||
-                          mod.label === "Intro" ||
                           mod.label === "Transcript" ||
                           mod.label === "Invités" ||
                           mod.label === "Script"

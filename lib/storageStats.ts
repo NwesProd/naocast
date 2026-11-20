@@ -69,8 +69,6 @@ async function buildReport(): Promise<StorageReport> {
       montageValidatedExternally: true,
       introKey: true,
       outroKey: true,
-      introTeaserKey: true,
-      introTeaserImportKey: true,
       podcast: { select: { userId: true } },
     },
   });
@@ -102,7 +100,7 @@ async function buildReport(): Promise<StorageReport> {
   const rushKeys = new Set(rushRows.map((r) => r.storageKey).filter((k): k is string => !!k));
   const rushPreviewKeys = new Set(rushRows.map((r) => r.previewKey).filter((k): k is string => !!k));
   const referenced = new Set<string>([...rushKeys, ...rushPreviewKeys, ...exportRows.map((e) => e.storageKey)]);
-  for (const e of episodes) for (const k of [e.introKey, e.outroKey, e.introTeaserKey, e.introTeaserImportKey]) if (k) referenced.add(k);
+  for (const e of episodes) for (const k of [e.introKey, e.outroKey]) if (k) referenced.add(k);
 
   const report: StorageReport = { totalBytes: 0, totalFiles: 0, byUser: new Map(), orphanBytes: 0, orphanFiles: 0, orphanKeys: [] };
   for (const { key, size } of objects) {

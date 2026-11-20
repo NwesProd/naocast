@@ -55,8 +55,6 @@ export interface EditingSummary {
   cuts: { startMs: number; endMs: number; source: string }[];
   generics: { label: string; text: string }[];
   logo: string;
-  intro: string;
-  introNotes: string | null;
 }
 
 function genericLine(
@@ -88,13 +86,6 @@ export async function buildEditingSummary(episodeId: string): Promise<EditingSum
     .filter(Boolean)
     .join("");
 
-  const introTeaser =
-    episode.introTeaserChoice === "MODULE"
-      ? `Teaser composé dans naocast.${episode.introTeaserValidated ? " (validé)" : " (non validé)"}`
-      : episode.introTeaserChoice === "IMPORT"
-        ? "Teaser importé"
-        : "Aucun teaser";
-
   return {
     podcastTitle: podcast?.title ?? "",
     episodeTitle: episode.title || "Sans titre",
@@ -125,8 +116,6 @@ export async function buildEditingSummary(episodeId: string): Promise<EditingSum
     logo: episode.logoEnabled
       ? `Logo du podcast ${LOGO_POSITION_LABEL[episode.logoPosition] ?? ""}${episode.logoOnIntro ? ", sur le générique de début" : ""}${episode.logoOnOutro ? ", sur le générique de fin" : ""}`.trim()
       : "Sans logo sur cet épisode",
-    intro: introTeaser,
-    introNotes: episode.introEditorNotes?.trim() || null,
   };
 }
 
@@ -153,7 +142,7 @@ export function renderEditingEmail(
     ${section("Rushs", `<ul>${rushes || "<li>Aucun</li>"}</ul>${summary.cameraSetup ? `<p>${escapeHtml(summary.cameraSetup)}</p>` : ""}`)}
     ${section("Voix", `<p>${summary.expectedSpeakerCount ? `${summary.expectedSpeakerCount} voix attendues` : "Nombre de voix non précisé"}${summary.speakers.length ? ` : ${escapeHtml(summary.speakers.join(", "))}` : ""}. ${summary.hasTranscript ? "Transcript disponible." : "Pas de transcript."}</p>`)}
     ${section("Coupes", `<p>${escapeHtml(summary.autocut)}</p><ul>${cuts || "<li>Aucune coupe manuelle</li>"}</ul>`)}
-    ${section("Intro, génériques et logo", `<ul><li>Intro : ${escapeHtml(summary.intro)}</li>${summary.introNotes ? `<li>Remarques pour le teaser de punchlines : <span style="white-space:pre-wrap">${escapeHtml(summary.introNotes)}</span></li>` : ""}${summary.generics.map((g) => `<li>Générique de ${g.label.toLowerCase()} : ${escapeHtml(g.text)}</li>`).join("")}<li>${escapeHtml(summary.logo)}</li></ul>`)}
+    ${section("Génériques et logo", `<ul>${summary.generics.map((g) => `<li>Générique de ${g.label.toLowerCase()} : ${escapeHtml(g.text)}</li>`).join("")}<li>${escapeHtml(summary.logo)}</li></ul>`)}
     <p style="margin-top:24px"><a href="${appUrl()}/admin/montages/${request.id}">Voir la demande dans le back office</a> (rushs téléchargeables)</p>
   `;
   return { subject: `Demande de montage : ${summary.podcastTitle} / ${title}`, html };
@@ -201,8 +190,6 @@ export async function finalizeEditingRequest(requestId: string, session: Stripe.
       cuts: [],
       generics: [],
       logo: "",
-      intro: "",
-      introNotes: null,
     });
     await sendEmail({ to: EDITING_REQUEST_EMAIL, subject, html });
   } catch (err) {

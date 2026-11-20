@@ -231,33 +231,8 @@ export async function renderVideo(
   // tunnel) si choisi, sinon celui de la config podcast par défaut.
   const introKey = episode.introSource === "EPISODE" && episode.introKey ? episode.introKey : episode.podcast.introKey;
   const outroKey = episode.outroSource === "EPISODE" && episode.outroKey ? episode.outroKey : episode.podcast.outroKey;
-  let introPath = introKey ? await getLocalWorkingPath(introKey, dir) : null;
+  const introPath = introKey ? await getLocalWorkingPath(introKey, dir) : null;
   const outroPath = outroKey ? await getLocalWorkingPath(outroKey, dir) : null;
-
-  // Module "Intro" (étape 7, optionnelle) : le teaser déjà assemblé (cf.
-  // app/api/episodes/[id]/intro-teaser) se diffuse AVANT le générique de
-  // début, les deux sont concaténés en un seul "générique effectif" ici,
-  // plutôt que d'étendre le filter_complex de renderEpisodeVideo pour un cas
-  // optionnel : un passage ffmpeg de plus, mais seulement pour les épisodes
-  // qui ont effectivement un teaser (rapide, ce sont des clips courts).
-  // introTeaserChoice détermine QUEL clip (le cas échéant) : un brouillon
-  // MODULE non encore validé n'est jamais utilisé (cf. Episode.introTeaserValidated).
-  const introTeaserClipKey =
-    episode.introTeaserChoice === "IMPORT"
-      ? episode.introTeaserImportKey
-      : episode.introTeaserChoice === "MODULE" && episode.introTeaserValidated
-        ? episode.introTeaserKey
-        : null;
-  if (introTeaserClipKey) {
-    const teaserPath = await getLocalWorkingPath(introTeaserClipKey, dir);
-    if (introPath) {
-      const combinedIntroPath = path.join(dir, "intro-with-teaser.mp4");
-      await concatWithIntroOutro([teaserPath, introPath], combinedIntroPath);
-      introPath = combinedIntroPath;
-    } else {
-      introPath = teaserPath;
-    }
-  }
 
   const introDurationSec = introPath ? await getDurationSec(introPath) : 0;
 

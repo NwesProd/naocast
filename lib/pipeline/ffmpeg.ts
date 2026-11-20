@@ -446,57 +446,6 @@ export async function renderEpisodeVideo(
   }
 }
 
-// Module "Intro" : assemble un teaser à partir de passages choisis dans le
-// corps de l'épisode, DANS L'ORDRE DONNÉ (pas trié chronologiquement, c'est
-// justement le but, l'utilisateur choisit son propre enchaînement). Même
-// principe de trim/atrim+concat que renderEpisodeVideo pour les plages
-// conservées, mais sur une liste de plages arbitraire plutôt que sur le
-// complément des découpes.
-export async function assembleClipsInOrder(
-  sourcePath: string,
-  outputPath: string,
-  rangesSec: { startSec: number; endSec: number }[],
-  onProgress?: (fraction: number) => void
-): Promise<void> {
-  if (rangesSec.length === 0) throw new Error("Aucun passage sélectionné pour le teaser.");
-
-  const filterParts: string[] = [];
-  const concatInputs: string[] = [];
-  rangesSec.forEach((seg, i) => {
-    filterParts.push(
-      `[0:v]trim=start=${seg.startSec}:end=${seg.endSec},setpts=PTS-STARTPTS[v${i}]`,
-      `[0:a]atrim=start=${seg.startSec}:end=${seg.endSec},asetpts=PTS-STARTPTS[a${i}]`
-    );
-    concatInputs.push(`[v${i}][a${i}]`);
-  });
-  const filterComplex =
-    rangesSec.length === 1
-      ? filterParts.join(";")
-      : `${filterParts.join(";")};${concatInputs.join("")}concat=n=${rangesSec.length}:v=1:a=1[outv][outa]`;
-  const outV = rangesSec.length === 1 ? "v0" : "outv";
-  const outA = rangesSec.length === 1 ? "a0" : "outa";
-
-  const args = [
-    "-i",
-    sourcePath,
-    "-filter_complex",
-    filterComplex,
-    "-map",
-    `[${outV}]`,
-    "-map",
-    `[${outA}]`,
-    ...X264_ENCODE_ARGS,
-    outputPath,
-  ];
-
-  if (onProgress) {
-    const outputDurationSec = rangesSec.reduce((sum, r) => sum + (r.endSec - r.startSec), 0);
-    await runFfmpegWithProgress(args, outputDurationSec, onProgress);
-  } else {
-    await runFfmpeg(args);
-  }
-}
-
 export async function extractAudio(
   inputPath: string,
   outputPath: string,

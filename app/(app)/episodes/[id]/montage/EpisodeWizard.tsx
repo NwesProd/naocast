@@ -41,28 +41,26 @@ interface Rush {
 // Étapes du tunnel. Avec un monteur humain (monteur naocast. ou personnel),
 // les deux dernières (prévisualisation, rendu final) laissent la place à une
 // seule étape "Envoi" : c'est le monteur qui produit le résultat.
-type StepKey = "editor" | "deposit" | "analysis" | "cut" | "intro" | "generics" | "preview" | "final" | "send";
+type StepKey = "editor" | "deposit" | "analysis" | "cut" | "generics" | "preview" | "final" | "send";
 
 const STEP_LABELS: Record<StepKey, string> = {
   editor: "Monteur",
   deposit: "Import",
   analysis: "Analyse",
   cut: "Cut",
-  intro: "Intro",
   generics: "Génériques et logo",
   preview: "Prévisualisation",
   final: "Rendu final",
   send: "Envoi",
 };
 
-const COMMON_STEPS: StepKey[] = ["editor", "deposit", "analysis", "cut", "intro", "generics"];
+const COMMON_STEPS: StepKey[] = ["editor", "deposit", "analysis", "cut", "generics"];
 
 type LogoPosition = "TOP_LEFT" | "TOP_RIGHT" | "BOTTOM_LEFT" | "BOTTOM_RIGHT";
 type EditorChoice = "PODKO" | "NEED_EDITOR" | "HAS_EDITOR_SEND" | "HAS_EDITOR_IMPORT";
 type IntroOutroSource = "PODCAST" | "EPISODE";
 type GenericCreationMode = "IMPORT" | "CUSTOM";
 type GenericCustomMode = "TEASER_COMPILATION" | "OWN_IDEA";
-type IntroTeaserChoice = "NONE" | "MODULE" | "IMPORT";
 
 const LOGO_POSITION_LABELS: Record<LogoPosition, string> = {
   TOP_LEFT: "En haut à gauche",
@@ -147,10 +145,8 @@ export function EpisodeWizard({
   initialExpectedSpeakerCount,
   initialGuestCount,
   initialAutocut,
-  initialIntroTeaser,
   initialGenerics,
   initialEditorNotes,
-  initialIntroEditorNotes,
 }: {
   episodeId: string;
   initialRushes: Rush[];
@@ -163,9 +159,7 @@ export function EpisodeWizard({
   // Invités déjà renseignés pour l'épisode : sert à deviner le nombre de voix.
   initialGuestCount: number;
   initialAutocut: { enabled: boolean; silenceMs: number | null };
-  initialIntroTeaser: { validated: boolean; choice: IntroTeaserChoice; hasImport: boolean };
   initialEditorNotes: string;
-  initialIntroEditorNotes: string;
   initialGenerics: {
     introSource: IntroOutroSource;
     hasEpisodeIntro: boolean;
@@ -209,10 +203,6 @@ export function EpisodeWizard({
   const [logoOnIntro, setLogoOnIntro] = useState(initialLogoSettings.logoOnIntro);
   const [logoOnOutro, setLogoOnOutro] = useState(initialLogoSettings.logoOnOutro);
   const [logoPosition, setLogoPosition] = useState<LogoPosition>(initialLogoSettings.logoPosition);
-  const [introTeaserValidated] = useState(initialIntroTeaser.validated);
-  const [introTeaserChoice, setIntroTeaserChoice] = useState<IntroTeaserChoice>(initialIntroTeaser.choice);
-  const [hasIntroTeaserImport, setHasIntroTeaserImport] = useState(initialIntroTeaser.hasImport);
-  const [introTeaserImportUploading, setIntroTeaserImportUploading] = useState(false);
   const [editorChoice, setEditorChoice] = useState<EditorChoice | null>(initialEditorChoice);
   const [showHasEditorSubChoice, setShowHasEditorSubChoice] = useState(false);
   const [editorActionLoading, setEditorActionLoading] = useState(false);
@@ -231,8 +221,6 @@ export function EpisodeWizard({
   const [ownEditorEmail, setOwnEditorEmail] = useState("");
   // Remarques pour le monteur naocast. (étape "Envoi") et validation du paiement au retour de Stripe.
   const [editorNotes, setEditorNotes] = useState(initialEditorNotes);
-  // Étape "Intro" avec un monteur naocast. : remarques pour son teaser de punchlines.
-  const [introEditorNotes, setIntroEditorNotes] = useState(initialIntroEditorNotes);
   const [confirmingPayment, setConfirmingPayment] = useState(searchParams.get("editing") === "success");
 
   // Certains appelants (ex. le bouton "Charger le transcript") n'attendent
@@ -513,40 +501,6 @@ export function EpisodeWizard({
     });
   }
 
-  // Étape "Intro" : choisir explicitement d'utiliser le teaser validé dans le
-  // module (MODULE) plutôt qu'un fichier importé directement (IMPORT), ou
-  // aucun des deux (NONE, valeur par défaut). "MODULE" n'a d'effet dans le
-  // rendu final que si le teaser a bien été validé dans le module (cf.
-  // introTeaserValidated) : construire un brouillon ne l'active pas seul.
-  async function saveIntroTeaserChoice(value: IntroTeaserChoice) {
-    setIntroTeaserChoice(value);
-    await fetch(`/api/episodes/${episodeId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ introTeaserChoice: value }),
-    });
-    window.dispatchEvent(new Event(EPISODE_UPDATED_EVENT));
-  }
-
-  async function handleIntroTeaserImportUpload(files: FileList | null) {
-    if (!files || files.length === 0) return;
-    setIntroTeaserImportUploading(true);
-    setError(null);
-    try {
-      const form = new FormData();
-      form.append("file", files[0]);
-      const res = await fetch(`/api/episodes/${episodeId}/intro-teaser-import`, { method: "POST", body: form });
-      if (!res.ok) throw new Error("Échec de l'import de l'intro.");
-      setHasIntroTeaserImport(true);
-      setIntroTeaserChoice("IMPORT");
-      window.dispatchEvent(new Event(EPISODE_UPDATED_EVENT));
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setIntroTeaserImportUploading(false);
-    }
-  }
-
   // Étape "1. Monteur", "Utiliser naocast." / "J'ai besoin d'un monteur" /
   // "J'ai déjà un monteur → je lui envoie les rushs" : les trois continuent
   // le même tunnel (cf. STEPS), ne divergent qu'à l'étape "Lancer" (soit géré
@@ -644,14 +598,6 @@ export function EpisodeWizard({
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ introCustomMode: value }),
-    });
-  }
-
-  async function saveIntroEditorNotes() {
-    await fetch(`/api/episodes/${episodeId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ introEditorNotes: introEditorNotes.trim() || null }),
     });
   }
 
@@ -870,7 +816,7 @@ export function EpisodeWizard({
         );
       case "preview":
         return previewUrl !== null;
-      // "cut" et "intro" volontairement absents : étapes optionnelles, comme
+      // "cut" volontairement absent : étape optionnelle, comme
       // "final"/"send" (dernière étape, sans suivant).
       default:
         return true;
@@ -884,8 +830,8 @@ export function EpisodeWizard({
     return true;
   }
 
-  // v2 : les étapes ont été refondues, les anciens numéros mémorisés ne correspondent plus.
-  const WIZARD_STEP_STORAGE_KEY = `podko:wizardStep2:${episodeId}`;
+  // v3 : l'étape Intro a disparu, les anciens numéros mémorisés ne correspondent plus.
+  const WIZARD_STEP_STORAGE_KEY = `podko:wizardStep3:${episodeId}`;
 
   // Change d'étape ET mémorise aussitôt le choix en localStorage, dans le
   // même appel plutôt que via un effet séparé déclenché par le changement de
@@ -908,8 +854,7 @@ export function EpisodeWizard({
 
   // Reprend le tunnel là où l'utilisateur l'avait laissé plutôt que de
   // toujours repartir de l'étape 1 : soit une étape précise demandée
-  // explicitement via l'URL (ex. le lien "Retourner au montage de l'épisode"
-  // du module Intro, ?step=6), soit la dernière étape mémorisée en
+  // explicitement via l'URL (?step=N), soit la dernière étape mémorisée en
   // localStorage si le tunnel avait déjà été entamé auparavant. Repli sur la
   // plus avancée réellement accessible si les prérequis d'une étape mémorisée
   // ne sont plus remplis entre-temps (ex. rush supprimé depuis).
@@ -1369,97 +1314,6 @@ export function EpisodeWizard({
             )}
           </div>
         )}
-        {key === "intro" && (
-          <div className="space-y-4">
-            <h2 className="font-medium text-mint-ink">Intro</h2>
-            {editorChoice === "NEED_EDITOR" && (
-              <div className="rounded-[10px] border border-border bg-white p-3 space-y-2">
-                <p className="text-sm font-medium text-ink">
-                  Le monteur réalisera un teaser des meilleures punchlines. Fais-nous part de tes remarques.
-                </p>
-                <textarea
-                  value={introEditorNotes}
-                  onChange={(e) => setIntroEditorNotes(e.target.value)}
-                  onBlur={saveIntroEditorNotes}
-                  maxLength={5000}
-                  rows={4}
-                  aria-label="Remarques pour le teaser"
-                  placeholder="Les passages à retenir, le ton, la durée souhaitée, ce qu'il faut éviter..."
-                  className="w-full rounded-md border border-border bg-white px-3 py-2 text-sm"
-                />
-              </div>
-            )}
-            <p className="text-sm text-mint-muted">
-              Tu peux ici construire et insérer ton intro, avant le générique de début : un teaser de quelques
-              passages choisis.
-            </p>
-
-            <div className="space-y-2">
-              {introTeaserValidated ? (
-                <Link
-                  href={`/episodes/${episodeId}/intro`}
-                  className="inline-block text-sm font-semibold rounded-[10px] bg-primary-button text-white px-4 py-2 hover:brightness-110 transition"
-                >
-                  Retourner au module Intro
-                </Link>
-              ) : !transcript || transcript.length === 0 ? (
-                <p className="text-sm text-mint-ink">
-                  Générez d&apos;abord le transcript à l&apos;étape « Cut » pour pouvoir choisir des passages.
-                </p>
-              ) : (
-                <Link
-                  href={`/episodes/${episodeId}/intro`}
-                  className="inline-block text-sm font-semibold rounded-[10px] bg-primary-button text-white px-4 py-2 hover:brightness-110 transition"
-                >
-                  Ouvrir le module Intro
-                </Link>
-              )}
-
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  disabled={!introTeaserValidated}
-                  onClick={() => saveIntroTeaserChoice("MODULE")}
-                  // Couleur volontairement DIFFÉRENTE du bouton "Ouvrir/Retourner au
-                  // module Intro" (primary-button orange) : ce bouton-ci reflète un
-                  // ÉTAT (l'intro validée est bien celle utilisée) plutôt qu'une
-                  // action de navigation, les deux se confondaient en un seul et
-                  // même orange, donnant l'impression de deux actions équivalentes.
-                  className={`text-sm font-semibold rounded-[10px] px-4 py-2 border transition disabled:opacity-40 disabled:cursor-not-allowed ${
-                    introTeaserChoice === "MODULE" && introTeaserValidated
-                      ? "bg-accent-teal text-white border-accent-teal"
-                      : "bg-white border-border text-ink hover:bg-[#FAFAF8]"
-                  }`}
-                >
-                  {introTeaserChoice === "MODULE" && introTeaserValidated ? "✓ Intro validée utilisée" : "Utiliser l'intro validée"}
-                </button>
-                {!introTeaserValidated && (
-                  <span className="text-xs text-mint-muted">Aucune intro validée pour l&apos;instant dans le module.</span>
-                )}
-              </div>
-
-              <div className="rounded-[10px] p-3 border border-border bg-white">
-                <p className="text-sm font-medium text-ink mb-1">Importer une intro</p>
-                <input
-                  type="file"
-                  accept="video/*,audio/*"
-                  disabled={introTeaserImportUploading}
-                  onChange={(e) => handleIntroTeaserImportUpload(e.target.files)}
-                  className={fileInputClass}
-                />
-                {introTeaserImportUploading && <p className="text-sm text-mint-muted mt-1">Envoi en cours...</p>}
-                {hasIntroTeaserImport && introTeaserChoice === "IMPORT" && (
-                  <p className="text-sm font-semibold text-[#0F6B67] mt-1">Intro importée, utilisée pour cet épisode.</p>
-                )}
-              </div>
-            </div>
-
-            <p className="text-xs text-mint-muted">
-              Optionnel : sans intro choisie, l&apos;épisode démarre directement sur le générique de début.
-            </p>
-          </div>
-        )}
-
         {key === "generics" && (
           <div className="space-y-8">
           <GenericStepBody

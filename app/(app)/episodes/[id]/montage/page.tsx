@@ -71,12 +71,6 @@ export default async function MontagePage({ params }: { params: Promise<{ id: st
           initialExpectedSpeakerCount={episode.expectedSpeakerCount}
           initialGuestCount={episode._count.episodeGuests}
           initialAutocut={{ enabled: episode.autocutEnabled, silenceMs: episode.autocutSilenceMs }}
-          initialIntroTeaser={{
-            validated: episode.introTeaserValidated,
-            choice: episode.introTeaserChoice,
-            hasImport: !!episode.introTeaserImportKey,
-          }}
-          initialIntroEditorNotes={episode.introEditorNotes ?? ""}
           initialGenerics={{
             introSource: episode.introSource,
             hasEpisodeIntro: !!episode.introKey,
