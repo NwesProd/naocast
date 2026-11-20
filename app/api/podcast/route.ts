@@ -13,7 +13,7 @@ import { tmpdir } from "os";
 import path from "path";
 
 // Configuration du podcast (une fois, à la création), un seul podcast par
-// compte au MVP. Titre, pochette, générique de début/fin, logo permanent
+// compte au MVP. Titre, pochette, générique de début/fin, jingle, logo permanent
 // (incrusté à chaque rendu, cf. lib/pipeline/render.ts).
 export async function GET() {
   const userId = await requireUserId();
@@ -26,6 +26,7 @@ const PREFIX_BY_FIELD: Record<string, string> = {
   intro: "podcast/intro",
   outro: "podcast/outro",
   logo: "podcast/logo",
+  jingle: "podcast/jingle",
 };
 
 // Champs pour lesquels on génère aussi un aperçu web-compatible (H.264/AAC) :
@@ -116,6 +117,7 @@ export async function POST(req: Request) {
       introKey?: string;
       outroKey?: string;
       logoKey?: string;
+      jingleKey?: string;
       introPreviewKey?: string | null;
       outroPreviewKey?: string | null;
     } = {};
@@ -125,6 +127,7 @@ export async function POST(req: Request) {
     if (keys.intro) data.introKey = keys.intro;
     if (keys.outro) data.outroKey = keys.outro;
     if (keys.logo) data.logoKey = keys.logo;
+    if (keys.jingle) data.jingleKey = keys.jingle;
     if (previewKeys.intro) data.introPreviewKey = previewKeys.intro;
     if (previewKeys.outro) data.outroPreviewKey = previewKeys.outro;
     // Nouveau générique sans aperçu (transcodage indisponible) : l'ancien
@@ -142,7 +145,7 @@ export async function POST(req: Request) {
     // génériques et leurs aperçus) ne servent plus à rien : on les supprime du
     // stockage plutôt que de les y laisser, facturés, indéfiniment.
     if (existingPodcast) {
-      const replaced = (["coverKey", "logoKey", "introKey", "outroKey", "introPreviewKey", "outroPreviewKey"] as const)
+      const replaced = (["coverKey", "logoKey", "jingleKey", "introKey", "outroKey", "introPreviewKey", "outroPreviewKey"] as const)
         .filter((field) => field in data && existingPodcast[field] && existingPodcast[field] !== data[field])
         .map((field) => existingPodcast[field]!);
       await Promise.all(replaced.map((key) => deleteObject(key).catch(() => {})));
@@ -159,7 +162,7 @@ export async function POST(req: Request) {
 // qu'ils référencent, supprimés ici d'abord pour ne rien laisser d'orphelin.
 export async function DELETE() {
   const userId = await requireUserId();
-  const podcast = await prisma.podcast.findUnique({ where: { userId }, include: { episodes: { select: { id: true } } } });
+  const podcast = await prisma.podcast.findUnique({ where: { userId }, include: { episodes: { select: { id: true } }, mediaAssets: { select: { key: true } } } });
   if (podcast) {
     for (const episode of podcast.episodes) await deleteEpisodeStorage(episode.id);
     await deletePodcastFiles(podcast);

@@ -232,9 +232,19 @@ export async function deleteObjectsByPrefix(prefix: string, keep: ReadonlySet<st
   return objects.length;
 }
 
-export async function getSignedDownloadUrl(key: string, expiresInSec = 3600): Promise<string> {
+// `downloadName` : le lien force le téléchargement du fichier sous ce nom (en-tête
+// Content-Disposition), un attribut `download` est ignoré sur une URL d'un autre domaine.
+export async function getSignedDownloadUrl(key: string, expiresInSec = 3600, downloadName?: string): Promise<string> {
   if (s3 && bucket) {
-    return getSignedUrl(s3, new GetObjectCommand({ Bucket: bucket, Key: key }), { expiresIn: expiresInSec });
+    return getSignedUrl(
+      s3,
+      new GetObjectCommand({
+        Bucket: bucket,
+        Key: key,
+        ...(downloadName ? { ResponseContentDisposition: `attachment; filename*=UTF-8''${encodeURIComponent(downloadName)}` } : {}),
+      }),
+      { expiresIn: expiresInSec }
+    );
   }
   // Servi en dev via la route /api/storage/[...key]
   return `/api/storage/${key}`;

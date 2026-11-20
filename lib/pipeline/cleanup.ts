@@ -98,6 +98,8 @@ export async function deletePodcastFiles(podcast: {
   outroKey: string | null;
   introPreviewKey: string | null;
   outroPreviewKey: string | null;
+  jingleKey?: string | null;
+  mediaAssets?: { key: string }[];
   referenceFiles?: unknown;
 }): Promise<void> {
   const refs = Array.isArray(podcast.referenceFiles) ? (podcast.referenceFiles as { key?: unknown }[]) : [];
@@ -108,6 +110,8 @@ export async function deletePodcastFiles(podcast: {
     podcast.outroKey,
     podcast.introPreviewKey,
     podcast.outroPreviewKey,
+    podcast.jingleKey,
+    ...(podcast.mediaAssets ?? []).map((a) => a.key),
     ...refs.map((r) => (typeof r?.key === "string" ? r.key : null)),
   ].filter((k): k is string => !!k);
   await Promise.all(keys.map((key) => deleteObject(key).catch(() => {})));

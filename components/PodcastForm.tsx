@@ -24,11 +24,12 @@ interface ExistingPodcast {
   intro: MediaFileRef | null;
   outro: MediaFileRef | null;
   logo: FileRef | null;
+  jingle: FileRef | null;
 }
 
 // Petite poubelle posée sur un média déjà enregistré : un clic demande confirmation sur place
 // (pas de boîte de dialogue du navigateur), puis supprime le média du podcast et du stockage.
-function DeleteMediaButton({ field, label }: { field: "cover" | "logo" | "intro" | "outro"; label: string }) {
+function DeleteMediaButton({ field, label }: { field: "cover" | "logo" | "jingle" | "intro" | "outro"; label: string }) {
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -193,7 +194,7 @@ export function PodcastForm({ existing }: { existing?: ExistingPodcast }) {
   // reste vrai après le tout premier enregistrement, permettant de basculer
   // vers le dashboard "Épisodes" une seule fois, la toute première fois que
   // le graphisme est validé (fin du parcours de configuration du podcast).
-  const [isFirstSave] = useState(!existing?.cover && !existing?.intro && !existing?.outro && !existing?.logo);
+  const [isFirstSave] = useState(!existing?.cover && !existing?.intro && !existing?.outro && !existing?.logo && !existing?.jingle);
   const [loading, setLoading] = useState(false);
   const [uploadPercent, setUploadPercent] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -267,22 +268,6 @@ export function PodcastForm({ existing }: { existing?: ExistingPodcast }) {
         </div>
 
         <div>
-          <label className="block text-sm font-medium mb-1.5 text-ink">Logo permanent</label>
-          <p className="text-xs text-text-muted mb-2">Incrusté en superposition sur chaque épisode monté.</p>
-          <div className="space-y-2">
-            {existing?.logo && (
-              <div className="flex items-start gap-2">
-                <ImagePreview file={existing.logo} />
-                <DeleteMediaButton field="logo" label="le logo" />
-              </div>
-            )}
-            <input name="logo" type="file" accept="image/*" className={fileInputClass} />
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
-        <div>
           <label className="block text-sm font-medium mb-1.5 text-ink">Générique de début</label>
           <div className="space-y-2">
             {existing?.intro && (
@@ -305,6 +290,33 @@ export function PodcastForm({ existing }: { existing?: ExistingPodcast }) {
               </div>
             )}
             <input name="outro" type="file" accept="video/*,audio/*" className={fileInputClass} />
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1.5 text-ink">Jingle</label>
+          <div className="space-y-2">
+            {existing?.jingle && (
+              <div className="flex items-center gap-2">
+                <audio src={existing.jingle.url} controls className="h-10 min-w-0 flex-1" />
+                <DeleteMediaButton field="jingle" label="le jingle" />
+              </div>
+            )}
+            <input name="jingle" type="file" accept="audio/*" className={fileInputClass} />
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1.5 text-ink">Logo permanent</label>
+          <p className="text-xs text-text-muted mb-2">Incrusté en superposition sur chaque épisode monté.</p>
+          <div className="space-y-2">
+            {existing?.logo && (
+              <div className="flex items-start gap-2">
+                <ImagePreview file={existing.logo} />
+                <DeleteMediaButton field="logo" label="le logo" />
+              </div>
+            )}
+            <input name="logo" type="file" accept="image/*" className={fileInputClass} />
           </div>
         </div>
       </div>

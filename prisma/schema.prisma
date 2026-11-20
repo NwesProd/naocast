@@ -147,9 +147,12 @@ model Podcast {
 
   // Éléments fixes incrustés à chaque rendu (fichier original, qualité
   // source, utilisé par le pipeline ffmpeg)
-  introKey String?
-  outroKey String?
-  logoKey  String?
+  introKey  String?
+  outroKey  String?
+  logoKey   String?
+  // Jingle principal du podcast (fichier audio), affiché dans la grille de la
+  // Bibliothèque de médias ; les autres sons sont des MediaAsset.
+  jingleKey String?
 
   // Version transcodée en H.264/AAC (MP4) du générique, générée à l'upload
   // uniquement pour la prévisualisation dans le navigateur : le fichier
@@ -172,10 +175,28 @@ model Podcast {
   bible            String?
   bibleGeneratedAt DateTime?
 
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  episodes  Episode[]
-  guests    Guest[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  episodes    Episode[]
+  guests      Guest[]
+  mediaAssets MediaAsset[]
+}
+
+// Bibliothèque de médias du podcast : jingles, transitions, sons et musiques
+// importés une fois et réutilisables sur chaque épisode. `type` est une chaîne
+// (jingle | transition | son | musique | autre, cf. lib/mediaAssets.ts).
+model MediaAsset {
+  id        String   @id @default(cuid())
+  podcastId String
+  podcast   Podcast  @relation(fields: [podcastId], references: [id], onDelete: Cascade)
+  name      String
+  type      String
+  key       String // clé de stockage (R2/B2)
+  mimeType  String
+  size      Int
+  createdAt DateTime @default(now())
+
+  @@index([podcastId, createdAt])
 }
 
 // Module "Invités" : un invité est rattaché au PODCAST (pas à un épisode

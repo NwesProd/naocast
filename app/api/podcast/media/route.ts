@@ -4,16 +4,17 @@ import { prisma } from "@/lib/db";
 import { deleteObject } from "@/lib/storage";
 import { requireUserId } from "@/lib/authz";
 
-// Suppression d'un média du podcast (onglet Bibliothèque de médias) : pochette, logo, générique de début
+// Suppression d'un média du podcast (onglet Bibliothèque de médias) : pochette, logo, jingle, générique de début
 // ou de fin. Le fichier (et l'aperçu d'un générique) est aussi retiré du stockage.
 const FIELDS = {
   cover: { key: "coverKey", preview: null },
   logo: { key: "logoKey", preview: null },
+  jingle: { key: "jingleKey", preview: null },
   intro: { key: "introKey", preview: "introPreviewKey" },
   outro: { key: "outroKey", preview: "outroPreviewKey" },
 } as const;
 
-const bodySchema = z.object({ field: z.enum(["cover", "logo", "intro", "outro"]) });
+const bodySchema = z.object({ field: z.enum(["cover", "logo", "jingle", "intro", "outro"]) });
 
 export async function DELETE(req: Request) {
   const userId = await requireUserId();

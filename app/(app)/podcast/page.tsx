@@ -5,12 +5,13 @@ import { getSignedDownloadUrl } from "@/lib/storage";
 import { PodcastForm } from "@/components/PodcastForm";
 import { PodcastDnaForm } from "@/components/PodcastDnaForm";
 import { PodcastTabs } from "@/components/PodcastTabs";
+import { MediaLibrary } from "@/components/MediaLibrary";
 
 // Configuration du podcast, accessible à tout moment depuis la sidebar
 // ("Mon podcast"), sert aussi bien à la création initiale (étape 2 du
 // parcours utilisateur, via l'onglet ADN) qu'à la modification ultérieure.
-// Deux onglets : Paramètres (titre, bible) et Bibliothèque de médias (pochette, logo,
-// génériques), deux préoccupations distinctes, chacune avec son propre
+// Deux onglets : Paramètres (titre, bible) et Bibliothèque de médias (pochette, génériques,
+// jingle, logo, puis tableau des jingles, transitions, sons et musiques), deux préoccupations distinctes, chacune avec son propre
 // formulaire.
 
 // Les clés de stockage sont générées en `<prefix>/<uuid v4>-<nom original>`
@@ -48,8 +49,26 @@ export default async function PodcastPage() {
         logo: podcast.logoKey
           ? { url: await getSignedDownloadUrl(podcast.logoKey), filename: originalFilenameFromKey(podcast.logoKey) }
           : null,
+        jingle: podcast.jingleKey
+          ? { url: await getSignedDownloadUrl(podcast.jingleKey), filename: originalFilenameFromKey(podcast.jingleKey) }
+          : null,
       }
     : undefined;
+
+  const mediaAssets = podcast
+    ? await Promise.all(
+        (await prisma.mediaAsset.findMany({ where: { podcastId: podcast.id }, orderBy: { createdAt: "desc" } })).map(async (a) => ({
+          id: a.id,
+          name: a.name,
+          type: a.type,
+          mimeType: a.mimeType,
+          size: a.size,
+          createdAt: a.createdAt.toISOString(),
+          url: await getSignedDownloadUrl(a.key),
+          downloadUrl: await getSignedDownloadUrl(a.key, 3600, a.name),
+        }))
+      )
+    : [];
 
   const existingDna = podcast
     ? {
@@ -84,7 +103,16 @@ export default async function PodcastPage() {
             content: <PodcastDnaForm existing={existingDna} />,
             switchToOnFirstSave: "graphisme",
           },
-          { key: "graphisme", label: "Bibliothèque de médias", content: <PodcastForm existing={existingGraphisme} /> },
+          {
+            key: "graphisme",
+            label: "Bibliothèque de médias",
+            content: (
+              <div className="space-y-10">
+                <PodcastForm existing={existingGraphisme} />
+                {podcast && <MediaLibrary initialAssets={mediaAssets} />}
+              </div>
+            ),
+          },
         ]}
       />
     </main>
