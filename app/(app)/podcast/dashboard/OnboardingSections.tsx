@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { NewEpisodeButton } from "@/app/(app)/dashboard/NewEpisodeButton";
-import { OpenFeedbackButton } from "@/components/OpenFeedbackButton";
 
 // Sections "mode d'emploi" du dashboard du podcast : bandeau du forfait, invitation à
 // donner son avis, checklist de démarrage (la prochaine étape mise en avant) et
@@ -44,22 +43,6 @@ export function PlanStrip({ planLabel, usageText, upgradeable }: { planLabel: st
           Gérer mon forfait
         </Link>
       )}
-    </div>
-  );
-}
-
-export function FeedbackBanner() {
-  return (
-    <div className="flex items-center justify-between gap-4 rounded-xl border border-border bg-white px-5 py-3">
-      <p className="flex items-center gap-3 text-sm text-ink">
-        <span className="text-lg" aria-hidden="true">
-          🎁
-        </span>
-        <span>
-          Un bug, une idée, une envie ? <strong>Dis-nous ce qui t&apos;aiderait</strong> : on lit tout, et ça fait avancer naocast.
-        </span>
-      </p>
-      <OpenFeedbackButton>Donner mon avis</OpenFeedbackButton>
     </div>
   );
 }

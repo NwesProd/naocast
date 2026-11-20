@@ -9,7 +9,8 @@ import { statusLabel } from "@/components/StatusBadge";
 import { getEpisodeUsage } from "@/lib/entitlements";
 import { isMontageDone } from "@/lib/moduleProgress";
 import { GuestPool } from "./GuestPool";
-import { Checklist, FeedbackBanner, HowItWorks, PlanStrip, type ChecklistStep } from "./OnboardingSections";
+import { Checklist, HowItWorks, PlanStrip, type ChecklistStep } from "./OnboardingSections";
+import { FeedbackBanner } from "./FeedbackBanner";
 
 // Tableau de bord du podcast (rythme de publication, dernier épisode,
 // prochaine sortie), accessible via "Mon podcast" dans la sidebar. Distinct de
