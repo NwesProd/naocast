@@ -101,7 +101,7 @@ export async function POST(req: Request) {
     });
 
     // Le titre vit désormais dans l'onglet "ADN" (cf. POST /api/podcast/dna),
-    // pas dans ce formulaire "Graphisme", requis seulement à la toute
+    // pas dans ce formulaire "Bibliothèque de médias", requis seulement à la toute
     // première configuration (pas encore de podcast, donc pas encore de
     // titre choisi ailleurs).
     const title = (fields.title || "").trim();

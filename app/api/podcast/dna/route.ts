@@ -15,7 +15,7 @@ interface ReferenceFile {
 
 // Onglet "ADN" (Mon podcast) : titre + positionnement en texte libre (les
 // documents de la bible passent par POST /api/podcast/bible/files). Route
-// distincte de POST /api/podcast (onglet "Graphisme") : les deux onglets
+// distincte de POST /api/podcast (onglet "Bibliothèque de médias") : les deux onglets
 // s'enregistrent indépendamment plutôt que de partager un seul gros formulaire.
 export async function POST(req: Request) {
   let userId: string;

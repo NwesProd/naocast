@@ -36,7 +36,7 @@ export function PodcastDnaForm({
   const router = useRouter();
   // Capturé une seule fois au montage : reste vrai après le tout premier
   // enregistrement (le prop `existing` ne se met à jour qu'au prochain rendu
-  // serveur), permettant de basculer vers l'onglet Graphisme une seule fois.
+  // serveur), permettant de basculer vers l'onglet Bibliothèque de médias une seule fois.
   const [isFirstSave] = useState(!existing);
   const [title, setTitle] = useState(existing?.title || "");
   const [bible, setBible] = useState(existing?.bible || "");

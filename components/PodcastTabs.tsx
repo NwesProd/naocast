@@ -8,11 +8,11 @@ interface Tab {
   content: ReactNode;
   // Si renseigné, `content` reçoit une prop `onFirstSave` qui bascule vers
   // l'onglet désigné ici (cf. PodcastDnaForm : premier enregistrement de
-  // l'ADN -> bascule automatique sur "Graphisme").
+  // l'ADN -> bascule automatique sur "Bibliothèque de médias").
   switchToOnFirstSave?: string;
 }
 
-// "Mon podcast" : Paramètres (positionnement, bible) / Graphisme (pochette,
+// "Mon podcast" : Paramètres (positionnement, bible) / Bibliothèque de médias (pochette,
 // logo, génériques), deux préoccupations distinctes, chacune avec son propre
 // formulaire et son propre enregistrement plutôt qu'un unique gros formulaire.
 export function PodcastTabs({ tabs }: { tabs: Tab[] }) {

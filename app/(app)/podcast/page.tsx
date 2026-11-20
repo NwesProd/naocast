@@ -9,7 +9,7 @@ import { PodcastTabs } from "@/components/PodcastTabs";
 // Configuration du podcast, accessible à tout moment depuis la sidebar
 // ("Mon podcast"), sert aussi bien à la création initiale (étape 2 du
 // parcours utilisateur, via l'onglet ADN) qu'à la modification ultérieure.
-// Deux onglets : ADN (positionnement, bible) et Graphisme (pochette, logo,
+// Deux onglets : Paramètres (titre, bible) et Bibliothèque de médias (pochette, logo,
 // génériques), deux préoccupations distinctes, chacune avec son propre
 // formulaire.
 
@@ -84,7 +84,7 @@ export default async function PodcastPage() {
             content: <PodcastDnaForm existing={existingDna} />,
             switchToOnFirstSave: "graphisme",
           },
-          { key: "graphisme", label: "Graphisme", content: <PodcastForm existing={existingGraphisme} /> },
+          { key: "graphisme", label: "Bibliothèque de médias", content: <PodcastForm existing={existingGraphisme} /> },
         ]}
       />
     </main>
