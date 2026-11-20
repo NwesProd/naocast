@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/Button";
 
 // Le bouton natif "Choisir un fichier" est stylé via le pseudo-élément
 // `file:` pour ressembler à un vrai bouton (radius, contraste), au lieu du
@@ -23,7 +22,6 @@ interface ExistingPodcast {
   cover: FileRef | null;
   intro: MediaFileRef | null;
   outro: MediaFileRef | null;
-  logo: FileRef | null;
   jingle: FileRef | null;
 }
 
@@ -188,70 +186,83 @@ function uploadWithProgress(
   });
 }
 
+type UploadField = "cover" | "jingle" | "intro" | "outro";
+
+// Pochette, jingle et génériques : chaque fichier est envoyé et enregistré dès qu'il est
+// choisi (pas de bouton d'enregistrement), la suppression est elle aussi immédiate.
 export function PodcastForm({ existing }: { existing?: ExistingPodcast }) {
   const router = useRouter();
-  // Capturé une seule fois au montage (cf. PodcastDnaForm, même raisonnement) :
-  // reste vrai après le tout premier enregistrement, permettant de basculer
-  // vers le dashboard "Épisodes" une seule fois, la toute première fois que
-  // le graphisme est validé (fin du parcours de configuration du podcast).
-  const [isFirstSave] = useState(!existing?.cover && !existing?.intro && !existing?.outro && !existing?.logo && !existing?.jingle);
-  const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState<UploadField | null>(null);
   const [uploadPercent, setUploadPercent] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setLoading(true);
+  async function upload(field: UploadField, file: File) {
+    setUploading(field);
     setUploadPercent(0);
     setError(null);
-    setSaved(false);
-
-    const form = new FormData(e.currentTarget);
+    const form = new FormData();
+    form.set(field, file);
 
     let res;
     try {
       res = await uploadWithProgress("/api/podcast", form, setUploadPercent);
     } catch {
       setError("Erreur réseau, réessayez.");
-      setLoading(false);
+      setUploading(null);
       setUploadPercent(null);
       return;
     }
+    setUploading(null);
+    setUploadPercent(null);
 
     if (!res.ok) {
-      const data = await res.json().catch(() => ({ error: undefined }));
-      setLoading(false);
-      setUploadPercent(null);
       if (res.status === 401) {
         router.push("/login");
         return;
       }
-      setError(data.error || "Impossible d'enregistrer la configuration.");
-      return;
-    }
-
-    setLoading(false);
-    setUploadPercent(null);
-    setSaved(true);
-    if (isFirstSave) {
-      router.push("/dashboard");
+      const data = await res.json().catch(() => ({ error: undefined }));
+      setError(data.error || "Impossible d'enregistrer ce fichier.");
       return;
     }
     router.refresh();
   }
 
-  const buttonLabel =
-    uploadPercent !== null && uploadPercent < 100
-      ? `Envoi... ${uploadPercent}%`
-      : loading
-        ? "Traitement en cours..."
-        : "Enregistrer les modifications";
+  function fileInput(field: UploadField, accept: string) {
+    return (
+      <div className="space-y-1.5">
+        <input
+          type="file"
+          accept={accept}
+          disabled={uploading !== null}
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            e.target.value = "";
+            if (f) upload(field, f);
+          }}
+          className={fileInputClass}
+        />
+        {uploading === field && (
+          <div className="space-y-1">
+            <p className="text-xs text-text-muted">
+              {uploadPercent !== null && uploadPercent < 100 ? `Envoi... ${uploadPercent}%` : "Traitement en cours..."}
+            </p>
+            <div className="h-1.5 w-full max-w-md rounded-pill bg-border overflow-hidden">
+              <div
+                className={`h-full bg-primary-button rounded-pill transition-[width] duration-200 ${
+                  uploadPercent === null || uploadPercent >= 100 ? "animate-pulse" : ""
+                }`}
+                style={{ width: `${uploadPercent === null ? 100 : Math.max(uploadPercent, 6)}%` }}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-8">
+    <div className="space-y-6">
       {error && <p className="text-sm text-[#8A2E1F]">{error}</p>}
-      {saved && <p className="text-sm text-[#0F6B67]">Configuration enregistrée.</p>}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
         <div>
@@ -263,33 +274,7 @@ export function PodcastForm({ existing }: { existing?: ExistingPodcast }) {
                 <DeleteMediaButton field="cover" label="la pochette" />
               </div>
             )}
-            <input name="cover" type="file" accept="image/*" className={fileInputClass} />
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-1.5 text-ink">Générique de début</label>
-          <div className="space-y-2">
-            {existing?.intro && (
-              <div className="space-y-2">
-                <MediaPreview file={existing.intro} />
-                <DeleteMediaButton field="intro" label="le générique de début" />
-              </div>
-            )}
-            <input name="intro" type="file" accept="video/*,audio/*" className={fileInputClass} />
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-1.5 text-ink">Générique de fin</label>
-          <div className="space-y-2">
-            {existing?.outro && (
-              <div className="space-y-2">
-                <MediaPreview file={existing.outro} />
-                <DeleteMediaButton field="outro" label="le générique de fin" />
-              </div>
-            )}
-            <input name="outro" type="file" accept="video/*,audio/*" className={fileInputClass} />
+            {fileInput("cover", "image/*")}
           </div>
         </div>
 
@@ -302,39 +287,36 @@ export function PodcastForm({ existing }: { existing?: ExistingPodcast }) {
                 <DeleteMediaButton field="jingle" label="le jingle" />
               </div>
             )}
-            <input name="jingle" type="file" accept="audio/*" className={fileInputClass} />
+            {fileInput("jingle", "audio/*")}
           </div>
         </div>
 
         <div>
-          <label className="block text-sm font-medium mb-1.5 text-ink">Logo permanent</label>
-          <p className="text-xs text-text-muted mb-2">Incrusté en superposition sur chaque épisode monté.</p>
+          <label className="block text-sm font-medium mb-1.5 text-ink">Générique de début</label>
           <div className="space-y-2">
-            {existing?.logo && (
-              <div className="flex items-start gap-2">
-                <ImagePreview file={existing.logo} />
-                <DeleteMediaButton field="logo" label="le logo" />
+            {existing?.intro && (
+              <div className="space-y-2">
+                <MediaPreview file={existing.intro} />
+                <DeleteMediaButton field="intro" label="le générique de début" />
               </div>
             )}
-            <input name="logo" type="file" accept="image/*" className={fileInputClass} />
+            {fileInput("intro", "video/*,audio/*")}
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1.5 text-ink">Générique de fin</label>
+          <div className="space-y-2">
+            {existing?.outro && (
+              <div className="space-y-2">
+                <MediaPreview file={existing.outro} />
+                <DeleteMediaButton field="outro" label="le générique de fin" />
+              </div>
+            )}
+            {fileInput("outro", "video/*,audio/*")}
           </div>
         </div>
       </div>
-
-      <Button type="submit" disabled={loading} className="w-full max-w-md">
-        {buttonLabel}
-      </Button>
-
-      {loading && (
-        <div className="h-1.5 w-full max-w-md rounded-pill bg-border overflow-hidden">
-          <div
-            className={`h-full bg-primary-button rounded-pill transition-[width] duration-200 ${
-              uploadPercent === null || uploadPercent >= 100 ? "animate-pulse" : ""
-            }`}
-            style={{ width: `${uploadPercent === null ? 100 : Math.max(uploadPercent, 6)}%` }}
-          />
-        </div>
-      )}
-    </form>
+    </div>
   );
 }

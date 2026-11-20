@@ -6,6 +6,7 @@ import { PodcastForm } from "@/components/PodcastForm";
 import { PodcastDnaForm } from "@/components/PodcastDnaForm";
 import { PodcastTabs } from "@/components/PodcastTabs";
 import { MediaLibrary } from "@/components/MediaLibrary";
+import { LOGO_ASSET_ID } from "@/lib/mediaAssets";
 
 // Configuration du podcast, accessible à tout moment depuis la sidebar
 // ("Mon podcast"), sert aussi bien à la création initiale (étape 2 du
@@ -46,15 +47,25 @@ export default async function PodcastPage() {
               previewUrl: podcast.outroPreviewKey ? await getSignedDownloadUrl(podcast.outroPreviewKey) : null,
             }
           : null,
-        logo: podcast.logoKey
-          ? { url: await getSignedDownloadUrl(podcast.logoKey), filename: originalFilenameFromKey(podcast.logoKey) }
-          : null,
         jingle: podcast.jingleKey
           ? { url: await getSignedDownloadUrl(podcast.jingleKey), filename: originalFilenameFromKey(podcast.jingleKey) }
           : null,
       }
     : undefined;
 
+  // Le logo permanent est la première ligne du tableau (type « logo »).
+  const logoRow = podcast?.logoKey
+    ? {
+        id: LOGO_ASSET_ID,
+        name: originalFilenameFromKey(podcast.logoKey),
+        type: "logo",
+        mimeType: `image/${podcast.logoKey.split(".").pop()?.toLowerCase() || "png"}`,
+        size: null,
+        createdAt: null,
+        url: await getSignedDownloadUrl(podcast.logoKey),
+        downloadUrl: await getSignedDownloadUrl(podcast.logoKey, 3600, originalFilenameFromKey(podcast.logoKey)),
+      }
+    : null;
   const mediaAssets = podcast
     ? await Promise.all(
         (await prisma.mediaAsset.findMany({ where: { podcastId: podcast.id }, orderBy: { createdAt: "desc" } })).map(async (a) => ({
@@ -67,7 +78,7 @@ export default async function PodcastPage() {
           url: await getSignedDownloadUrl(a.key),
           downloadUrl: await getSignedDownloadUrl(a.key, 3600, a.name),
         }))
-      )
+      ).then((rows) => (logoRow ? [logoRow, ...rows] : rows))
     : [];
 
   const existingDna = podcast

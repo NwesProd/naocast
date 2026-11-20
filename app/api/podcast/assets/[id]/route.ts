@@ -3,15 +3,15 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { deleteObject } from "@/lib/storage";
 import { requireUserId } from "@/lib/authz";
-import { MEDIA_ASSET_TYPE_KEYS } from "@/lib/mediaAssets";
+import { MEDIA_ASSET_TYPE_KEYS, type MediaAssetType } from "@/lib/mediaAssets";
 
 async function ownedAsset(userId: string, id: string) {
   return prisma.mediaAsset.findFirst({ where: { id, podcast: { userId } } });
 }
 
-const patchSchema = z.object({ type: z.enum(MEDIA_ASSET_TYPE_KEYS).optional(), name: z.string().trim().min(1).max(200).optional() });
+const patchSchema = z.object({ type: z.enum(MEDIA_ASSET_TYPE_KEYS.filter((t) => t !== "logo") as [MediaAssetType, ...MediaAssetType[]]).optional(), name: z.string().trim().min(1).max(200).optional() });
 
-// Change le type ou le nom d'un média de la bibliothèque.
+// Change le type ou le nom d'un média de la bibliothèque (le type « logo » est réservé au logo permanent).
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const userId = await requireUserId();
   const { id } = await params;

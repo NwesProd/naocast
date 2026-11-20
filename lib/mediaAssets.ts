@@ -23,3 +23,7 @@ export function previewKind(mimeType: string): "audio" | "video" | "image" | nul
   if (mimeType.startsWith("image/")) return "image";
   return null;
 }
+
+// Le logo permanent du podcast (Podcast.logoKey) apparaît dans le tableau comme une
+// ligne de type « logo », sans être une ligne MediaAsset : cet identifiant la désigne.
+export const LOGO_ASSET_ID = "logo";

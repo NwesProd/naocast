@@ -6,10 +6,10 @@ import { pipeline } from "stream/promises";
 import { tmpdir } from "os";
 import path from "path";
 import { prisma } from "@/lib/db";
-import { getSignedDownloadUrl, putLocalFile } from "@/lib/storage";
+import { deleteObject, getSignedDownloadUrl, putLocalFile } from "@/lib/storage";
 import { parseMultipart } from "@/lib/parseMultipart";
 import { requireUserId, AuthError } from "@/lib/authz";
-import { MEDIA_ASSET_TYPE_KEYS, previewKind } from "@/lib/mediaAssets";
+import { LOGO_ASSET_ID, MEDIA_ASSET_TYPE_KEYS, previewKind } from "@/lib/mediaAssets";
 
 // Ajoute un média (jingle, transition, son, musique...) à la bibliothèque du podcast.
 // Fichier audio, vidéo ou image (logo), passé par un fichier temporaire pour ne pas le charger en mémoire.
@@ -42,6 +42,29 @@ export async function POST(req: Request) {
     if (!uploaded) return NextResponse.json({ error: "Format non pris en charge : importe un fichier audio, vidéo ou une image." }, { status: 400 });
     const up: { key: string; name: string; mimeType: string; size: number } = uploaded;
     const type = (MEDIA_ASSET_TYPE_KEYS as string[]).includes(fields.type) ? fields.type : "autre";
+
+    // Le logo permanent (incrusté sur chaque épisode monté) est unique : un nouveau
+    // logo remplace l'ancien au lieu de s'ajouter à la liste.
+    if (type === "logo") {
+      if (previewKind(up.mimeType) !== "image") {
+        await deleteObject(up.key).catch(() => {});
+        return NextResponse.json({ error: "Le logo doit être une image." }, { status: 400 });
+      }
+      await prisma.podcast.update({ where: { id: podcast.id }, data: { logoKey: up.key } });
+      if (podcast.logoKey) await deleteObject(podcast.logoKey).catch(() => {});
+      return NextResponse.json({
+        asset: {
+          id: LOGO_ASSET_ID,
+          name: up.name,
+          type: "logo",
+          mimeType: up.mimeType,
+          size: up.size,
+          createdAt: new Date().toISOString(),
+          url: await getSignedDownloadUrl(up.key),
+          downloadUrl: await getSignedDownloadUrl(up.key, 3600, up.name),
+        },
+      });
+    }
 
     const asset = await prisma.mediaAsset.create({
       data: { podcastId: podcast.id, name: up.name, type, key: up.key, mimeType: up.mimeType, size: up.size },

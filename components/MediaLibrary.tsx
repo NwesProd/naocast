@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { MEDIA_ASSET_TYPES, previewKind, mediaAssetTypeLabel } from "@/lib/mediaAssets";
+import { LOGO_ASSET_ID, MEDIA_ASSET_TYPES, previewKind, mediaAssetTypeLabel } from "@/lib/mediaAssets";
 
 const pillBtn =
   "text-xs font-semibold rounded-pill bg-white border border-border px-3 py-1.5 hover:bg-[#FAFAF8] transition disabled:opacity-50 disabled:cursor-not-allowed";
@@ -12,18 +12,20 @@ export interface MediaAssetItem {
   name: string;
   type: string;
   mimeType: string;
-  size: number;
-  createdAt: string;
+  size: number | null;
+  createdAt: string | null;
   url: string;
   downloadUrl: string;
 }
 
-function formatSize(bytes: number): string {
+function formatSize(bytes: number | null): string {
+  if (bytes === null) return "-";
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} Ko`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
 }
 
-function formatDate(iso: string): string {
+function formatDate(iso: string | null): string {
+  if (!iso) return "-";
   return new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
 }
 
@@ -49,7 +51,9 @@ export function MediaLibrary({ initialAssets }: { initialAssets: MediaAssetItem[
       const res = await fetch("/api/podcast/assets", { method: "POST", body: data });
       const body = await res.json().catch(() => null);
       if (!res.ok) throw new Error(body?.error || "Échec de l'envoi du média.");
-      setAssets((list) => [body.asset as MediaAssetItem, ...list]);
+      const asset = body.asset as MediaAssetItem;
+      // Le logo permanent est unique : le nouveau remplace l'ancien.
+      setAssets((list) => (asset.id === LOGO_ASSET_ID ? [asset, ...list.filter((a) => a.id !== LOGO_ASSET_ID)] : [asset, ...list]));
       setPreviewId(body.asset.id);
     } catch (err) {
       setError((err as Error).message);
@@ -77,7 +81,14 @@ export function MediaLibrary({ initialAssets }: { initialAssets: MediaAssetItem[
   async function remove(id: string) {
     setError(null);
     try {
-      const res = await fetch(`/api/podcast/assets/${id}`, { method: "DELETE" });
+      const res =
+        id === LOGO_ASSET_ID
+          ? await fetch("/api/podcast/media", {
+              method: "DELETE",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ field: "logo" }),
+            })
+          : await fetch(`/api/podcast/assets/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error();
       setAssets((list) => list.filter((a) => a.id !== id));
       if (previewId === id) setPreviewId(null);
@@ -93,7 +104,7 @@ export function MediaLibrary({ initialAssets }: { initialAssets: MediaAssetItem[
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="text-base font-bold text-ink">Médias</h2>
-          <p className="text-sm text-text-muted">Logos, jingles, transitions, sons et musiques à réutiliser sur tes épisodes.</p>
+          <p className="text-sm text-text-muted">Logo permanent (incrusté sur chaque épisode monté), jingles, transitions, sons et musiques.</p>
         </div>
         <div className="flex items-center gap-2">
           <select value={newType} onChange={(e) => setNewType(e.target.value)} disabled={uploading} className={selectClass} aria-label="Type du média à ajouter">
@@ -163,19 +174,24 @@ export function MediaLibrary({ initialAssets }: { initialAssets: MediaAssetItem[
                     )}
                   </td>
                   <td className="px-3 py-2">
-                    <select
-                      value={a.type}
-                      onChange={(e) => changeType(a.id, e.target.value)}
-                      className={selectClass}
-                      aria-label={`Type de ${a.name}`}
-                    >
-                      {MEDIA_ASSET_TYPES.some((t) => t.key === a.type) ? null : <option value={a.type}>{mediaAssetTypeLabel(a.type)}</option>}
-                      {MEDIA_ASSET_TYPES.map((t) => (
-                        <option key={t.key} value={t.key}>
-                          {t.label}
-                        </option>
-                      ))}
-                    </select>
+                    {a.id === LOGO_ASSET_ID ? (
+                      <span className="inline-block px-2 py-1.5 text-sm text-ink" title="Incrusté sur chaque épisode monté">
+                        {mediaAssetTypeLabel("logo")}
+                      </span>
+                    ) : (
+                      <select
+                        value={a.type}
+                        onChange={(e) => changeType(a.id, e.target.value)}
+                        className={selectClass}
+                        aria-label={`Type de ${a.name}`}
+                      >
+                        {MEDIA_ASSET_TYPES.filter((t) => t.key !== "logo").map((t) => (
+                          <option key={t.key} value={t.key}>
+                            {t.label}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   </td>
                   <td className="px-3 py-2 text-text-muted whitespace-nowrap">{formatSize(a.size)}</td>
                   <td className="px-3 py-2 text-text-muted whitespace-nowrap">{formatDate(a.createdAt)}</td>
