@@ -40,8 +40,8 @@ export function McpConnector({ hasAccess, mcpUrl }: { hasAccess: boolean; mcpUrl
       <div>
         <h2 className="font-semibold text-ink">Connecteur Claude</h2>
         <p className="text-sm text-text-muted mt-1">
-          Branchez votre Claude sur votre compte naocast : il peut lire vos transcripts, votre script et vos invités, et enregistrer un script
-          pour vous.
+          Branchez votre Claude sur votre compte naocast : il peut lire vos transcripts, votre script et vos invités, enregistrer un script et gérer
+          vos invités (les créer et les ajouter à un épisode).
         </p>
       </div>
 

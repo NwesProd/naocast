@@ -8,7 +8,7 @@ import { getObjectBuffer } from "@/lib/storage";
 import { scriptToHtml, scriptToPlainText } from "@/lib/scriptText";
 import { extractDocumentText } from "@/lib/documentText";
 import { hasModuleAccess, PLAN_LABELS, type ModuleKey } from "@/lib/plan";
-import type { Plan } from "@/app/generated/prisma/client";
+import { Prisma, type Plan } from "@/app/generated/prisma/client";
 
 // Serveur MCP "Connecteur Claude" : permet à un podcasteur de brancher son Claude
 // sur son compte naocast (clé personnelle, cf. lib/apiTokens.ts). Chaque outil est
@@ -252,6 +252,83 @@ export function createNaocastMcpServer(user: McpUser): McpServer {
       const clean = normalizeTags(tags);
       await prisma.guest.update({ where: { id: guestId }, data: { tags: clean } });
       return ok(`Mots clés enregistrés : ${clean.join(", ") || "(aucun)"}.`);
+    }
+  );
+
+  server.registerTool(
+    "create_guest",
+    {
+      title: "Créer un invité",
+      description:
+        "Ajoute un invité au pool du podcast (nom, média, réseaux, mots clés). Si un invité du même nom existe déjà, il n'est pas dupliqué : son identifiant est renvoyé. Ne le rattache à aucun épisode (utiliser add_guest_to_episode ensuite).",
+      inputSchema: {
+        name: z.string().min(1).max(200),
+        media: z.string().max(200).optional().describe("Média, entreprise ou projet de l'invité"),
+        socialLinks: z.array(z.object({ platform: z.enum(["instagram", "linkedin", "youtube"]), url: z.string().url() })).max(6).optional(),
+        tags: z.array(z.string().max(40)).max(20).optional(),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    },
+    async ({ name, media, socialLinks, tags }) => {
+      const lock = locked("invites", "Invités");
+      if (lock) return lock;
+      const podcast = await prisma.podcast.findUnique({ where: { userId: user.userId }, select: { id: true } });
+      if (!podcast) return fail("Aucun podcast configuré sur ce compte.");
+      const existing = await prisma.guest.findFirst({ where: { podcastId: podcast.id, name: { equals: name.trim(), mode: "insensitive" } } });
+      if (existing) return ok(`Cet invité existe déjà dans le pool (id ${existing.id}), rien n'a été créé.`);
+      const guest = await prisma.guest.create({
+        data: {
+          podcastId: podcast.id,
+          name: name.trim(),
+          mediaName: media?.trim() || null,
+          socialLinks: (socialLinks ?? []) as unknown as Prisma.InputJsonValue,
+          tags: normalizeTags(tags ?? []),
+        },
+      });
+      return ok(`Invité créé dans le pool (id ${guest.id}).`);
+    }
+  );
+
+  server.registerTool(
+    "add_guest_to_episode",
+    {
+      title: "Ajouter un invité à un épisode",
+      description: "Rattache un invité du pool à un épisode (casting). Refusé si le casting de l'épisode est déjà validé : l'utilisateur doit d'abord retirer la validation dans naocast.",
+      inputSchema: { episodeId: z.string(), guestId: z.string() },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+    },
+    async ({ episodeId, guestId }) => {
+      const lock = locked("invites", "Invités");
+      if (lock) return lock;
+      const episode = await ownedEpisode(user.userId, episodeId);
+      if (!episode) return fail("Épisode introuvable.");
+      if (episode.guestsCastingValidated) return fail("Le casting de cet épisode est validé : demande à l'utilisateur de retirer la validation dans le module Invités.");
+      const guest = await prisma.guest.findUnique({ where: { id: guestId } });
+      if (!guest || guest.podcastId !== episode.podcastId) return fail("Invité introuvable dans le pool de ce podcast.");
+      const already = await prisma.episodeGuest.findUnique({ where: { episodeId_guestId: { episodeId, guestId } } });
+      if (already) return ok(`${guest.name} est déjà rattaché à cet épisode.`);
+      const maxOrder = await prisma.episodeGuest.aggregate({ where: { episodeId }, _max: { order: true } });
+      await prisma.episodeGuest.create({ data: { episodeId, guestId, order: (maxOrder._max.order ?? -1) + 1 } });
+      return ok(`${guest.name} ajouté à l'épisode.`);
+    }
+  );
+
+  server.registerTool(
+    "remove_guest_from_episode",
+    {
+      title: "Retirer un invité d'un épisode",
+      description: "Détache un invité d'un épisode. L'invité reste dans le pool du podcast. Refusé si le casting de l'épisode est validé.",
+      inputSchema: { episodeId: z.string(), guestId: z.string() },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
+    },
+    async ({ episodeId, guestId }) => {
+      const lock = locked("invites", "Invités");
+      if (lock) return lock;
+      const episode = await ownedEpisode(user.userId, episodeId);
+      if (!episode) return fail("Épisode introuvable.");
+      if (episode.guestsCastingValidated) return fail("Le casting de cet épisode est validé : demande à l'utilisateur de retirer la validation dans le module Invités.");
+      const removed = await prisma.episodeGuest.deleteMany({ where: { episodeId, guestId } });
+      return ok(removed.count > 0 ? "Invité retiré de l'épisode (il reste dans le pool)." : "Cet invité n'était pas rattaché à l'épisode.");
     }
   );
 
