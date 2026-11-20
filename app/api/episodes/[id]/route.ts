@@ -48,7 +48,7 @@ const patchSchema = z.object({
   logoOnIntro: z.boolean().optional(),
   logoOnOutro: z.boolean().optional(),
   logoPosition: z.enum(["TOP_LEFT", "TOP_RIGHT", "BOTTOM_LEFT", "BOTTOM_RIGHT"]).optional(),
-  editorChoice: z.enum(["PODKO", "NEED_EDITOR", "HAS_EDITOR_SEND", "HAS_EDITOR_IMPORT"]).optional(),
+  editorChoice: z.enum(["PODKO", "NEED_EDITOR", "HAS_EDITOR_SEND", "HAS_EDITOR_IMPORT", "CLAUDE"]).optional(),
   introSource: z.enum(["PODCAST", "EPISODE"]).optional(),
   outroSource: z.enum(["PODCAST", "EPISODE"]).optional(),
   introCreationMode: z.enum(["IMPORT", "CUSTOM"]).optional(),

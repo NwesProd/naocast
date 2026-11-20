@@ -120,7 +120,7 @@ export default async function PodcastDashboardPage() {
     {
       key: "customize",
       title: "Personnalise ton podcast",
-      description: "Pochette, générique, logo : ils sont incrustés automatiquement sur chaque épisode.",
+      description: "Pochette, générique, jingle, logo : ta bibliothèque de médias, réutilisée sur chaque épisode.",
       done: !!(podcast.coverKey || podcast.introKey || podcast.outroKey || podcast.logoKey),
       cta: { label: "Configurer", href: "/podcast" },
     },
@@ -134,21 +134,21 @@ export default async function PodcastDashboardPage() {
     {
       key: "import",
       title: "Importe ton enregistrement",
-      description: "Dépose ton fichier : naocast le transcrit et repère tes silences et tes ratés.",
+      description: "Dépose tes rushs dans le module Montage, ils servent à ton monteur ou à Claude.",
       done: episodes.some((ep) => ep._count.rushes > 0 || ep._count.transcriptSegments > 0 || ep.status !== "DRAFT" || ep.montageValidatedExternally),
       cta: { label: "Importer", href: focusHref },
     },
     {
       key: "montage",
       title: "Lance ton montage",
-      description: "Accepte ou refuse les coupes proposées, choisis tes génériques, regarde l'aperçu.",
+      description: "Envoie-le à un monteur (naocast ou le tien) ou monte-le avec Claude.",
       done: episodes.some((ep) => ep.status !== "DRAFT" || ep.montageValidatedExternally),
       cta: { label: "Monter", href: focusHref },
     },
     {
       key: "validate",
       title: "Valide ton premier montage",
-      description: "Relis le rendu, puis télécharge la vidéo et l'audio finaux.",
+      description: "Visionne l'épisode monté, valide-le, puis télécharge la vidéo et l'audio.",
       done: episodes.some((ep) => isMontageDone(ep)),
       cta: { label: "Relire", href: focusHref },
     },

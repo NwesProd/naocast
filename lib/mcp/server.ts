@@ -4,7 +4,9 @@ import { prisma } from "@/lib/db";
 import { groupBySpeaker } from "@/lib/transcriptGrouping";
 import { episodeDisplayStatus, EPISODE_COUNTS_SELECT } from "@/lib/moduleProgress";
 import { normalizeTags } from "@/lib/guestRelevance";
-import { getObjectBuffer } from "@/lib/storage";
+import { getObjectBuffer, getSignedDownloadUrl, getSignedUploadUrl, listAllObjects, storageMode } from "@/lib/storage";
+import { randomUUID } from "crypto";
+import { registerFinalAsset } from "@/lib/finalDelivery";
 import { scriptToHtml, scriptToPlainText } from "@/lib/scriptText";
 import { extractDocumentText } from "@/lib/documentText";
 import { hasModuleAccess, PLAN_LABELS, type ModuleKey } from "@/lib/plan";
@@ -328,6 +330,138 @@ export function createNaocastMcpServer(user: McpUser): McpServer {
       if (episode.guestsCastingValidated) return fail("Le casting de cet épisode est validé : demande à l'utilisateur de retirer la validation dans le module Invités.");
       const removed = await prisma.episodeGuest.deleteMany({ where: { episodeId, guestId } });
       return ok(removed.count > 0 ? "Invité retiré de l'épisode (il reste dans le pool)." : "Cet invité n'était pas rattaché à l'épisode.");
+    }
+  );
+
+  // Fichiers : rushs, épisode final et bibliothèque de médias du podcast. Chaque fichier est désigné par
+  // un identifiant (« rush:… », « final:video », « media:… », « podcast:jingle »…) à passer à get_file_url.
+  server.registerTool(
+    "list_episode_files",
+    {
+      title: "Fichiers d'un épisode",
+      description:
+        "Liste les fichiers utiles pour monter un épisode : rushs importés, épisode final déjà déposé, et médias du podcast (générique de début et de fin, jingle, logo, pochette, bibliothèque de sons et musiques). Chaque fichier a un identifiant à donner à get_file_url pour le télécharger.",
+      inputSchema: { episodeId: z.string() },
+      annotations: { readOnlyHint: true },
+    },
+    async ({ episodeId }) => {
+      const episode = await ownedEpisode(user.userId, episodeId);
+      if (!episode) return fail("Épisode introuvable.");
+      const [rushes, exportsList, podcast] = await Promise.all([
+        prisma.rushSource.findMany({ where: { episodeId, status: "READY" }, orderBy: { createdAt: "asc" } }),
+        prisma.exportAsset.findMany({ where: { episodeId } }),
+        prisma.podcast.findUnique({ where: { id: episode.podcastId }, include: { mediaAssets: { orderBy: { createdAt: "asc" } } } }),
+      ]);
+      const podcastFiles = [
+        ["intro", "Générique de début", podcast?.introKey],
+        ["outro", "Générique de fin", podcast?.outroKey],
+        ["jingle", "Jingle", podcast?.jingleKey],
+        ["logo", "Logo permanent (à incruster)", podcast?.logoKey],
+        ["cover", "Pochette", podcast?.coverKey],
+      ].filter(([, , key]) => !!key);
+      return json({
+        status: episode.status,
+        rushes: rushes.map((r) => ({
+          id: `rush:${r.id}`,
+          name: r.originalFilename || r.externalRef,
+          durationSec: r.durationSec,
+          sizeBytes: r.fileSizeBytes != null ? Number(r.fileSizeBytes) : null,
+        })),
+        final: exportsList.map((e) => ({ id: `final:${e.type.toLowerCase()}`, type: e.type })),
+        podcastMedia: podcastFiles.map(([key, label]) => ({ id: `podcast:${key}`, label })),
+        mediaLibrary: (podcast?.mediaAssets ?? []).map((a) => ({ id: `media:${a.id}`, name: a.name, type: a.type, mimeType: a.mimeType })),
+      });
+    }
+  );
+
+  server.registerTool(
+    "get_file_url",
+    {
+      title: "Lien de téléchargement d'un fichier",
+      description:
+        "Renvoie un lien de téléchargement temporaire (1 heure) pour un fichier désigné par list_episode_files. Télécharge-le ensuite (par exemple avec curl -L -o) pour le monter en local avec ffmpeg.",
+      inputSchema: { episodeId: z.string(), fileId: z.string() },
+      annotations: { readOnlyHint: true },
+    },
+    async ({ episodeId, fileId }) => {
+      const episode = await ownedEpisode(user.userId, episodeId);
+      if (!episode) return fail("Épisode introuvable.");
+      const [kind, ref] = fileId.split(":");
+      let key: string | null = null;
+      let name = fileId;
+      if (kind === "rush") {
+        const rush = await prisma.rushSource.findFirst({ where: { id: ref, episodeId } });
+        key = rush?.storageKey ?? null;
+        name = rush?.originalFilename ?? name;
+      } else if (kind === "final") {
+        const asset = await prisma.exportAsset.findFirst({ where: { episodeId, type: ref === "audio" ? "AUDIO" : "VIDEO" }, orderBy: { createdAt: "desc" } });
+        key = asset?.storageKey ?? null;
+      } else if (kind === "media") {
+        const asset = await prisma.mediaAsset.findFirst({ where: { id: ref, podcastId: episode.podcastId } });
+        key = asset?.key ?? null;
+        name = asset?.name ?? name;
+      } else if (kind === "podcast") {
+        const podcast = await prisma.podcast.findUnique({ where: { id: episode.podcastId } });
+        const keys: Record<string, string | null | undefined> = {
+          intro: podcast?.introKey,
+          outro: podcast?.outroKey,
+          jingle: podcast?.jingleKey,
+          logo: podcast?.logoKey,
+          cover: podcast?.coverKey,
+        };
+        key = keys[ref] ?? null;
+      }
+      if (!key) return fail("Fichier introuvable.");
+      return json({ name, url: await getSignedDownloadUrl(key, 3600), expiresInSeconds: 3600 });
+    }
+  );
+
+  server.registerTool(
+    "create_final_upload",
+    {
+      title: "Préparer le dépôt de l'épisode final",
+      description:
+        "Étape 1 du dépôt du montage terminé : renvoie une URL d'envoi (méthode PUT, corps = le fichier, en-tête Content-Type identique à contentType) et une clé. Envoie le fichier (par exemple curl -T fichier -H 'Content-Type: …' URL), puis appelle complete_final_upload avec la clé. Dépose la vidéo (l'audio en est extrait automatiquement) ou seulement l'audio. Refusé si l'utilisateur a déjà validé le montage.",
+      inputSchema: {
+        episodeId: z.string(),
+        kind: z.enum(["video", "audio"]),
+        filename: z.string().min(1).max(300),
+        contentType: z.string().max(200).optional(),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    },
+    async ({ episodeId, kind, filename, contentType }) => {
+      const lock = locked("montage", "Montage");
+      if (lock) return lock;
+      const episode = await ownedEpisode(user.userId, episodeId);
+      if (!episode) return fail("Épisode introuvable.");
+      if (episode.status === "EXPORTED") return fail("Le montage est validé : demande à l'utilisateur de retirer la validation dans le module Montage.");
+      if (storageMode !== "s3") return fail("Le dépôt par le connecteur n'est pas disponible dans cet environnement.");
+      const type = contentType || (kind === "video" ? "video/mp4" : "audio/mpeg");
+      const key = `episodes/${episodeId}/final/${randomUUID()}-${filename.replace(/[\\/]/g, "_")}`;
+      return json({ key, uploadUrl: await getSignedUploadUrl(key, type), method: "PUT", contentType: type, expiresInSeconds: 6 * 3600 });
+    }
+  );
+
+  server.registerTool(
+    "complete_final_upload",
+    {
+      title: "Terminer le dépôt de l'épisode final",
+      description:
+        "Étape 2 : à appeler une fois le fichier envoyé avec l'URL de create_final_upload. Enregistre le fichier comme épisode final ; naocast extrait l'audio d'une vidéo, puis l'utilisateur relit et valide le montage dans naocast.",
+      inputSchema: { episodeId: z.string(), kind: z.enum(["video", "audio"]), key: z.string() },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
+    },
+    async ({ episodeId, kind, key }) => {
+      const lock = locked("montage", "Montage");
+      if (lock) return lock;
+      const episode = await ownedEpisode(user.userId, episodeId);
+      if (!episode) return fail("Épisode introuvable.");
+      if (episode.status === "EXPORTED") return fail("Le montage est validé : demande à l'utilisateur de retirer la validation dans le module Montage.");
+      if (!key.startsWith(`episodes/${episodeId}/final/`)) return fail("Clé de fichier invalide.");
+      if (!(await listAllObjects(key)).some((o) => o.key === key)) return fail("Fichier introuvable : envoie-le d'abord avec l'URL fournie.");
+      await registerFinalAsset(episodeId, kind, key);
+      return ok(kind === "video" ? "Vidéo déposée. naocast extrait l'audio, puis l'utilisateur pourra relire et valider le montage." : "Audio déposé. L'utilisateur peut relire et valider le montage dans naocast.");
     }
   );
 

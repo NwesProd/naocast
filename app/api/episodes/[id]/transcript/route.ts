@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { requireUserId, requireOwnedEpisode } from "@/lib/authz";
 import { jsonResponse } from "@/lib/json";
 import { z } from "zod";
+import { FINAL_SOURCE_ID } from "@/lib/transcriptSource";
 
 // Étape "Cut" du tunnel de montage : génère (ou régénère) le transcript de
 // l'épisode à partir d'UN SEUL rush choisi explicitement par l'utilisateur.
@@ -32,11 +33,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const parsed = bodySchema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: "Requête invalide." }, { status: 400 });
 
-  const rush = await prisma.rushSource.findFirst({
-    where: { id: parsed.data.rushId, episodeId, status: "READY" },
-  });
-  if (!rush) {
-    return NextResponse.json({ error: "Rush introuvable ou pas encore prêt." }, { status: 400 });
+  if (parsed.data.rushId === FINAL_SOURCE_ID) {
+    const hasFinal = (await prisma.exportAsset.count({ where: { episodeId, type: { in: ["VIDEO", "AUDIO"] } } })) > 0;
+    if (!hasFinal) return NextResponse.json({ error: "Aucun épisode final déposé." }, { status: 400 });
+  } else {
+    const rush = await prisma.rushSource.findFirst({
+      where: { id: parsed.data.rushId, episodeId, status: "READY" },
+    });
+    if (!rush) {
+      return NextResponse.json({ error: "Rush introuvable ou pas encore prêt." }, { status: 400 });
+    }
   }
 
   await prisma.episode.update({

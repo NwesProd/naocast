@@ -115,7 +115,7 @@ export function firstOpenModuleHref(
 ): string {
   if (!state.title) return `/episodes/${episodeId}/new`;
 
-  const montageHref = state.status === "DRAFT" ? `/episodes/${episodeId}/montage` : `/episodes/${episodeId}/review`;
+  const montageHref = `/episodes/${episodeId}/montage`;
 
   const modules: { done: boolean; href: string }[] = [
     ...(opts.prodEnabled === false

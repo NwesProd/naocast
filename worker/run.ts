@@ -1,7 +1,6 @@
 import "dotenv/config";
 import { prisma } from "@/lib/db";
 import { runJob } from "@/worker/pipeline";
-import { cleanupExportedEpisodeFiles } from "@/lib/pipeline/cleanup";
 
 // Worker minimal : interroge la table ProcessingJob toutes les POLL_INTERVAL_MS
 // et exécute le prochain job PENDING le plus ancien, épisode par épisode, dans
@@ -52,20 +51,10 @@ async function tick(): Promise<boolean> {
   }
   if (!job) return false;
 
-  // MANUAL_TRANSCRIBE tourne "à côté" du pipeline principal (déclenché depuis
-  // le tunnel de montage ou la relecture, sur un seul rush, indépendamment de
-  // l'avancement du reste) : il ne doit jamais faire basculer le statut de
-  // l'épisode (PROCESSING/READY_FOR_REVIEW/FAILED), qui refléterait alors à
-  // tort l'état du pipeline automatique aux yeux de la sidebar/relecture.
-  //
-  // Même chose pour la prévisualisation du tunnel (PREVIEW_RENDER et les jobs
-  // qui la préparent) : un épisode encore en DRAFT n'a, par construction, que
-  // des jobs "à côté" (le pipeline complet le passe d'abord en QUEUED, cf.
-  // enqueueEpisodePipeline), ils ne doivent pas le faire passer en
-  // PROCESSING ni en "prêt pour relecture".
-  const episodeNow = await prisma.episode.findUnique({ where: { id: job.episodeId }, select: { status: true } });
-  const affectsEpisodeStatus =
-    job.type !== "MANUAL_TRANSCRIBE" && job.type !== "PREVIEW_RENDER" && episodeNow?.status !== "DRAFT";
+  // Seule l'extraction de l'audio de l'épisode final fait avancer le statut de l'épisode
+  // (PROCESSING pendant le job, "à relire" une fois terminé). La transcription tourne
+  // "à côté" et ne doit jamais le modifier.
+  const affectsEpisodeStatus = job.type === "EXPORT_AUDIO";
 
   await withRetry(() =>
     prisma.processingJob.update({
@@ -87,34 +76,7 @@ async function tick(): Promise<boolean> {
       })
     );
     if (affectsEpisodeStatus) {
-      // Le job qui termine le pipeline varie selon la config (EXPORT_AUDIO le
-      // plus souvent, mais pas forcément), on marque l'épisode prêt ici, une
-      // fois qu'il ne reste plus aucun job non terminé, plutôt que de le faire
-      // dans un job précis dont le statut serait aussitôt écrasé par le
-      // passage à "PROCESSING" du job suivant.
-      const remaining = await withRetry(() =>
-        prisma.processingJob.count({
-          where: { episodeId: job.episodeId, status: { not: "DONE" }, type: { not: "MANUAL_TRANSCRIBE" } },
-        })
-      );
-      if (remaining === 0) {
-        // EXPORT_AUDIO n'est jamais inclus dans le pipeline automatique (cf.
-        // enqueueEpisodePipeline), il n'est créé que par la validation en
-        // relecture (cf. /validate), donc le voir terminer signifie que
-        // l'export final est prêt, pas que le pipeline de montage l'est.
-        const nextStatus = job.type === "EXPORT_AUDIO" ? "EXPORTED" : "READY_FOR_REVIEW";
-        await withRetry(() => prisma.episode.update({ where: { id: job.episodeId }, data: { status: nextStatus } }));
-        if (nextStatus === "EXPORTED") {
-          // Épisode définitivement figé (cf. /restart-tunnel) : seuls les
-          // exports vidéo et audio finaux servent encore, tout le reste
-          // (rushs, génériques d'épisode, teaser) libère le stockage R2/B2
-          // (best-effort, ne doit jamais faire échouer le job déjà marqué
-          // DONE).
-          await cleanupExportedEpisodeFiles(job.episodeId).catch((err) =>
-            console.warn(`[worker] nettoyage des fichiers échoué pour l'épisode ${job.episodeId}:`, err)
-          );
-        }
-      }
+      await withRetry(() => prisma.episode.update({ where: { id: job.episodeId }, data: { status: "READY_FOR_REVIEW" } }));
     }
   } catch (err) {
     console.error(`[worker] échec ${job.type} - épisode ${job.episodeId}:`, err);

@@ -1,30 +1,33 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireUserId, requireOwnedEpisode } from "@/lib/authz";
+import { cleanupExportedEpisodeFiles } from "@/lib/pipeline/cleanup";
 
-// Étape 7 du parcours : export final, après validation du rendu en relecture.
-// L'export audio n'est déclenché qu'ici (pas pendant le pipeline automatique,
-// cf. enqueueEpisodePipeline) : pas d'intérêt à extraire l'audio d'un rendu
-// que l'utilisateur n'a pas encore validé et pourrait encore recouper.
-//
-// Passe par la file de jobs (comme le reste du pipeline) plutôt que d'exécuter
-// l'extraction audio en bloquant la requête HTTP : ça permet à la relecture
-// d'afficher une vraie progression % (cf. worker/pipeline.ts, extractAudio)
-// au lieu d'un simple "Export en cours..." sans retour tant que ça dure.
+// Valide le montage final : l'épisode devient « Prêt à diffuser » et les fichiers deviennent
+// téléchargeables. Les rushs, devenus inutiles, sont supprimés du stockage (comme à la
+// validation d'un montage fait hors naocast).
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const userId = await requireUserId();
   const { id: episodeId } = await params;
-  await requireOwnedEpisode(userId, episodeId);
+  const episode = await requireOwnedEpisode(userId, episodeId);
 
-  const maxSeq = await prisma.processingJob.aggregate({ where: { episodeId }, _max: { sequence: true } });
-  const sequence = (maxSeq._max.sequence ?? -1) + 1;
+  if (episode.status !== "READY_FOR_REVIEW") {
+    return NextResponse.json({ error: "Dépose d'abord l'épisode final et attends la fin de son traitement." }, { status: 409 });
+  }
+  const hasFinal = (await prisma.exportAsset.count({ where: { episodeId } })) > 0;
+  if (!hasFinal) return NextResponse.json({ error: "Aucun fichier final déposé." }, { status: 409 });
 
-  await prisma.$transaction([
-    // Repli si une précédente validation a échoué et laissé un job derrière elle.
-    prisma.processingJob.deleteMany({ where: { episodeId, type: "EXPORT_AUDIO" } }),
-    prisma.processingJob.create({ data: { episodeId, type: "EXPORT_AUDIO", sequence } }),
-    prisma.episode.update({ where: { id: episodeId }, data: { status: "QUEUED" } }),
-  ]);
+  await prisma.episode.update({ where: { id: episodeId }, data: { status: "EXPORTED" } });
+  await cleanupExportedEpisodeFiles(episodeId).catch((err) => console.warn(`[validate] nettoyage échoué pour ${episodeId}:`, err));
+  return NextResponse.json({ ok: true });
+}
 
+// Retire la validation : l'épisode repasse « à relire » (les rushs supprimés ne reviennent pas).
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const userId = await requireUserId();
+  const { id: episodeId } = await params;
+  const episode = await requireOwnedEpisode(userId, episodeId);
+  if (episode.status !== "EXPORTED") return NextResponse.json({ error: "Le montage n'est pas validé." }, { status: 409 });
+  await prisma.episode.update({ where: { id: episodeId }, data: { status: "READY_FOR_REVIEW" } });
   return NextResponse.json({ ok: true });
 }

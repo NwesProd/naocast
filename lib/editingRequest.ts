@@ -15,23 +15,6 @@ export function escapeHtml(value: string): string {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-const CAMERA_SETUP_LABEL: Record<string, string> = {
-  PRE_EDITED: "Pré-montage déjà fait (ou caméra unique) : fichiers à mettre bout à bout",
-  MULTI_CAMERA: "Caméras séparées, non synchronisées",
-};
-
-const CUSTOM_MODE_LABEL: Record<string, string> = {
-  TEASER_COMPILATION: "Compiler les meilleurs extraits en teaser",
-  OWN_IDEA: "Idée du podcasteur",
-};
-
-const LOGO_POSITION_LABEL: Record<string, string> = {
-  TOP_LEFT: "en haut à gauche",
-  TOP_RIGHT: "en haut à droite",
-  BOTTOM_LEFT: "en bas à gauche",
-  BOTTOM_RIGHT: "en bas à droite",
-};
-
 export function formatMs(ms: number): string {
   const total = Math.floor(ms / 1000);
   const h = Math.floor(total / 3600);
@@ -50,35 +33,18 @@ export interface EditingSummary {
   expectedSpeakerCount: number | null;
   speakers: string[];
   hasTranscript: boolean;
-  autocut: string;
   rushes: { id: string; name: string; type: string; externalRef: string | null; storageKey: string | null; durationSec: number | null; sizeBytes: number | null; selected: boolean }[];
-  cuts: { startMs: number; endMs: number; source: string }[];
   generics: { label: string; text: string }[];
   logo: string;
 }
 
-function genericLine(
-  source: string,
-  creationMode: string | null,
-  customMode: string | null,
-  customDescription: string | null,
-  hasFile: boolean
-): string {
-  if (source === "PODCAST") return "Générique standard du podcast";
-  if (creationMode === "IMPORT" || !creationMode) return hasFile ? "Fichier spécifique importé sur naocast." : "Fichier spécifique (non fourni)";
-  const mode = customMode ? CUSTOM_MODE_LABEL[customMode] : "À créer";
-  const desc = customMode === "OWN_IDEA" && customDescription ? ` : « ${customDescription} »` : "";
-  return `À créer sur-mesure (${mode})${desc}`;
-}
-
-// Récapitulatif de l'épisode tel qu'il est au moment de la lecture (rushs, coupes,
-// génériques, logo...), partagé par l'email et la fiche du back office.
+// Récapitulatif de l'épisode tel qu'il est au moment de la lecture (rushs, voix, génériques,
+// logo...), partagé par l'email et la fiche du back office.
 export async function buildEditingSummary(episodeId: string): Promise<EditingSummary | null> {
   const episode = await prisma.episode.findUnique({ where: { id: episodeId } });
   if (!episode) return null;
   const podcast = await prisma.podcast.findUnique({ where: { id: episode.podcastId } });
   const rushes = await prisma.rushSource.findMany({ where: { episodeId }, orderBy: { createdAt: "asc" } });
-  const cuts = await prisma.cutMarker.findMany({ where: { episodeId }, orderBy: { startMs: "asc" } });
   const speakers = await prisma.episodeSpeaker.findMany({ where: { episodeId }, orderBy: { label: "asc" } });
   const transcriptCount = await prisma.transcriptSegment.count({ where: { episodeId } });
 
@@ -91,13 +57,10 @@ export async function buildEditingSummary(episodeId: string): Promise<EditingSum
     episodeTitle: episode.title || "Sans titre",
     episodeCode: code,
     releaseDate: episode.releaseDate,
-    cameraSetup: episode.cameraSetup ? CAMERA_SETUP_LABEL[episode.cameraSetup] : null,
+    cameraSetup: null,
     expectedSpeakerCount: episode.expectedSpeakerCount,
     speakers: speakers.map((s, i) => s.displayName || `Locuteur ${i + 1}`),
     hasTranscript: transcriptCount > 0,
-    autocut: episode.autocutEnabled
-      ? `Couper les silences${episode.autocutSilenceMs ? ` (à partir de ${episode.autocutSilenceMs / 1000} s)` : ""}`
-      : "Pas de coupe automatique des silences",
     rushes: rushes.map((r) => ({
       id: r.id,
       name: r.originalFilename || r.externalRef || `(${r.type})`,
@@ -108,14 +71,11 @@ export async function buildEditingSummary(episodeId: string): Promise<EditingSum
       sizeBytes: r.fileSizeBytes != null ? Number(r.fileSizeBytes) : null,
       selected: r.selectedForEpisode,
     })),
-    cuts: cuts.map((c) => ({ startMs: c.startMs, endMs: c.endMs, source: c.source })),
     generics: [
-      { label: "Début", text: genericLine(episode.introSource, episode.introCreationMode, episode.introCustomMode, episode.introCustomDescription, !!episode.introKey) },
-      { label: "Fin", text: genericLine(episode.outroSource, episode.outroCreationMode, episode.outroCustomMode, episode.outroCustomDescription, !!episode.outroKey) },
+      { label: "Début", text: podcast?.introKey ? "Générique de début du podcast (bibliothèque de médias)" : "Pas de générique de début" },
+      { label: "Fin", text: podcast?.outroKey ? "Générique de fin du podcast (bibliothèque de médias)" : "Pas de générique de fin" },
     ],
-    logo: episode.logoEnabled
-      ? `Logo du podcast ${LOGO_POSITION_LABEL[episode.logoPosition] ?? ""}${episode.logoOnIntro ? ", sur le générique de début" : ""}${episode.logoOnOutro ? ", sur le générique de fin" : ""}`.trim()
-      : "Sans logo sur cet épisode",
+    logo: podcast?.logoKey ? "Logo permanent du podcast (bibliothèque de médias)" : "Pas de logo",
   };
 }
 
@@ -130,7 +90,6 @@ export function renderEditingEmail(
   const rushes = summary.rushes
     .map((r) => `<li>${escapeHtml(r.name)}${r.durationSec ? ` (${formatMs(r.durationSec * 1000)})` : ""}${r.selected ? "" : " : non retenu"}${r.externalRef ? ` : ${escapeHtml(r.externalRef)}` : ""}</li>`)
     .join("");
-  const cuts = summary.cuts.map((c) => `<li>${formatMs(c.startMs)} → ${formatMs(c.endMs)}${c.source === "AUTOCUT" ? " (silence)" : ""}</li>`).join("");
   const amount = request.amountTotal != null ? `${(request.amountTotal / 100).toFixed(2).replace(".", ",")} ${(request.currency || "eur").toUpperCase()}` : null;
   const title = `${summary.episodeCode ? `${summary.episodeCode} ` : ""}${summary.episodeTitle}`;
 
@@ -141,7 +100,6 @@ export function renderEditingEmail(
     ${section("Remarques du podcasteur", request.notes ? `<p style="white-space:pre-wrap">${escapeHtml(request.notes)}</p>` : "<p><em>Aucune remarque.</em></p>")}
     ${section("Rushs", `<ul>${rushes || "<li>Aucun</li>"}</ul>${summary.cameraSetup ? `<p>${escapeHtml(summary.cameraSetup)}</p>` : ""}`)}
     ${section("Voix", `<p>${summary.expectedSpeakerCount ? `${summary.expectedSpeakerCount} voix attendues` : "Nombre de voix non précisé"}${summary.speakers.length ? ` : ${escapeHtml(summary.speakers.join(", "))}` : ""}. ${summary.hasTranscript ? "Transcript disponible." : "Pas de transcript."}</p>`)}
-    ${section("Coupes", `<p>${escapeHtml(summary.autocut)}</p><ul>${cuts || "<li>Aucune coupe manuelle</li>"}</ul>`)}
     ${section("Génériques et logo", `<ul>${summary.generics.map((g) => `<li>Générique de ${g.label.toLowerCase()} : ${escapeHtml(g.text)}</li>`).join("")}<li>${escapeHtml(summary.logo)}</li></ul>`)}
     <p style="margin-top:24px"><a href="${appUrl()}/admin/montages/${request.id}">Voir la demande dans le back office</a> (rushs téléchargeables)</p>
   `;
@@ -185,9 +143,7 @@ export async function finalizeEditingRequest(requestId: string, session: Stripe.
       expectedSpeakerCount: null,
       speakers: [],
       hasTranscript: false,
-      autocut: "",
       rushes: [],
-      cuts: [],
       generics: [],
       logo: "",
     });

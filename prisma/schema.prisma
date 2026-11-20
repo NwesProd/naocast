@@ -257,6 +257,7 @@ enum EditorChoice {
   NEED_EDITOR
   HAS_EDITOR_SEND
   HAS_EDITOR_IMPORT
+  CLAUDE // montage fait avec Claude (connecteur) par le podcasteur
 }
 
 // Étapes "Générique de début/fin" du tunnel : reprendre le générique de la

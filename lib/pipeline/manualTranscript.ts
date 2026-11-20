@@ -4,6 +4,7 @@ import { getLocalWorkingPath } from "@/lib/storage";
 import { workDirFor } from "@/lib/pipeline/render";
 import { transcribeAudio } from "@/lib/pipeline/transcribe";
 import { diarizeAudio, assignSpeakers } from "@/lib/pipeline/diarize";
+import { FINAL_SOURCE_ID } from "@/lib/transcriptSource";
 
 // Étape "Cut" du tunnel de montage (ou "Régénérer" en relecture) : génère le
 // transcript de l'épisode à partir d'UN SEUL rush choisi explicitement par
@@ -14,12 +15,19 @@ import { diarizeAudio, assignSpeakers } from "@/lib/pipeline/diarize";
 // trop long pour une requête web sans provoquer de timeout côté proxy
 // (502 constaté en conditions réelles sur Railway).
 export async function runManualTranscribe(episodeId: string, rushId: string, expectedSpeakerCount: number | null): Promise<void> {
-  const rush = await prisma.rushSource.findFirst({ where: { id: rushId, episodeId, status: "READY" } });
-  if (!rush || !rush.storageKey) {
-    throw new Error("Rush introuvable ou pas encore prêt.");
+  let sourceKey: string | null;
+  if (rushId === FINAL_SOURCE_ID) {
+    // Épisode final déposé : l'audio est plus léger à télécharger que la vidéo.
+    const finals = await prisma.exportAsset.findMany({ where: { episodeId, type: { in: ["VIDEO", "AUDIO"] } }, orderBy: { createdAt: "desc" } });
+    sourceKey = (finals.find((f) => f.type === "AUDIO") ?? finals[0])?.storageKey ?? null;
+    if (!sourceKey) throw new Error("Aucun épisode final déposé.");
+  } else {
+    const rush = await prisma.rushSource.findFirst({ where: { id: rushId, episodeId, status: "READY" } });
+    sourceKey = rush?.storageKey ?? null;
+    if (!sourceKey) throw new Error("Rush introuvable ou pas encore prêt.");
   }
 
-  const localPath = await getLocalWorkingPath(rush.storageKey, workDirFor(episodeId));
+  const localPath = await getLocalWorkingPath(sourceKey, workDirFor(episodeId));
 
   const segments = await transcribeAudio(localPath);
 

@@ -1,12 +1,11 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { getFullEpisode, episodeLabel } from "@/lib/episode";
+import { FINAL_SOURCE_ID } from "@/lib/transcriptSource";
 import { TranscriptModuleClient } from "./TranscriptModuleClient";
 
-// Module "Transcript" : affiche le transcript déjà généré dans le tunnel de
-// montage (étape "Cut"), ou permet de le générer directement depuis ici si
-// ça n'a pas encore été fait, même route /transcript que le tunnel, pas de
-// logique dupliquée, juste une autre porte d'entrée.
+// Module "Transcript" : affiche le transcript de l'épisode, ou le génère à partir des rushs
+// importés ou de l'épisode final déposé dans le module Montage.
 export default async function TranscriptPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session?.user) redirect("/login");
@@ -16,9 +15,13 @@ export default async function TranscriptPage({ params }: { params: Promise<{ id:
   if (!episode || episode.podcast.userId !== session.user.id) redirect("/dashboard");
   if (!episode.title) redirect(`/episodes/${id}/new`);
 
-  const rushes = episode.rushes
-    .filter((r) => r.selectedForEpisode && r.status === "READY")
-    .map((r) => ({ id: r.id, originalFilename: r.originalFilename, type: r.type }));
+  // Sources possibles : les rushs importés et/ou l'épisode final déposé (seul disponible une fois le montage validé).
+  const rushes = [
+    ...episode.rushes.filter((r) => r.status === "READY").map((r) => ({ id: r.id, originalFilename: r.originalFilename, type: r.type })),
+    ...(episode.exports.some((e) => e.type === "VIDEO" || e.type === "AUDIO")
+      ? [{ id: FINAL_SOURCE_ID, originalFilename: "Épisode final", type: "FINAL" }]
+      : []),
+  ];
 
   return (
     <main className="p-8 w-full">

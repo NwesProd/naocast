@@ -292,7 +292,7 @@ export function TranscriptModuleClient({
         <div className="rounded-xl bg-mint p-5 space-y-3">
           {rushes.length === 0 ? (
             <p className="text-sm text-mint-ink">
-              Sélectionnez au moins un rush à l&apos;étape « Analyse » du tunnel de montage pour générer le transcript.
+              Importe des rushs ou dépose l&apos;épisode final dans le module Montage pour générer le transcript.
             </p>
           ) : (
             <>

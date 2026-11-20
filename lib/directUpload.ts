@@ -35,14 +35,28 @@ async function post(url: string, payload: unknown): Promise<Response> {
   return fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
 }
 
-export async function uploadRushDirect(
+export function uploadRushDirect(episodeId: string, file: File, onProgress: (bytesSent: number) => void): Promise<"done" | null> {
+  return uploadDirect(`/api/episodes/${episodeId}/rushes/direct`, {}, { filename: file.name }, file, onProgress);
+}
+
+// Même envoi direct pour l'épisode final (vidéo ou audio), cf. app/api/episodes/[id]/final/route.ts.
+export function uploadFinalDirect(
   episodeId: string,
+  kind: "video" | "audio",
   file: File,
   onProgress: (bytesSent: number) => void
 ): Promise<"done" | null> {
-  const base = `/api/episodes/${episodeId}/rushes/direct`;
+  return uploadDirect(`/api/episodes/${episodeId}/final`, { kind }, { kind }, file, onProgress);
+}
 
-  const initRes = await post(base, { action: "init", filename: file.name, contentType: file.type || "application/octet-stream" });
+async function uploadDirect(
+  base: string,
+  initExtra: Record<string, unknown>,
+  completeExtra: Record<string, unknown>,
+  file: File,
+  onProgress: (bytesSent: number) => void
+): Promise<"done" | null> {
+  const initRes = await post(base, { action: "init", filename: file.name, contentType: file.type || "application/octet-stream", ...initExtra });
   if (!initRes.ok) {
     const data = await initRes.json().catch(() => ({}));
     throw new Error(data.error || `Échec de l'upload (code ${initRes.status}).`);
@@ -105,7 +119,7 @@ export async function uploadRushDirect(
     throw failure;
   }
 
-  const doneRes = await post(base, { action: "complete", key, uploadId, filename: file.name, parts: etags });
+  const doneRes = await post(base, { action: "complete", key, uploadId, parts: etags, ...completeExtra });
   if (!doneRes.ok) {
     const data = await doneRes.json().catch(() => ({}));
     throw new Error(data.error || `Échec de l'upload (code ${doneRes.status}).`);

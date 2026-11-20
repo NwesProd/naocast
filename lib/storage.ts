@@ -250,6 +250,13 @@ export async function getSignedDownloadUrl(key: string, expiresInSec = 3600, dow
   return `/api/storage/${key}`;
 }
 
+// URL signée pour envoyer un fichier d'un seul bloc (PUT) vers R2, utilisée par le connecteur
+// Claude : le fichier n'est pas relayé par le serveur. Uniquement en mode S3/R2.
+export async function getSignedUploadUrl(key: string, contentType?: string, expiresInSec = 6 * 3600): Promise<string> {
+  if (!s3 || !bucket) throw new Error("Envoi direct indisponible en stockage local.");
+  return getSignedUrl(s3, new PutObjectCommand({ Bucket: bucket, Key: key, ContentType: contentType }), { expiresIn: expiresInSec });
+}
+
 // Envoi direct navigateur -> R2 (upload multipart par blocs, URLs signées) : le
 // fichier ne passe plus par le serveur web, donc plus de 502 du proxy Railway
 // sur un gros rush. Uniquement en mode S3/R2 (en local, l'upload passe par la

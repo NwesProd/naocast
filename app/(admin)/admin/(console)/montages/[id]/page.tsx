@@ -170,40 +170,6 @@ export default async function AdminMontagePage({ params }: { params: Promise<{ i
               </div>
             </div>
           </section>
-
-          <section className="admin-section">
-            <h2 className="admin-section-title">coupes ({summary.cuts.length})</h2>
-            <p className="admin-help">{summary.autocut}</p>
-            <div className="admin-table-wrap">
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>De</th>
-                    <th>À</th>
-                    <th>Durée</th>
-                    <th>Origine</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {summary.cuts.length === 0 && (
-                    <tr>
-                      <td colSpan={4} className="admin-empty">
-                        Aucune coupe.
-                      </td>
-                    </tr>
-                  )}
-                  {summary.cuts.map((c, i) => (
-                    <tr key={i}>
-                      <td>{formatMs(c.startMs)}</td>
-                      <td>{formatMs(c.endMs)}</td>
-                      <td>{((c.endMs - c.startMs) / 1000).toFixed(1).replace(".", ",")} s</td>
-                      <td>{c.source === "AUTOCUT" ? "Silence" : "Manuelle"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
         </>
       )}
     </>

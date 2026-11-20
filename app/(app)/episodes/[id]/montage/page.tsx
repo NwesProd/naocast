@@ -1,90 +1,84 @@
 import { redirect } from "next/navigation";
+import path from "path";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
-import { ExternalGate } from "@/components/ExternalValidation";
-import { EpisodeWizard } from "./EpisodeWizard";
+import { getSignedDownloadUrl } from "@/lib/storage";
+import { getUserAccess } from "@/lib/entitlements";
+import { hasModuleAccess } from "@/lib/plan";
+import { appUrl } from "@/lib/email";
+import { MontageClient } from "./MontageClient";
 
-export default async function MontagePage({ params }: { params: Promise<{ id: string }> }) {
+// Module « Montage » : l'épisode se monte hors de naocast (monteur naocast, monteur personnel
+// ou Claude). Ici : choisir la voie, importer les rushs, déposer l'épisode final, le visionner,
+// le valider puis le télécharger (vidéo et audio).
+export default async function MontagePage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ editing?: string; session_id?: string }>;
+}) {
   const session = await auth();
   if (!session?.user) redirect("/login");
   const { id } = await params;
+  const { editing, session_id: sessionId } = await searchParams;
 
   const episode = await prisma.episode.findUnique({
     where: { id },
     include: {
-      podcast: true,
+      podcast: { select: { userId: true } },
       rushes: { orderBy: { createdAt: "asc" } },
-      cutMarkers: true,
-      _count: { select: { episodeGuests: true } },
+      exports: { orderBy: { createdAt: "desc" } },
     },
   });
+  if (!episode || episode.podcast.userId !== session.user.id) redirect("/dashboard");
+  // Les informations de base (titre obligatoire) doivent être renseignées avant le montage.
+  if (!episode.title) redirect(`/episodes/${id}/new`);
+
+  const paidRequest = await prisma.editingRequest.findFirst({ where: { episodeId: id, status: "PAID" }, select: { id: true } });
   const pendingRequest = await prisma.editingRequest.findFirst({
     where: { episodeId: id, status: "PENDING_PAYMENT" },
     orderBy: { createdAt: "desc" },
     select: { notes: true },
   });
-  if (!episode || episode.podcast.userId !== session.user.id) redirect("/dashboard");
+  const access = await getUserAccess(session.user.id);
 
-  // Les informations de base (titre obligatoire) doivent être renseignées
-  // avant d'accéder au tunnel de montage.
-  if (!episode.title) redirect(`/episodes/${id}/new`);
+  // Nom de fichier au téléchargement : « S1E4 Titre - video.mp4 », caractères interdits remplacés.
+  const code = [episode.season != null ? `S${episode.season}` : null, episode.episodeNumber != null ? `E${episode.episodeNumber}` : null]
+    .filter(Boolean)
+    .join("");
+  const prefix = [code, (episode.title || "Sans titre").replace(/[\\/:*?"<>|]/g, " ").trim()].filter(Boolean).join(" ");
 
-  if (episode.status !== "DRAFT") redirect(`/episodes/${id}/review`);
-
-  // BigInt (fileSizeBytes) n'est pas sérialisable tel quel vers un composant
-  // client, et l'assistant ne s'en sert pas : on ne le transmet pas.
-  const rushes = episode.rushes.map((r) => ({
-    id: r.id,
-    type: r.type,
-    status: r.status,
-    originalFilename: r.originalFilename,
-    durationSec: r.durationSec,
-    selectedForEpisode: r.selectedForEpisode,
-  }));
+  const video = episode.exports.find((e) => e.type === "VIDEO");
+  const audio = episode.exports.find((e) => e.type === "AUDIO");
+  const fileInfo = async (asset: typeof video, label: string, fallbackExt: string) => {
+    if (!asset) return null;
+    const name = `${prefix} - ${label}${path.extname(asset.storageKey) || fallbackExt}`;
+    return { url: await getSignedDownloadUrl(asset.storageKey), downloadUrl: await getSignedDownloadUrl(asset.storageKey, 3600, name) };
+  };
 
   return (
     <main className="p-8 w-full">
-      <ExternalGate
+      <MontageClient
         episodeId={id}
-        field="montageValidatedExternally"
-        wording={{ ask: "Montage géré en dehors de naocast ?", validated: "Montage validé hors naocast.", button: "Valider le montage hors naocast", warning: "Les rushs importés dans naocast seront supprimés pour libérer de l'espace." }}
-        initialValidated={episode.montageValidatedExternally}
-      >
-        <EpisodeWizard
-          episodeId={id}
-          initialRushes={rushes}
-          initialCutMarkers={episode.cutMarkers}
-          podcastLogo={{
-            hasLogo: !!episode.podcast.logoKey,
-            hasIntro: !!episode.podcast.introKey,
-            hasOutro: !!episode.podcast.outroKey,
-          }}
-          initialLogoSettings={{
-            logoEnabled: episode.logoEnabled,
-            logoOnIntro: episode.logoOnIntro,
-            logoOnOutro: episode.logoOnOutro,
-            logoPosition: episode.logoPosition,
-          }}
-          initialEditorChoice={episode.editorChoice}
-          initialEditorNotes={pendingRequest?.notes ?? ""}
-          initialCameraSetup={episode.cameraSetup}
-          initialExpectedSpeakerCount={episode.expectedSpeakerCount}
-          initialGuestCount={episode._count.episodeGuests}
-          initialAutocut={{ enabled: episode.autocutEnabled, silenceMs: episode.autocutSilenceMs }}
-          initialGenerics={{
-            introSource: episode.introSource,
-            hasEpisodeIntro: !!episode.introKey,
-            introCreationMode: episode.introCreationMode,
-            introCustomMode: episode.introCustomMode,
-            introCustomDescription: episode.introCustomDescription || "",
-            outroSource: episode.outroSource,
-            hasEpisodeOutro: !!episode.outroKey,
-            outroCreationMode: episode.outroCreationMode,
-            outroCustomMode: episode.outroCustomMode,
-            outroCustomDescription: episode.outroCustomDescription || "",
-          }}
-        />
-      </ExternalGate>
+        episodeTitle={episode.title}
+        status={episode.status}
+        editorChoice={episode.editorChoice}
+        ownEditorEmail={episode.ownEditorEmail}
+        initialNotes={pendingRequest?.notes ?? ""}
+        editingPaid={!!paidRequest}
+        paymentReturn={editing === "success" && sessionId ? sessionId : null}
+        rushes={episode.rushes.map((r) => ({
+          id: r.id,
+          filename: r.originalFilename || r.externalRef || "Fichier",
+          durationSec: r.durationSec,
+          sizeBytes: r.fileSizeBytes != null ? Number(r.fileSizeBytes) : null,
+          ready: r.status === "READY",
+        }))}
+        video={await fileInfo(video, "video", ".mp4")}
+        audio={await fileInfo(audio, "audio", ".mp3")}
+        claude={{ hasAccess: hasModuleAccess(access.plan, "mcp", access.extraModules), mcpUrl: `${appUrl()}/api/mcp` }}
+      />
     </main>
   );
 }

@@ -41,26 +41,6 @@ export async function purgeEpisodeRushes(episodeId: string): Promise<void> {
   ]);
 }
 
-// "Recommencer le montage à zéro" (avant validation) : le tunnel repart du
-// début, l'utilisateur réimporte ses rushs. On supprime donc les rushs
-// (fichiers, aperçus, lignes), les découpes, les jobs et les rendus précédents.
-// Restent : le transcript (phrases et locuteurs, long à produire), les informations
-// de l'épisode, les invités, le script et les génériques choisis.
-export async function resetEpisodeToScratch(episodeId: string): Promise<void> {
-  await deleteObjectsByPrefix(`rushes/${episodeId}/`);
-  // Rendus précédents (exports vidéo et audio).
-  await Promise.all(["final.mp4", "audio.mp3", "preview.mp4"].map((name) => deleteObject(`episodes/${episodeId}/${name}`).catch(() => {})));
-
-  await prisma.$transaction([
-    prisma.rushSource.deleteMany({ where: { episodeId } }),
-    prisma.cutMarker.deleteMany({ where: { episodeId } }),
-    prisma.processingJob.deleteMany({ where: { episodeId } }),
-    prisma.exportAsset.deleteMany({ where: { episodeId } }),
-    // Le rush du transcript n'existe plus : la référence est vidée, les phrases restent.
-    prisma.episode.update({ where: { id: episodeId }, data: { status: "DRAFT", transcriptRushId: null } }),
-  ]);
-}
-
 // Supprime tous les fichiers stockés propres à un épisode (rushs + leurs
 // aperçus, générique sur-mesure de l'épisode, exports vidéo/
 // audio) avant sa suppression en base : la cascade Prisma (onDelete: Cascade)

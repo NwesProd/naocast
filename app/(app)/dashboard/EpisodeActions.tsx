@@ -114,7 +114,7 @@ export function EpisodeActions({
           <div className="bg-white rounded-xl p-5 max-w-sm w-full space-y-3" onClick={(e) => e.stopPropagation()}>
             <h2 className="font-semibold text-ink">Supprimer cet épisode ?</h2>
             <p className="text-sm text-text-muted">
-              « {title || fallbackLabel} » sera définitivement supprimé, avec ses rushs, découpes et rendus. Cette
+              « {title || fallbackLabel} » sera définitivement supprimé, avec ses rushs et ses fichiers. Cette
               action est irréversible.
             </p>
             {deleteError && <p className="text-sm text-[#8A2E1F]">{deleteError}</p>}
