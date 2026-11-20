@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { EPISODE_UPDATED_EVENT } from "@/components/SidebarNav";
 import { SocialBadge, SOCIAL_PLATFORMS } from "@/components/SocialBadge";
 import { TagInput } from "@/components/TagInput";
+import { todayInParis } from "@/lib/moduleProgress";
 
 interface SocialLink {
   platform: string;
@@ -34,6 +35,12 @@ const pillBtn =
   "text-xs font-semibold rounded-pill bg-white border border-border px-3 py-1.5 hover:bg-[#FAFAF8] transition disabled:opacity-50 disabled:cursor-not-allowed";
 const inputCls = "w-full rounded-md border border-border bg-white px-3 py-2 text-sm";
 const labelCls = "block text-xs font-medium text-text-muted mb-1";
+
+// Invité déjà passé sur le podcast : sa dernière apparition est un épisode déjà sorti
+// (date de sortie atteinte). La carte du pool passe alors en vert.
+function hasAppeared(iso: string | null, todayYmd: string): boolean {
+  return !!iso && iso.slice(0, 10) <= todayYmd;
+}
 
 function formatDate(iso: string | null): string {
   if (!iso) return "Jamais apparu";
@@ -224,6 +231,8 @@ export function GuestsModuleClient({
       setValidatingCasting(false);
     }
   }
+
+  const todayYmd = todayInParis();
 
   return (
     <div className="space-y-4">
@@ -498,19 +507,23 @@ export function GuestsModuleClient({
             {!poolLoading && poolGuests.length === 0 && (
               <p className="text-xs text-text-muted">Aucun invité dans le pool pour le moment.</p>
             )}
-            {poolGuests.map((g) => (
-              <div key={g.id} className="h-[76px] rounded-xl bg-sky p-3 flex items-start justify-between gap-2 overflow-hidden">
+            {poolGuests.map((g) => {
+              const appeared = hasAppeared(g.lastAppearanceAt, todayYmd);
+              const ink = appeared ? "text-[#1F5C3A]" : "text-sky-ink";
+              const muted = appeared ? "text-[#1F5C3A]/70" : "text-sky-muted";
+              return (
+              <div key={g.id} className={`h-[76px] rounded-xl ${appeared ? "bg-[#DDEFE3]" : "bg-sky"} p-3 flex items-start justify-between gap-2 overflow-hidden`}>
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-sky-ink truncate">
+                  <p className={`text-sm font-medium ${ink} truncate`}>
                     {g.name}
-                    {g.mediaName && <span className="text-sky-muted font-normal"> - {g.mediaName}</span>}
+                    {g.mediaName && <span className={`${muted} font-normal`}> - {g.mediaName}</span>}
                   </p>
                   {g.relevantTags.length > 0 ? (
-                    <p className="text-xs text-sky-ink truncate" title="Mots clés présents dans le script">
+                    <p className={`text-xs ${ink} truncate`} title="Mots clés présents dans le script">
                       <span className="font-semibold">Pertinent</span> : {g.relevantTags.join(", ")}
                     </p>
                   ) : (
-                    <p className="text-xs text-sky-muted truncate">{formatDate(g.lastAppearanceAt)}</p>
+                    <p className={`text-xs ${muted} truncate`}>{formatDate(g.lastAppearanceAt)}</p>
                   )}
                   {g.tags.length > 0 && (
                     <div className="mt-1 flex gap-1 overflow-hidden">
@@ -518,7 +531,7 @@ export function GuestsModuleClient({
                         <span
                           key={t}
                           className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] leading-none ${
-                            g.relevantTags.includes(t) ? "bg-white font-semibold text-sky-ink" : "bg-white/50 text-sky-muted"
+                            g.relevantTags.includes(t) ? `bg-white font-semibold ${ink}` : `bg-white/50 ${muted}`
                           }`}
                         >
                           {t}
@@ -544,7 +557,8 @@ export function GuestsModuleClient({
                   </button>
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>
