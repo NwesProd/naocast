@@ -17,20 +17,18 @@ import {
   listAllObjects,
   putLocalFile,
 } from "@/lib/storage";
-import { registerFinalAsset } from "@/lib/finalDelivery";
+import { registerFinalVideo } from "@/lib/finalDelivery";
 
-// Dépôt de l'épisode final (vidéo et/ou audio) monté ailleurs : par le monteur, par Claude ou
+// Dépôt de la vidéo finale de l'épisode, montée ailleurs : par le monteur, par Claude ou
 // par l'utilisateur lui-même. Envoi direct vers R2 par blocs (comme pour les rushs, cf.
 // rushes/direct) ; en stockage local (dev), repli sur un envoi multipart via le serveur.
 const PART_SIZE = 32 * 1024 * 1024;
 
-const kindSchema = z.enum(["video", "audio"]);
 const bodySchema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("init"), kind: kindSchema, filename: z.string().min(1).max(300), contentType: z.string().max(200).optional() }),
+  z.object({ action: z.literal("init"), filename: z.string().min(1).max(300), contentType: z.string().max(200).optional() }),
   z.object({ action: z.literal("part-url"), key: z.string(), uploadId: z.string(), partNumber: z.number().int().min(1).max(10000) }),
   z.object({
     action: z.literal("complete"),
-    kind: kindSchema,
     key: z.string(),
     uploadId: z.string(),
     parts: z.array(z.object({ partNumber: z.number().int().min(1), etag: z.string().min(1) })).min(1),
@@ -49,8 +47,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   // Repli sans envoi direct : multipart classique via le serveur (stockage local).
   if ((req.headers.get("content-type") || "").startsWith("multipart/")) {
-    const kindParam = kindSchema.safeParse(new URL(req.url).searchParams.get("kind"));
-    if (!kindParam.success) return NextResponse.json({ error: "Type de fichier invalide." }, { status: 400 });
     const tmpDir = await mkdtemp(path.join(tmpdir(), "naocast-final-"));
     try {
       let key: string | null = null;
@@ -65,7 +61,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         await putLocalFile(key, tmpPath, file.mimeType);
       });
       if (!key) return NextResponse.json({ error: "Fichier manquant." }, { status: 400 });
-      await registerFinalAsset(episodeId, kindParam.data, key);
+      await registerFinalVideo(episodeId, key);
       return NextResponse.json({ ok: true });
     } finally {
       await rm(tmpDir, { recursive: true, force: true });
@@ -105,6 +101,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!(await listAllObjects(body.key)).some((o) => o.key === body.key)) {
     return NextResponse.json({ error: "Fichier introuvable après l'envoi, réessaie." }, { status: 502 });
   }
-  await registerFinalAsset(episodeId, body.kind, body.key);
+  await registerFinalVideo(episodeId, body.key);
   return NextResponse.json({ ok: true });
 }

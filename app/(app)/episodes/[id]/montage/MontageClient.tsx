@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { EPISODE_UPDATED_EVENT } from "@/components/SidebarNav";
@@ -56,10 +55,10 @@ function OptionCard({ selected, onClick, title, description, disabled }: { selec
 }
 
 // Module « Montage » : choisir la voie (monteur naocast, monteur personnel ou Claude), importer
-// les rushs, déposer l'épisode final monté ailleurs, le visionner, le valider puis le télécharger.
+// les rushs, déposer la vidéo finale montée ailleurs, la visionner, la valider puis la télécharger
+// (vidéo, et audio extrait de la vidéo).
 export function MontageClient({
   episodeId,
-  episodeTitle,
   status,
   editorChoice,
   ownEditorEmail,
@@ -69,10 +68,8 @@ export function MontageClient({
   rushes,
   video,
   audio,
-  claude,
 }: {
   episodeId: string;
-  episodeTitle: string | null;
   status: string;
   editorChoice: string | null;
   ownEditorEmail: string | null;
@@ -81,22 +78,20 @@ export function MontageClient({
   paymentReturn: string | null;
   rushes: Rush[];
   video: FinalFile | null;
-  audio: FinalFile | null;
-  claude: { hasAccess: boolean; mcpUrl: string };
+  audio: FinalFile | null; // extrait de la vidéo finale
 }) {
   const router = useRouter();
   const validated = status === "EXPORTED";
   const processing = status === "QUEUED" || status === "PROCESSING";
-  const hasFinal = !!video || !!audio;
+  const hasFinal = !!video;
   const choice: Choice | null = editorChoice === "NEED_EDITOR" || editorChoice === "HAS_EDITOR_SEND" || editorChoice === "CLAUDE" ? editorChoice : null;
 
   const [error, setError] = useState<string | null>(null);
   const [notes, setNotes] = useState(initialNotes);
   const [email, setEmail] = useState(ownEditorEmail ?? "");
   const [busy, setBusy] = useState(false);
-  const [uploading, setUploading] = useState<string | null>(null); // "rush" | "video" | "audio"
+  const [uploading, setUploading] = useState<string | null>(null); // "rush" | "video"
   const [uploadPercent, setUploadPercent] = useState(0);
-  const [promptCopied, setPromptCopied] = useState(false);
   const [changingChoice, setChangingChoice] = useState(false);
   const confirmedPayment = useRef(false);
 
@@ -162,17 +157,17 @@ export function MontageClient({
     router.refresh();
   }
 
-  async function uploadFinal(kind: "video" | "audio", file: File | undefined) {
+  async function uploadFinal(file: File | undefined) {
     if (!file) return;
     setError(null);
-    setUploading(kind);
+    setUploading("video");
     setUploadPercent(0);
     try {
-      const direct = await uploadFinalDirect(episodeId, kind, file, (sent) => setUploadPercent(Math.round((sent / file.size) * 100)));
+      const direct = await uploadFinalDirect(episodeId, file, (sent) => setUploadPercent(Math.round((sent / file.size) * 100)));
       if (direct === null) {
         const form = new FormData();
         form.append("file", file);
-        const res = await fetch(`/api/episodes/${episodeId}/final?kind=${kind}`, { method: "POST", body: form });
+        const res = await fetch(`/api/episodes/${episodeId}/final`, { method: "POST", body: form });
         if (!res.ok) throw new Error((await res.json().catch(() => null))?.error || "Échec du dépôt du fichier.");
       }
       window.dispatchEvent(new Event(EPISODE_UPDATED_EVENT));
@@ -236,7 +231,6 @@ export function MontageClient({
     }
   }
 
-  const claudePrompt = `Monte l'épisode « ${episodeTitle ?? "sans titre"} » (id ${episodeId}) avec le connecteur naocast : liste les fichiers de l'épisode et ma bibliothèque de médias (jingle, génériques, logo), télécharge les rushs, fais le montage, puis dépose la vidéo finale sur naocast.`;
 
   const editorSent = status === "HUMAN_EDITOR_REQUESTED";
   const showChoice = !validated && !hasFinal && (!choice || changingChoice) && !editorSent;
@@ -257,7 +251,7 @@ export function MontageClient({
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <OptionCard selected={choice === "NEED_EDITOR"} onClick={() => patchEditorChoice("NEED_EDITOR")} title="Monteur naocast" description="Un monteur de l'équipe s'en occupe (prestation payante)." />
             <OptionCard selected={choice === "HAS_EDITOR_SEND"} onClick={() => patchEditorChoice("HAS_EDITOR_SEND")} title="Mon monteur" description="Tu envoies les rushs et tes consignes à ton propre monteur." />
-            <OptionCard selected={choice === "CLAUDE"} onClick={() => patchEditorChoice("CLAUDE")} title="Monter avec Claude" description="Claude monte l'épisode à partir de tes fichiers, via le connecteur." />
+            <OptionCard selected={choice === "CLAUDE"} onClick={() => patchEditorChoice("CLAUDE")} title="Monter avec Claude" description="Tu montes l'épisode toi-même avec Claude, à partir de tes fichiers." />
           </div>
         </section>
       )}
@@ -335,50 +329,10 @@ export function MontageClient({
                 {rushes.length === 0 && <p className="text-xs text-text-muted">Importe d&apos;abord au moins un rush.</p>}
               </div>
             ))}
-
-          {choice === "CLAUDE" &&
-            (claude.hasAccess ? (
-              <div className="space-y-3 rounded-md border border-border bg-[#FAFAF8] p-4">
-                <ol className="list-decimal space-y-1 pl-5 text-sm text-text-muted">
-                  <li>
-                    Branche naocast dans Claude (Claude Code) avec le connecteur : voir{" "}
-                    <Link href="/account" className="underline">
-                      Paramètres
-                    </Link>
-                    .
-                  </li>
-                  <li>Importe tes rushs ci-dessus : Claude les télécharge depuis naocast.</li>
-                  <li>Donne-lui cette consigne, il monte puis dépose la vidéo finale ici.</li>
-                </ol>
-                <pre className="whitespace-pre-wrap rounded-md border border-border bg-white p-3 font-sans text-xs text-ink">{claudePrompt}</pre>
-                <button
-                  type="button"
-                  className={pillBtn}
-                  onClick={async () => {
-                    try {
-                      await navigator.clipboard.writeText(claudePrompt);
-                      setPromptCopied(true);
-                      setTimeout(() => setPromptCopied(false), 2000);
-                    } catch {
-                      setError("Copie impossible, sélectionne le texte à la main.");
-                    }
-                  }}
-                >
-                  {promptCopied ? "Copié" : "Copier la consigne"}
-                </button>
-              </div>
-            ) : (
-              <p className="rounded-md bg-peach p-3 text-sm text-peach-ink">
-                Le montage avec Claude passe par le connecteur, réservé à naocast infinity et naocast lifetime.{" "}
-                <Link href="/billing" className="underline">
-                  Voir les forfaits
-                </Link>
-              </p>
-            ))}
         </section>
       )}
 
-      {/* 3. Épisode final : dépôt */}
+      {/* 3. Vidéo finale : dépôt */}
       {!validated && (
         <section className="space-y-3 rounded-xl border border-border bg-white p-5">
           <h2 className="text-sm font-semibold text-ink">Épisode final</h2>
@@ -388,18 +342,12 @@ export function MontageClient({
             <p className="text-sm text-[#8A2E1F]">Le traitement du fichier a échoué. Dépose-le de nouveau.</p>
           ) : null}
           <p className="text-sm text-text-muted">
-            {hasFinal ? "Tu peux remplacer les fichiers déposés." : "Dès que le montage est fini, dépose ici la vidéo (l'audio en est extrait automatiquement) ou seulement l'audio."}
+            {video ? "Tu peux remplacer la vidéo déposée." : "Dès que le montage est fini, dépose ici la vidéo finale : naocast en extrait l'audio, que tu pourras télécharger aussi."}
           </p>
-          <div className="flex flex-wrap gap-2">
-            <label className={`${pillBtn} cursor-pointer`}>
-              {uploading === "video" ? `Envoi... ${uploadPercent}%` : video ? "Remplacer la vidéo" : "Déposer la vidéo"}
-              <input type="file" accept="video/*" className="hidden" disabled={uploading !== null} onChange={(e) => { uploadFinal("video", e.target.files?.[0]); e.target.value = ""; }} />
-            </label>
-            <label className={`${pillBtn} cursor-pointer`}>
-              {uploading === "audio" ? `Envoi... ${uploadPercent}%` : audio ? "Remplacer l'audio" : "Déposer l'audio seul"}
-              <input type="file" accept="audio/*" className="hidden" disabled={uploading !== null} onChange={(e) => { uploadFinal("audio", e.target.files?.[0]); e.target.value = ""; }} />
-            </label>
-          </div>
+          <label className={`${pillBtn} inline-block cursor-pointer`}>
+            {uploading === "video" ? `Envoi... ${uploadPercent}%` : video ? "Remplacer la vidéo" : "Déposer la vidéo finale"}
+            <input type="file" accept="video/*" className="hidden" disabled={uploading !== null} onChange={(e) => { uploadFinal(e.target.files?.[0]); e.target.value = ""; }} />
+          </label>
         </section>
       )}
 
@@ -408,7 +356,6 @@ export function MontageClient({
         <section className="space-y-4 rounded-xl border border-border bg-white p-5">
           <h2 className="text-sm font-semibold text-ink">{validated ? "Épisode validé" : "À relire avant validation"}</h2>
           {video && <video src={video.url} controls className="w-full max-h-[480px] rounded-md border border-border bg-black" />}
-          {audio && <audio src={audio.url} controls className="w-full" />}
 
           {validated ? (
             <div className="flex flex-wrap items-center gap-2">

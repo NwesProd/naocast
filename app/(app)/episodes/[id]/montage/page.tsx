@@ -3,14 +3,11 @@ import path from "path";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { getSignedDownloadUrl } from "@/lib/storage";
-import { getUserAccess } from "@/lib/entitlements";
-import { hasModuleAccess } from "@/lib/plan";
-import { appUrl } from "@/lib/email";
 import { MontageClient } from "./MontageClient";
 
 // Module « Montage » : l'épisode se monte hors de naocast (monteur naocast, monteur personnel
-// ou Claude). Ici : choisir la voie, importer les rushs, déposer l'épisode final, le visionner,
-// le valider puis le télécharger (vidéo et audio).
+// ou Claude). Ici : choisir la voie, importer les rushs, déposer la vidéo finale, la visionner,
+// la valider puis la télécharger (vidéo, et audio extrait de la vidéo).
 export default async function MontagePage({
   params,
   searchParams,
@@ -41,7 +38,6 @@ export default async function MontagePage({
     orderBy: { createdAt: "desc" },
     select: { notes: true },
   });
-  const access = await getUserAccess(session.user.id);
 
   // Nom de fichier au téléchargement : « S1E4 Titre - video.mp4 », caractères interdits remplacés.
   const code = [episode.season != null ? `S${episode.season}` : null, episode.episodeNumber != null ? `E${episode.episodeNumber}` : null]
@@ -61,7 +57,6 @@ export default async function MontagePage({
     <main className="p-8 w-full">
       <MontageClient
         episodeId={id}
-        episodeTitle={episode.title}
         status={episode.status}
         editorChoice={episode.editorChoice}
         ownEditorEmail={episode.ownEditorEmail}
@@ -77,7 +72,6 @@ export default async function MontagePage({
         }))}
         video={await fileInfo(video, "video", ".mp4")}
         audio={await fileInfo(audio, "audio", ".mp3")}
-        claude={{ hasAccess: hasModuleAccess(access.plan, "mcp", access.extraModules), mcpUrl: `${appUrl()}/api/mcp` }}
       />
     </main>
   );

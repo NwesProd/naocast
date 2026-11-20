@@ -39,14 +39,9 @@ export function uploadRushDirect(episodeId: string, file: File, onProgress: (byt
   return uploadDirect(`/api/episodes/${episodeId}/rushes/direct`, {}, { filename: file.name }, file, onProgress);
 }
 
-// Même envoi direct pour l'épisode final (vidéo ou audio), cf. app/api/episodes/[id]/final/route.ts.
-export function uploadFinalDirect(
-  episodeId: string,
-  kind: "video" | "audio",
-  file: File,
-  onProgress: (bytesSent: number) => void
-): Promise<"done" | null> {
-  return uploadDirect(`/api/episodes/${episodeId}/final`, { kind }, { kind }, file, onProgress);
+// Même envoi direct pour la vidéo finale de l'épisode, cf. app/api/episodes/[id]/final/route.ts.
+export function uploadFinalDirect(episodeId: string, file: File, onProgress: (bytesSent: number) => void): Promise<"done" | null> {
+  return uploadDirect(`/api/episodes/${episodeId}/final`, {}, {}, file, onProgress);
 }
 
 async function uploadDirect(

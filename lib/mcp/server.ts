@@ -6,7 +6,7 @@ import { episodeDisplayStatus, EPISODE_COUNTS_SELECT } from "@/lib/moduleProgres
 import { normalizeTags } from "@/lib/guestRelevance";
 import { getObjectBuffer, getSignedDownloadUrl, getSignedUploadUrl, listAllObjects, storageMode } from "@/lib/storage";
 import { randomUUID } from "crypto";
-import { registerFinalAsset } from "@/lib/finalDelivery";
+import { registerFinalVideo } from "@/lib/finalDelivery";
 import { scriptToHtml, scriptToPlainText } from "@/lib/scriptText";
 import { extractDocumentText } from "@/lib/documentText";
 import { hasModuleAccess, PLAN_LABELS, type ModuleKey } from "@/lib/plan";
@@ -340,7 +340,7 @@ export function createNaocastMcpServer(user: McpUser): McpServer {
     {
       title: "Fichiers d'un épisode",
       description:
-        "Liste les fichiers utiles pour monter un épisode : rushs importés, épisode final déjà déposé, et médias du podcast (générique de début et de fin, jingle, logo, pochette, bibliothèque de sons et musiques). Chaque fichier a un identifiant à donner à get_file_url pour le télécharger.",
+        "Liste les fichiers utiles pour monter un épisode : rushs importés, vidéo finale déjà déposée, et médias du podcast (générique de début et de fin, jingle, logo, pochette, bibliothèque de sons et musiques). Chaque fichier a un identifiant à donner à get_file_url pour le télécharger.",
       inputSchema: { episodeId: z.string() },
       annotations: { readOnlyHint: true },
     },
@@ -419,25 +419,24 @@ export function createNaocastMcpServer(user: McpUser): McpServer {
   server.registerTool(
     "create_final_upload",
     {
-      title: "Préparer le dépôt de l'épisode final",
+      title: "Préparer le dépôt de la vidéo finale",
       description:
-        "Étape 1 du dépôt du montage terminé : renvoie une URL d'envoi (méthode PUT, corps = le fichier, en-tête Content-Type identique à contentType) et une clé. Envoie le fichier (par exemple curl -T fichier -H 'Content-Type: …' URL), puis appelle complete_final_upload avec la clé. Dépose la vidéo (l'audio en est extrait automatiquement) ou seulement l'audio. Refusé si l'utilisateur a déjà validé le montage.",
+        "Étape 1 du dépôt du montage terminé : renvoie une URL d'envoi (méthode PUT, corps = le fichier vidéo, en-tête Content-Type identique à contentType) et une clé. Envoie le fichier (par exemple curl -T fichier -H 'Content-Type: …' URL), puis appelle complete_final_upload avec la clé. Une seule vidéo finale par épisode : naocast en extrait l'audio. Refusé si l'utilisateur a déjà validé le montage.",
       inputSchema: {
         episodeId: z.string(),
-        kind: z.enum(["video", "audio"]),
         filename: z.string().min(1).max(300),
         contentType: z.string().max(200).optional(),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
     },
-    async ({ episodeId, kind, filename, contentType }) => {
+    async ({ episodeId, filename, contentType }) => {
       const lock = locked("montage", "Montage");
       if (lock) return lock;
       const episode = await ownedEpisode(user.userId, episodeId);
       if (!episode) return fail("Épisode introuvable.");
       if (episode.status === "EXPORTED") return fail("Le montage est validé : demande à l'utilisateur de retirer la validation dans le module Montage.");
       if (storageMode !== "s3") return fail("Le dépôt par le connecteur n'est pas disponible dans cet environnement.");
-      const type = contentType || (kind === "video" ? "video/mp4" : "audio/mpeg");
+      const type = contentType || "video/mp4";
       const key = `episodes/${episodeId}/final/${randomUUID()}-${filename.replace(/[\\/]/g, "_")}`;
       return json({ key, uploadUrl: await getSignedUploadUrl(key, type), method: "PUT", contentType: type, expiresInSeconds: 6 * 3600 });
     }
@@ -446,13 +445,13 @@ export function createNaocastMcpServer(user: McpUser): McpServer {
   server.registerTool(
     "complete_final_upload",
     {
-      title: "Terminer le dépôt de l'épisode final",
+      title: "Terminer le dépôt de la vidéo finale",
       description:
-        "Étape 2 : à appeler une fois le fichier envoyé avec l'URL de create_final_upload. Enregistre le fichier comme épisode final ; naocast extrait l'audio d'une vidéo, puis l'utilisateur relit et valide le montage dans naocast.",
-      inputSchema: { episodeId: z.string(), kind: z.enum(["video", "audio"]), key: z.string() },
+        "Étape 2 : à appeler une fois la vidéo envoyée avec l'URL de create_final_upload. Enregistre le fichier comme vidéo finale ; naocast en extrait l'audio, puis l'utilisateur relit et valide le montage dans naocast.",
+      inputSchema: { episodeId: z.string(), key: z.string() },
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
     },
-    async ({ episodeId, kind, key }) => {
+    async ({ episodeId, key }) => {
       const lock = locked("montage", "Montage");
       if (lock) return lock;
       const episode = await ownedEpisode(user.userId, episodeId);
@@ -460,8 +459,8 @@ export function createNaocastMcpServer(user: McpUser): McpServer {
       if (episode.status === "EXPORTED") return fail("Le montage est validé : demande à l'utilisateur de retirer la validation dans le module Montage.");
       if (!key.startsWith(`episodes/${episodeId}/final/`)) return fail("Clé de fichier invalide.");
       if (!(await listAllObjects(key)).some((o) => o.key === key)) return fail("Fichier introuvable : envoie-le d'abord avec l'URL fournie.");
-      await registerFinalAsset(episodeId, kind, key);
-      return ok(kind === "video" ? "Vidéo déposée. naocast extrait l'audio, puis l'utilisateur pourra relire et valider le montage." : "Audio déposé. L'utilisateur peut relire et valider le montage dans naocast.");
+      await registerFinalVideo(episodeId, key);
+      return ok("Vidéo déposée. naocast en extrait l'audio, puis l'utilisateur pourra relire et valider le montage.");
     }
   );
 
