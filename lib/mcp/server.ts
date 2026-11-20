@@ -254,41 +254,5 @@ export function createNaocastMcpServer(user: McpUser): McpServer {
     }
   );
 
-  server.registerTool(
-    "get_guest_messages",
-    {
-      title: "Messages aux invités",
-      description: "Le « message d'info » (avant l'enregistrement) et le « message diffusion » (annonce de sortie) de l'épisode, tels qu'enregistrés.",
-      inputSchema: { episodeId: z.string() },
-      annotations: { readOnlyHint: true },
-    },
-    async ({ episodeId }) => {
-      const episode = await ownedEpisode(user.userId, episodeId);
-      if (!episode) return fail("Épisode introuvable.");
-      return json({ info: episode.guestMessage, broadcast: episode.guestBroadcastMessage });
-    }
-  );
-
-  server.registerTool(
-    "save_guest_message",
-    {
-      title: "Enregistrer un message aux invités",
-      description: "Enregistre le « message d'info » (kind = info) ou le « message diffusion » (kind = broadcast) de l'épisode. Remplace le texte existant.",
-      inputSchema: { episodeId: z.string(), kind: z.enum(["info", "broadcast"]), message: z.string().max(20000) },
-      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
-    },
-    async ({ episodeId, kind, message }) => {
-      const lock = locked("invites", "Invités");
-      if (lock) return lock;
-      const episode = await ownedEpisode(user.userId, episodeId);
-      if (!episode) return fail("Épisode introuvable.");
-      await prisma.episode.update({
-        where: { id: episodeId },
-        data: kind === "info" ? { guestMessage: message || null } : { guestBroadcastMessage: message || null },
-      });
-      return ok("Message enregistré.");
-    }
-  );
-
   return server;
 }
