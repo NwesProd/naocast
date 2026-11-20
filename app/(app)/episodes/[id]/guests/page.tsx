@@ -47,8 +47,6 @@ export default async function GuestsPage({ params }: { params: Promise<{ id: str
             tags: eg.guest.tags,
           },
         }))}
-        initialGuestMessage={episode.guestMessage || ""}
-        initialBroadcastMessage={episode.guestBroadcastMessage || ""}
         initialCastingValidated={episode.guestsCastingValidated}
       />
     </main>

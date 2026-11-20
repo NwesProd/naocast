@@ -46,14 +46,10 @@ function formatDate(iso: string | null): string {
 export function GuestsModuleClient({
   episodeId,
   initialEpisodeGuests,
-  initialGuestMessage,
-  initialBroadcastMessage,
   initialCastingValidated,
 }: {
   episodeId: string;
   initialEpisodeGuests: EpisodeGuestItem[];
-  initialGuestMessage: string;
-  initialBroadcastMessage: string;
   initialCastingValidated: boolean;
 }) {
   const [episodeGuests, setEpisodeGuests] = useState<EpisodeGuestItem[]>(initialEpisodeGuests);
@@ -247,9 +243,9 @@ export function GuestsModuleClient({
 
       {error && <p className="text-sm text-[#8A2E1F]">{error}</p>}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+      <div className="space-y-8">
         {/* Invités de l'épisode */}
-        <div className="lg:col-span-2 space-y-3">
+        <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="font-medium text-ink text-sm">Invités de l&apos;épisode</h2>
             <button type="button" onClick={() => setShowAddForm((v) => !v)} className={pillBtn}>
@@ -320,7 +316,7 @@ export function GuestsModuleClient({
             <p className="text-sm text-text-muted rounded-xl bg-mint p-4">Aucun invité pour le moment.</p>
           )}
 
-          <ul className="space-y-2">
+          <ul className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 items-start">
             {episodeGuests.map((eg) => {
               const expanded = expandedGuestId === eg.guest.id;
               const availablePlatforms = SOCIAL_PLATFORMS.filter(
@@ -479,7 +475,7 @@ export function GuestsModuleClient({
         </div>
 
         {/* Pool d'invités */}
-        <div className="lg:col-span-1 space-y-3">
+        <div className="space-y-3">
           <div className="flex items-center justify-between gap-2">
             <h2 className="font-medium text-ink text-sm">Pool d&apos;invités</h2>
           </div>
@@ -497,8 +493,7 @@ export function GuestsModuleClient({
             />
           </div>
 
-          {/* 4 invités visibles à la fois, le reste défile */}
-          <div className="max-h-[328px] space-y-2 overflow-y-auto pr-1">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
             {poolLoading && <p className="text-xs text-text-muted">Chargement...</p>}
             {!poolLoading && poolGuests.length === 0 && (
               <p className="text-xs text-text-muted">Aucun invité dans le pool pour le moment.</p>
@@ -552,99 +547,6 @@ export function GuestsModuleClient({
             ))}
           </div>
         </div>
-      </div>
-
-      <MessageCard title="Message d'info" endpoint={`/api/episodes/${episodeId}/guest-message`} field="guestMessage" initialMessage={initialGuestMessage} onError={setError} />
-
-      {/* Annonce de la sortie aux invités et consignes pour la relayer. */}
-      <MessageCard
-        title="Message diffusion"
-        endpoint={`/api/episodes/${episodeId}/guest-broadcast-message`}
-        field="guestBroadcastMessage"
-        initialMessage={initialBroadcastMessage}
-        onError={setError}
-      />
-    </div>
-  );
-}
-
-// Encart de message (message d'info, message diffusion) : texte à écrire,
-// enregistrer et copier dans le presse-papier. Le connecteur Claude peut
-// aussi le rédiger (cf. save_guest_message dans lib/mcp/server.ts).
-function MessageCard({
-  title,
-  endpoint,
-  field,
-  initialMessage,
-  onError,
-}: {
-  title: string;
-  endpoint: string;
-  field: "guestMessage" | "guestBroadcastMessage";
-  initialMessage: string;
-  onError: (message: string | null) => void;
-}) {
-  const [message, setMessage] = useState(initialMessage);
-  const [saving, setSaving] = useState(false);
-  const [copied, setCopied] = useState(false);
-
-  async function save() {
-    setSaving(true);
-    try {
-      const res = await fetch(endpoint, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ [field]: message }),
-      });
-      if (!res.ok) throw new Error();
-    } catch {
-      onError("Échec de l'enregistrement du message.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(message);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      onError("Échec de la copie dans le presse-papier.");
-    }
-  }
-
-  return (
-    <div className="rounded-xl bg-mint p-5 space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="font-medium text-mint-ink text-sm">{title}</h2>
-        {message && (
-          <button type="button" onClick={copy} title="Copier le message" className="rounded-md border border-border bg-white p-2 text-ink hover:bg-[#FAFAF8] transition">
-            {copied ? (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                <path d="M5 13l4 4L19 7" stroke="#0F6B67" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            ) : (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                <rect x="9" y="9" width="11" height="11" rx="1.5" stroke="currentColor" strokeWidth="2" />
-                <path d="M5 15V6a1.5 1.5 0 0 1 1.5-1.5H15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-              </svg>
-            )}
-          </button>
-        )}
-      </div>
-
-      <div className="space-y-2">
-        <textarea
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          rows={10}
-          placeholder="Écris ton message..."
-          className={`${inputCls} bg-white`}
-        />
-        <button type="button" onClick={save} disabled={saving} className={pillBtn}>
-          {saving ? "Enregistrement..." : "Enregistrer"}
-        </button>
       </div>
     </div>
   );
