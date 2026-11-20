@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/Button";
 
 const inputClass = "w-full rounded-md border border-border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-button/30";
+const BIBLE_PLACEHOLDER =
+  "Tu peux écrire ici : quelques questions pour t'aider à décrire ton podcast.\nC'est quoi ? Ça s'adresse à qui ? Pourquoi ce podcast existe ? Quelle ligne éditoriale ? Y a-t-il des règles à respecter ?";
 const pillBtn =
   "text-xs font-semibold rounded-pill bg-white border border-border px-3 py-1.5 hover:bg-[#FAFAF8] transition disabled:opacity-50 disabled:cursor-not-allowed";
 
@@ -18,15 +19,13 @@ interface BibleDocument {
 
 interface ExistingDna {
   title: string;
-  dna: string;
   bible: string;
   documents: BibleDocument[];
 }
 
-// Onglet "ADN" (Mon podcast) : titre, positionnement en texte libre (guidé
-// par des questions suggérées) et bible du podcast : texte libre et/ou
-// documents (PDF, Word, texte, Markdown). Le connecteur Claude lit l'ADN, la
-// bible et le texte des documents pour garder le ton du podcast.
+// Onglet "Paramètres" (Mon podcast) : titre et bible du podcast, en texte
+// libre et/ou en documents (PDF, Word, texte, Markdown). Le connecteur Claude
+// lit la bible et le texte des documents pour garder le ton du podcast.
 export function PodcastDnaForm({
   existing,
   onFirstSave,
@@ -40,11 +39,10 @@ export function PodcastDnaForm({
   // serveur), permettant de basculer vers l'onglet Graphisme une seule fois.
   const [isFirstSave] = useState(!existing);
   const [title, setTitle] = useState(existing?.title || "");
-  const [dna, setDna] = useState(existing?.dna || "");
   const [bible, setBible] = useState(existing?.bible || "");
   const [draftBible, setDraftBible] = useState(existing?.bible || "");
 
-  const [editingBible, setEditingBible] = useState(!existing?.bible);
+  const [editingBible, setEditingBible] = useState(false);
   const [documents, setDocuments] = useState<BibleDocument[]>(existing?.documents || []);
   const [uploadingKey, setUploadingKey] = useState<string | null>(null); // "new" ou la clé du document remplacé
   const [previewKey, setPreviewKey] = useState<string | null>(null);
@@ -52,8 +50,6 @@ export function PodcastDnaForm({
 
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [savingTitle, setSavingTitle] = useState(false);
-  const [savedTitle, setSavedTitle] = useState(false);
   const [savingBible, setSavingBible] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -83,30 +79,6 @@ export function PodcastDnaForm({
       setError((err as Error).message);
     } finally {
       setSaving(false);
-    }
-  }
-
-  // Enregistrement rapide du seul titre, sans passer par le reste du
-  // formulaire (ADN, documents) ni forcément l'avoir sous les yeux (repliés
-  // une fois la bible générée).
-  async function saveTitleOnly() {
-    setSavingTitle(true);
-    setSavedTitle(false);
-    setError(null);
-    try {
-      const data = new FormData();
-      data.set("title", title);
-      const res = await fetch("/api/podcast/dna", { method: "POST", body: data });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({ error: undefined }));
-        throw new Error(body.error || "Échec de l'enregistrement.");
-      }
-      setSavedTitle(true);
-      router.refresh();
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setSavingTitle(false);
     }
   }
 
@@ -191,7 +163,6 @@ export function PodcastDnaForm({
         className="space-y-8"
       >
         {error && <p className="text-sm text-[#8A2E1F]">{error}</p>}
-        {saved && <p className="text-sm text-[#0F6B67]">Tout est enregistré.</p>}
 
         <div>
           <label className="block text-sm font-medium mb-1.5 text-ink">Titre du podcast</label>
@@ -200,16 +171,13 @@ export function PodcastDnaForm({
               name="title"
               required
               value={title}
-              onChange={(e) => {
-                setTitle(e.target.value);
-                setSavedTitle(false);
-              }}
+              onChange={(e) => setTitle(e.target.value)}
               className={`${inputClass} max-w-md`}
             />
-            <button type="button" onClick={saveTitleOnly} disabled={savingTitle} className={pillBtn}>
-              {savingTitle ? "Enregistrement..." : "Enregistrer"}
+            <button type="submit" disabled={saving} className={pillBtn}>
+              {saving ? "Enregistrement..." : "Enregistrer"}
             </button>
-            {savedTitle && <span className="text-xs text-[#0F6B67]">Enregistré.</span>}
+            {saved && <span className="text-xs text-[#0F6B67]">Enregistré.</span>}
             {!isFirstSave && (
               <button
                 type="button"
@@ -221,38 +189,22 @@ export function PodcastDnaForm({
             )}
           </div>
         </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-1.5 text-ink">ADN du podcast (facultatif)</label>
-          <p className="text-xs text-text-muted mb-2">
-            Quelques questions pour t&apos;aider à le décrire : c&apos;est quoi ? Ça s&apos;adresse à qui ? Pourquoi ce
-            podcast existe ? Quelle ligne éditoriale ? Y a-t-il des règles à respecter ?
-          </p>
-          <textarea
-            name="dna"
-            value={dna}
-            onChange={(e) => setDna(e.target.value)}
-            rows={8}
-            placeholder="Écris librement, pas besoin de répondre point par point..."
-            className={inputClass}
-          />
-        </div>
       </form>
 
       <div className="rounded-xl bg-mint p-5 space-y-3">
         <h2 className="font-medium text-mint-ink text-sm">Bible du podcast</h2>
-        {editingBible ? (
+        {editingBible || !bible ? (
           <>
             <textarea
               value={draftBible}
               onChange={(e) => setDraftBible(e.target.value)}
-              rows={20}
-              placeholder="Ton, public, format, règles éditoriales..."
+              rows={14}
+              placeholder={BIBLE_PLACEHOLDER}
               className={`${inputClass} bg-white text-sm`}
             />
             <div className="flex gap-2">
               <button type="button" onClick={saveBible} disabled={savingBible} className={pillBtn}>
-                {savingBible ? "Enregistrement..." : "Enregistrer la bible"}
+                {savingBible ? "Enregistrement..." : "Enregistrer"}
               </button>
               {bible && (
                 <button type="button" onClick={() => setEditingBible(false)} className={pillBtn}>
@@ -355,10 +307,6 @@ export function PodcastDnaForm({
           </label>
         </div>
       </div>
-
-      <Button type="submit" form="podcast-dna-form" disabled={saving} variant="secondary" className="w-full max-w-md">
-        {saving ? "Enregistrement..." : "Enregistrer"}
-      </Button>
 
       {confirmingDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">

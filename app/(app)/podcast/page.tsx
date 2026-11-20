@@ -54,8 +54,8 @@ export default async function PodcastPage() {
   const existingDna = podcast
     ? {
         title: podcast.title,
-        dna: podcast.dna || "",
-        bible: podcast.bible || "",
+        // L'ancien champ ADN a été fusionné dans la bible : un texte ADN existant s'y affiche.
+        bible: podcast.bible || podcast.dna || "",
         documents: await Promise.all(
           ((podcast.referenceFiles as { key: string; filename: string; mimeType: string; text?: string | null }[] | null) ?? []).map(
             async (f) => ({
