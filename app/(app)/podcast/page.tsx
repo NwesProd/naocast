@@ -20,12 +20,6 @@ function originalFilenameFromKey(key: string): string {
   return basename.slice(37); // 36 caractères d'UUID v4 + le tiret séparateur
 }
 
-interface ReferenceFile {
-  key: string;
-  filename: string;
-  mimeType: string;
-}
-
 export default async function PodcastPage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
@@ -57,15 +51,11 @@ export default async function PodcastPage() {
       }
     : undefined;
 
-  const referenceFiles = ((podcast?.referenceFiles as ReferenceFile[] | null) ?? []) as ReferenceFile[];
   const existingDna = podcast
     ? {
         title: podcast.title,
         dna: podcast.dna || "",
         bible: podcast.bible || "",
-        referenceFiles: await Promise.all(
-          referenceFiles.map(async (f) => ({ key: f.key, filename: f.filename, url: await getSignedDownloadUrl(f.key) }))
-        ),
       }
     : undefined;
 

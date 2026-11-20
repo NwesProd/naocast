@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { Button } from "@/components/Button";
 import { EPISODE_UPDATED_EVENT } from "@/components/SidebarNav";
-import { useSimulatedProgress } from "@/lib/useSimulatedProgress";
 
 interface TranscriptWord {
   text: string;
@@ -93,8 +92,6 @@ export function IntroClient({
   const [resetting, setResetting] = useState(false);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [cutModeSegmentId, setCutModeSegmentId] = useState<string | null>(null);
-  const [suggesting, setSuggesting] = useState(false);
-  const suggestProgress = useSimulatedProgress(suggesting);
   const [dragWordAnchor, setDragWordAnchor] = useState<number | null>(null);
   const [dragWordEnd, setDragWordEnd] = useState<number | null>(null);
 
@@ -141,28 +138,6 @@ export function IntroClient({
     }
     const created = await res.json();
     setIntroSegments((s) => [...s, { ...created, removedRanges: created.removedRanges ?? [] }]);
-  }
-
-  async function suggestHooks() {
-    setSuggesting(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/episodes/${episodeId}/intro-suggestions`, { method: "POST" });
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        throw new Error(data?.error || "Échec de la suggestion automatique.");
-      }
-      const created: IntroSegment[] = await res.json();
-      if (created.length === 0) {
-        setError("Aucun nouveau passage suggéré (déjà tous présents dans la séquence ?).");
-        return;
-      }
-      setIntroSegments((s) => [...s, ...created.map((seg) => ({ ...seg, removedRanges: seg.removedRanges ?? [] }))]);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setSuggesting(false);
-    }
   }
 
   async function removeSegment(id: string) {
@@ -446,9 +421,6 @@ export function IntroClient({
         </div>
       ) : (
         <>
-          <button type="button" onClick={suggestHooks} disabled={suggesting} className={pillBtn}>
-            {suggesting ? `Recherche des meilleurs passages... ${suggestProgress}%` : "✨ Suggérer les meilleurs passages (IA)"}
-          </button>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
             <div className="rounded-xl bg-mint p-4 space-y-2">
               <h2 className="font-medium text-mint-ink text-sm">Transcript</h2>

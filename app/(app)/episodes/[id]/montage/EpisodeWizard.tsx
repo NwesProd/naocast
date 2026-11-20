@@ -57,14 +57,6 @@ const STEP_LABELS: Record<StepKey, string> = {
 
 const COMMON_STEPS: StepKey[] = ["editor", "deposit", "analysis", "cut", "intro", "generics"];
 
-interface CutSuggestionItem {
-  id: string;
-  startMs: number;
-  endMs: number;
-  text: string;
-  reason: string;
-}
-
 type LogoPosition = "TOP_LEFT" | "TOP_RIGHT" | "BOTTOM_LEFT" | "BOTTOM_RIGHT";
 type EditorChoice = "PODKO" | "NEED_EDITOR" | "HAS_EDITOR_SEND" | "HAS_EDITOR_IMPORT";
 type IntroOutroSource = "PODCAST" | "EPISODE";
@@ -155,7 +147,6 @@ export function EpisodeWizard({
   initialExpectedSpeakerCount,
   initialGuestCount,
   initialAutocut,
-  initialCutSuggestions,
   initialIntroTeaser,
   initialGenerics,
   initialEditorNotes,
@@ -172,7 +163,6 @@ export function EpisodeWizard({
   // Invités déjà renseignés pour l'épisode : sert à deviner le nombre de voix.
   initialGuestCount: number;
   initialAutocut: { enabled: boolean; silenceMs: number | null };
-  initialCutSuggestions: CutSuggestionItem[];
   initialIntroTeaser: { validated: boolean; choice: IntroTeaserChoice; hasImport: boolean };
   initialEditorNotes: string;
   initialIntroEditorNotes: string;
@@ -207,9 +197,6 @@ export function EpisodeWizard({
   const [expectedSpeakerCount, setExpectedSpeakerCount] = useState<number | null>(
     initialExpectedSpeakerCount ?? (initialGuestCount > 0 ? initialGuestCount + 1 : 2)
   );
-  const [cutSuggestions, setCutSuggestions] = useState<CutSuggestionItem[]>(initialCutSuggestions);
-  const [suggesting, setSuggesting] = useState(false);
-  const [suggestionsAnalyzed, setSuggestionsAnalyzed] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewStatus, setPreviewStatus] = useState<"idle" | "running">("idle");
   const [previewProgress, setPreviewProgress] = useState(0);
@@ -263,7 +250,6 @@ export function EpisodeWizard({
       setTranscript(data.transcriptSegments);
       setSpeakers(data.speakers);
       setCutMarkers(data.cutMarkers);
-      setCutSuggestions(data.cutSuggestions ?? []);
     } catch {
       setError("Échec du rechargement de l'épisode, réessayez.");
     }
@@ -345,52 +331,11 @@ export function EpisodeWizard({
       const job = await pollJobUntilDone(episodeId, jobId);
       if (job.status === "FAILED") throw new Error(job.errorMessage || "Échec de la génération du transcript.");
       await refreshEpisode();
-      // Le transcript tout juste généré est aussitôt relu par l'IA : les
-      // passages à couper apparaissent surlignés sans action de plus.
-      runCutSuggestions();
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setGeneratingTranscript(false);
     }
-  }
-
-  // Demande à l'IA les passages à couper (ratés, faux départs, reprises...),
-  // affichés surlignés dans le transcript : rien n'est coupé sans accord.
-  async function runCutSuggestions() {
-    setSuggesting(true);
-    try {
-      const res = await fetch(`/api/episodes/${episodeId}/cut-suggestions`, { method: "POST" });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(data?.error || "Analyse impossible pour le moment.");
-      setCutSuggestions(data);
-      setSuggestionsAnalyzed(true);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setSuggesting(false);
-    }
-  }
-
-  async function decideSuggestion(suggestionId: string, action: "accept" | "reject") {
-    const res = await fetch(`/api/episodes/${episodeId}/cut-suggestions/${suggestionId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action }),
-    });
-    if (!res.ok) {
-      setError("Impossible d'enregistrer ce choix, réessayez.");
-      return;
-    }
-    if (action === "accept") {
-      const marker = await res.json();
-      setCutMarkers((m) => [...m, marker]);
-    }
-    setCutSuggestions((list) => list.filter((x) => x.id !== suggestionId));
-  }
-
-  async function acceptAllSuggestions() {
-    for (const sg of [...cutSuggestions]) await decideSuggestion(sg.id, "accept");
   }
 
   async function handleUpload(files: FileList | null) {
@@ -1396,67 +1341,11 @@ export function EpisodeWizard({
                   )}
                 </div>
 
-                <div className="rounded-md bg-white border border-border p-4 space-y-3">
-                  <div className="flex items-center justify-between gap-3 flex-wrap">
-                    <p className="text-sm font-medium text-ink">
-                      Coupes proposées par l&apos;IA{cutSuggestions.length > 0 ? ` (${cutSuggestions.length})` : ""}
-                    </p>
-                    <div className="flex items-center gap-2">
-                      {cutSuggestions.length > 1 && (
-                        <button type="button" onClick={acceptAllSuggestions} disabled={suggesting} className={pillBtn}>
-                          Tout accepter
-                        </button>
-                      )}
-                      <button type="button" onClick={runCutSuggestions} disabled={suggesting} className={pillBtn}>
-                        {suggesting
-                          ? "Analyse en cours..."
-                          : cutSuggestions.length > 0 || suggestionsAnalyzed
-                            ? "Relancer l'analyse"
-                            : "Analyser les passages à couper"}
-                      </button>
-                    </div>
-                  </div>
-                  {suggesting && (
-                    <p className="text-xs text-text-muted">L&apos;IA relit le transcript, cela peut prendre une minute.</p>
-                  )}
-                  {!suggesting && cutSuggestions.length === 0 && suggestionsAnalyzed && (
-                    <p className="text-xs text-text-muted">Rien à couper : l&apos;IA n&apos;a repéré aucun passage.</p>
-                  )}
-                  {cutSuggestions.length > 0 && (
-                    <ul className="divide-y rounded-md border border-border max-h-64 overflow-y-auto">
-                      {cutSuggestions.map((sg) => (
-                        <li key={sg.id} className="px-3 py-2 flex items-start justify-between gap-3 text-sm">
-                          <button
-                            type="button"
-                            onClick={() => document.getElementById(`sug-${sg.id}`)?.scrollIntoView({ block: "center", behavior: "smooth" })}
-                            className="text-left min-w-0"
-                            title="Voir dans le transcript"
-                          >
-                            <span className="text-xs text-text-muted">
-                              {formatTime(sg.startMs)} → {formatTime(sg.endMs)} · {sg.reason}
-                            </span>
-                            <span className="block text-ink line-clamp-2">{sg.text}</span>
-                          </button>
-                          <span className="flex items-center gap-1.5 shrink-0">
-                            <button type="button" onClick={() => decideSuggestion(sg.id, "accept")} className={`${pillBtn} text-[#0F6B67]`}>
-                              Couper
-                            </button>
-                            <button type="button" onClick={() => decideSuggestion(sg.id, "reject")} className={pillBtn}>
-                              Garder
-                            </button>
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-
                 <TranscriptCutEditor
                   episodeId={episodeId}
                   transcript={transcript}
                   speakers={speakers}
                   cutMarkers={cutMarkers}
-                  suggestions={cutSuggestions}
                   onCutMarkersChange={setCutMarkers}
                   onAssignSpeaker={assignSpeaker}
                 />

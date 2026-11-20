@@ -26,9 +26,8 @@ export async function getFullEpisode(id: string) {
   const cutMarkers = await prisma.cutMarker.findMany({ where: { episodeId: id }, orderBy: { startMs: "asc" } });
   const jobs = await prisma.processingJob.findMany({ where: { episodeId: id }, orderBy: { sequence: "asc" } });
   const exports = await prisma.exportAsset.findMany({ where: { episodeId: id } });
-  const cutSuggestions = await prisma.cutSuggestion.findMany({ where: { episodeId: id }, orderBy: { startMs: "asc" } });
 
-  return { ...episode, podcast, rushes, transcriptSegments, speakers, cutMarkers, cutSuggestions, jobs, exports };
+  return { ...episode, podcast, rushes, transcriptSegments, speakers, cutMarkers, jobs, exports };
 }
 
 // "S1E98 Titre de l'épisode", même format que celui déjà affiché dans la

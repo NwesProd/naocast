@@ -121,7 +121,7 @@ export function Checklist({ steps }: { steps: ChecklistStep[] }) {
 
 const HOW_IT_WORKS = [
   { n: 1, bg: "bg-mint", ink: "text-mint-ink", muted: "text-mint-muted", title: "Tu déposes", text: "Importe tes rushs, en fichier ou en lien. Une caméra, plusieurs, peu importe." },
-  { n: 2, bg: "bg-sky", ink: "text-sky-ink", muted: "text-sky-muted", title: "naocast prépare", text: "Transcript, locuteurs, silences et ratés repérés par l'IA. Tu n'as plus qu'à valider." },
+  { n: 2, bg: "bg-sky", ink: "text-sky-ink", muted: "text-sky-muted", title: "naocast prépare", text: "Transcript, locuteurs et silences repérés automatiquement. Tu n'as plus qu'à valider." },
   { n: 3, bg: "bg-butter", ink: "text-butter-ink", muted: "text-butter-ink/70", title: "Tu ajustes", text: "Coupes, intro, génériques et logo, avec un aperçu rapide avant le rendu final." },
   { n: 4, bg: "bg-peach", ink: "text-peach-ink", muted: "text-peach-muted", title: "Tu diffuses", text: "Vidéo et audio finaux à télécharger, prêts à publier. Tu gardes la main de bout en bout." },
 ];

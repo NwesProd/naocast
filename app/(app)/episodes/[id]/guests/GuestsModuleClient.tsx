@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSimulatedProgress } from "@/lib/useSimulatedProgress";
 import { EPISODE_UPDATED_EVENT } from "@/components/SidebarNav";
 import { SocialBadge, SOCIAL_PLATFORMS } from "@/components/SocialBadge";
 import { TagInput } from "@/components/TagInput";
@@ -569,8 +568,9 @@ export function GuestsModuleClient({
   );
 }
 
-// Encart de message généré (message d'info, message diffusion) : bouton de
-// génération, texte modifiable, copie dans le presse-papier.
+// Encart de message (message d'info, message diffusion) : texte à écrire,
+// enregistrer et copier dans le presse-papier. Le connecteur Claude peut
+// aussi le rédiger (cf. save_guest_message dans lib/mcp/server.ts).
 function MessageCard({
   title,
   endpoint,
@@ -585,28 +585,8 @@ function MessageCard({
   onError: (message: string | null) => void;
 }) {
   const [message, setMessage] = useState(initialMessage);
-  const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
-  const progress = useSimulatedProgress(generating);
-
-  async function generate() {
-    setGenerating(true);
-    onError(null);
-    try {
-      const res = await fetch(endpoint, { method: "POST" });
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        throw new Error(data?.error || "Échec de la génération du message.");
-      }
-      const data = await res.json();
-      setMessage(data[field] || "");
-    } catch (e) {
-      onError((e as Error).message);
-    } finally {
-      setGenerating(false);
-    }
-  }
 
   async function save() {
     setSaving(true);
@@ -654,23 +634,18 @@ function MessageCard({
         )}
       </div>
 
-      <button
-        type="button"
-        onClick={generate}
-        disabled={generating}
-        className="text-sm font-semibold rounded-[10px] bg-primary-button text-white px-4 py-2 disabled:opacity-40 disabled:cursor-not-allowed"
-      >
-        {generating ? `Génération en cours... ${progress}%` : message ? "Régénérer le message" : "Générer le message"}
-      </button>
-
-      {message && (
-        <div className="space-y-2">
-          <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={10} className={`${inputCls} bg-white`} />
-          <button type="button" onClick={save} disabled={saving} className={pillBtn}>
-            {saving ? "Enregistrement..." : "Modifier"}
-          </button>
-        </div>
-      )}
+      <div className="space-y-2">
+        <textarea
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          rows={10}
+          placeholder="Écris ton message..."
+          className={`${inputCls} bg-white`}
+        />
+        <button type="button" onClick={save} disabled={saving} className={pillBtn}>
+          {saving ? "Enregistrement..." : "Enregistrer"}
+        </button>
+      </div>
     </div>
   );
 }

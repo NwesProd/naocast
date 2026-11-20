@@ -6,8 +6,7 @@ import { hasModuleAccess } from "@/lib/plan";
 import { PlanLockedNotice } from "@/components/PlanLockedNotice";
 import { ScriptModuleClient } from "./ScriptModuleClient";
 
-// Module "Script" (catégorie Prod) : idées d'angles/thèmes pour l'épisode,
-// générées à partir de la bible du podcast et des invités déjà ajoutés.
+// Module "Script" (catégorie Prod) : brouillon et validation du script de l'épisode.
 export default async function ScriptPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session?.user) redirect("/login");
@@ -16,8 +15,7 @@ export default async function ScriptPage({ params }: { params: Promise<{ id: str
   const episode = await prisma.episode.findUnique({
     where: { id },
     include: {
-      podcast: { select: { userId: true, bible: true } },
-      episodeGuests: { include: { guest: { select: { name: true, mediaName: true } } }, orderBy: { order: "asc" } },
+      podcast: { select: { userId: true } },
     },
   });
   if (!episode || episode.podcast.userId !== session.user.id) redirect("/dashboard");
@@ -36,9 +34,6 @@ export default async function ScriptPage({ params }: { params: Promise<{ id: str
     <main className="p-8 w-full">
       <ScriptModuleClient
         episodeId={id}
-        hasBible={!!episode.podcast.bible}
-        guestNames={episode.episodeGuests.map((eg) => eg.guest.name)}
-        initialIdeas={(episode.scriptAngleIdeas as string[] | null) ?? []}
         initialScriptDraft={episode.scriptDraft || ""}
         initialScriptValidated={episode.scriptValidated}
       />
