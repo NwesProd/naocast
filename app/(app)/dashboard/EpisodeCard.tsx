@@ -1,10 +1,8 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { StatusBadge } from "@/components/StatusBadge";
-import { EPISODE_UPDATED_EVENT } from "@/components/SidebarNav";
+import { EpisodeActions } from "./EpisodeActions";
 
 // Couleurs de zone selon la catégorie de statut (brouillon / en traitement /
 // validé) plutôt qu'un fond unique, le badge (toujours en ton plein) reste
@@ -23,34 +21,6 @@ const ZONE_CLASSES: Record<string, { bg: string; text: string; muted: string }> 
   FAILED: { bg: "bg-[#FBEAE7]", text: "text-[#8A2E1F]", muted: "text-[#8A2E1F]/70" },
 };
 const DEFAULT_ZONE = ZONE_CLASSES.DRAFT;
-
-function GearIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-      <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" />
-      <path
-        d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
-        stroke="currentColor"
-        strokeWidth="2"
-      />
-    </svg>
-  );
-}
-
-function TrashIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-      <polyline points="3 6 5 6 21 6" stroke="currentColor" strokeWidth="2" />
-      <path
-        d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
-        stroke="currentColor"
-        strokeWidth="2"
-      />
-      <line x1="10" y1="11" x2="10" y2="17" stroke="currentColor" strokeWidth="2" />
-      <line x1="14" y1="11" x2="14" y2="17" stroke="currentColor" strokeWidth="2" />
-    </svg>
-  );
-}
 
 interface EpisodeCardProps {
   id: string;
@@ -78,12 +48,6 @@ export function EpisodeCard({
   fallbackLabel,
   deletionLockedWhenValidated,
 }: EpisodeCardProps) {
-  const router = useRouter();
-  const [confirming, setConfirming] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-  const locked = status === "EXPORTED" && deletionLockedWhenValidated;
-
   const zone = ZONE_CLASSES[displayStatus] || DEFAULT_ZONE;
   const sn = [season != null ? `S${season}` : null, episodeNumber != null ? `E${episodeNumber}` : null]
     .filter(Boolean)
@@ -92,25 +56,6 @@ export function EpisodeCard({
   // Ouvre le premier module non validé auquel le forfait donne accès : la décision se prend
   // côté serveur (cf. app/(app)/episodes/[id]/start/page.tsx), avec le forfait de l'utilisateur.
   const href = `/episodes/${id}/start`;
-
-  async function handleDelete() {
-    setDeleting(true);
-    setDeleteError(null);
-    const res = await fetch(`/api/episodes/${id}`, { method: "DELETE" });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({ error: undefined }));
-      setDeleteError(data.error || "Échec de la suppression.");
-      setDeleting(false);
-      return;
-    }
-    // La sidebar garde son propre état (épisode sélectionné, persisté en
-    // localStorage) indépendamment de cette liste, un simple router.refresh()
-    // ne le met pas à jour. Si l'épisode supprimé était le sélectionné, ce
-    // signal lui fait revérifier via l'API (cf. SidebarNav), constater sa
-    // disparition (404) et reverrouiller les modules ; sinon, no-op inoffensif.
-    window.dispatchEvent(new Event(EPISODE_UPDATED_EVENT));
-    router.refresh();
-  }
 
   return (
     <div className={`relative rounded-xl ${zone.bg} min-h-[132px]`}>
@@ -123,68 +68,16 @@ export function EpisodeCard({
         <StatusBadge status={displayStatus} />
       </Link>
 
-      <div className="absolute top-3 right-3 flex gap-1.5">
-        <button
-          type="button"
-          onClick={(e) => {
-            e.preventDefault();
-            router.push(`/episodes/${id}/new`);
-          }}
-          title="Modifier les informations"
-          className={`rounded-full bg-white/70 hover:bg-white p-1.5 ${zone.text} transition`}
-        >
-          <GearIcon />
-        </button>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.preventDefault();
-            if (locked) return;
-            setConfirming(true);
-          }}
-          disabled={locked}
-          title={locked ? "Épisode validé : ne peut plus être supprimé avec votre forfait" : "Supprimer l'épisode"}
-          className={`rounded-full bg-white/70 p-1.5 transition ${
-            locked ? "text-[#8A2E1F]/30 cursor-not-allowed" : "hover:bg-white text-[#8A2E1F]"
-          }`}
-        >
-          <TrashIcon />
-        </button>
+      <div className="absolute top-3 right-3">
+        <EpisodeActions
+          id={id}
+          title={title}
+          fallbackLabel={fallbackLabel}
+          status={status}
+          deletionLockedWhenValidated={deletionLockedWhenValidated}
+          gearClassName={zone.text}
+        />
       </div>
-
-      {confirming && (
-        <div
-          className="fixed inset-0 z-50 bg-ink/40 flex items-center justify-center p-4"
-          onClick={() => !deleting && setConfirming(false)}
-        >
-          <div className="bg-white rounded-xl p-5 max-w-sm w-full space-y-3" onClick={(e) => e.stopPropagation()}>
-            <h2 className="font-semibold text-ink">Supprimer cet épisode ?</h2>
-            <p className="text-sm text-text-muted">
-              « {title || fallbackLabel} » sera définitivement supprimé, avec ses rushs, découpes et rendus. Cette
-              action est irréversible.
-            </p>
-            {deleteError && <p className="text-sm text-[#8A2E1F]">{deleteError}</p>}
-            <div className="flex justify-end gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => setConfirming(false)}
-                disabled={deleting}
-                className="text-sm rounded-[10px] bg-white border border-border text-ink px-3 py-1.5 hover:bg-[#FAFAF8] transition disabled:opacity-50"
-              >
-                Annuler
-              </button>
-              <button
-                type="button"
-                onClick={handleDelete}
-                disabled={deleting}
-                className="text-sm font-semibold rounded-[10px] bg-[#8A2E1F] text-white px-3 py-1.5 hover:brightness-110 transition disabled:opacity-50"
-              >
-                {deleting ? "Suppression..." : "Supprimer"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

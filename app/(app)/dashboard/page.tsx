@@ -3,7 +3,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { getEpisodeUsage } from "@/lib/entitlements";
 import { NewEpisodeButton } from "./NewEpisodeButton";
-import { EpisodeCard } from "./EpisodeCard";
+import { EpisodesView } from "./EpisodesView";
 import { PlanUsageBanner } from "./PlanUsageBanner";
 import { PLAN_LOCKS_VALIDATED_EPISODE_DELETION } from "@/lib/plan";
 import { episodeDisplayStatus, EPISODE_COUNTS_SELECT } from "@/lib/moduleProgress";
@@ -51,22 +51,20 @@ export default async function DashboardPage() {
       {episodes.length === 0 ? (
         <p className="text-text-muted text-sm">Aucun épisode pour le moment.</p>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {episodes.map((ep) => (
-            <EpisodeCard
-              key={ep.id}
-              id={ep.id}
-              title={ep.title}
-              status={ep.status}
-              displayStatus={episodeDisplayStatus(ep, ep._count, prodEnabled)}
-              season={ep.season}
-              episodeNumber={ep.episodeNumber}
-              releaseDateLabel={ep.releaseDate ? ep.releaseDate.toLocaleDateString("fr-FR") : null}
-              fallbackLabel={`Épisode du ${ep.createdAt.toLocaleDateString("fr-FR")}`}
-              deletionLockedWhenValidated={PLAN_LOCKS_VALIDATED_EPISODE_DELETION[usage.plan]}
-            />
-          ))}
-        </div>
+        <EpisodesView
+          episodes={episodes.map((ep) => ({
+            id: ep.id,
+            title: ep.title,
+            status: ep.status,
+            displayStatus: episodeDisplayStatus(ep, ep._count, prodEnabled),
+            season: ep.season,
+            episodeNumber: ep.episodeNumber,
+            releaseDateLabel: ep.releaseDate ? ep.releaseDate.toLocaleDateString("fr-FR") : null,
+            fallbackLabel: `Épisode du ${ep.createdAt.toLocaleDateString("fr-FR")}`,
+          }))}
+          deletionLockedWhenValidated={PLAN_LOCKS_VALIDATED_EPISODE_DELETION[usage.plan]}
+          prodEnabled={prodEnabled}
+        />
       )}
     </main>
   );
