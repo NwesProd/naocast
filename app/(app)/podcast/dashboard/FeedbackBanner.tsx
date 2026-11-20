@@ -1,35 +1,46 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { OpenFeedbackButton } from "@/components/OpenFeedbackButton";
 
 const STORAGE_KEY = "naocast.feedbackBanner.hiddenUntil";
 const HIDE_DAYS = 7;
 
+const listeners = new Set<() => void>();
+let hiddenThisSession = false; // repli quand le navigateur n'a pas de stockage
+
+function subscribe(listener: () => void) {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+// Masqué tant que « Plus tard » est actif ; côté serveur (et avant l'hydratation) l'encart
+// reste masqué pour éviter un affichage qui clignote.
+function isHidden(): boolean {
+  if (hiddenThisSession) return true;
+  try {
+    return Date.now() < Number(localStorage.getItem(STORAGE_KEY) || 0);
+  } catch {
+    return false;
+  }
+}
+
 // Invitation à donner son avis (dashboard du podcast). « Plus tard » la masque 7 jours
 // sur cet appareil (simple confort d'affichage, stocké dans le navigateur).
 export function FeedbackBanner() {
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    try {
-      const until = Number(localStorage.getItem(STORAGE_KEY) || 0);
-      setVisible(Date.now() >= until);
-    } catch {
-      setVisible(true);
-    }
-  }, []);
+  const hidden = useSyncExternalStore(subscribe, isHidden, () => true);
 
   function hideForLater() {
-    setVisible(false);
+    hiddenThisSession = true;
     try {
       localStorage.setItem(STORAGE_KEY, String(Date.now() + HIDE_DAYS * 24 * 60 * 60 * 1000));
     } catch {
-      // navigateur sans stockage : l'encart reviendra au prochain affichage
+      // navigateur sans stockage : masqué jusqu'au prochain rechargement
     }
+    listeners.forEach((l) => l());
   }
 
-  if (!visible) return null;
+  if (hidden) return null;
 
   return (
     <div className="flex items-center justify-between gap-4 rounded-xl border border-border bg-white px-5 py-3">
