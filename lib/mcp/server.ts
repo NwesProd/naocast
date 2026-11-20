@@ -5,6 +5,7 @@ import { groupBySpeaker } from "@/lib/transcriptGrouping";
 import { episodeDisplayStatus, EPISODE_COUNTS_SELECT } from "@/lib/moduleProgress";
 import { normalizeTags } from "@/lib/guestRelevance";
 import { getObjectBuffer } from "@/lib/storage";
+import { scriptToHtml, scriptToPlainText } from "@/lib/scriptText";
 import { extractDocumentText } from "@/lib/documentText";
 import { hasModuleAccess, PLAN_LABELS, type ModuleKey } from "@/lib/plan";
 import type { Plan } from "@/app/generated/prisma/client";
@@ -133,7 +134,7 @@ export function createNaocastMcpServer(user: McpUser): McpServer {
         episodeNumber: episode.episodeNumber,
         releaseDate: episode.releaseDate ? episode.releaseDate.toISOString().slice(0, 10) : null,
         status: episodeDisplayStatus(episode, { transcriptSegments, rushes, episodeGuests: guests.length, introSegments }, prodEnabled),
-        script: { draft: episode.scriptDraft, angleIdeas: episode.scriptAngleIdeas, validated: episode.scriptValidated },
+        script: { draft: scriptToPlainText(episode.scriptDraft), angleIdeas: episode.scriptAngleIdeas, validated: episode.scriptValidated },
         guests: guests.map((g) => ({ id: g.guest.id, name: g.guest.name, media: g.guest.mediaName, tags: g.guest.tags, socialLinks: g.guest.socialLinks })),
         speakers: [...names.values()],
         hasTranscript: count > 0,
@@ -203,7 +204,7 @@ export function createNaocastMcpServer(user: McpUser): McpServer {
     "save_script",
     {
       title: "Enregistrer le script",
-      description: "Remplace le brouillon du script de l'épisode par le texte fourni (script complet, questions, notes). Refusé si le script est déjà validé : l'utilisateur doit d'abord retirer la validation dans naocast.",
+      description: "Remplace le brouillon du script de l'épisode par le texte fourni (script complet, questions, notes). Mise en forme en Markdown, affichée telle quelle dans l'éditeur de naocast : # titre, ## sous-titre, **gras**, *italique*, <u>souligné</u>, lignes vides entre les paragraphes. Refusé si le script est déjà validé : l'utilisateur doit d'abord retirer la validation dans naocast.",
       inputSchema: { episodeId: z.string(), script: z.string().max(100000) },
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
     },
@@ -213,7 +214,7 @@ export function createNaocastMcpServer(user: McpUser): McpServer {
       const episode = await ownedEpisode(user.userId, episodeId);
       if (!episode) return fail("Épisode introuvable.");
       if (episode.scriptValidated) return fail("Le script est validé : demande à l'utilisateur de retirer la validation dans le module Script avant de le modifier.");
-      await prisma.episode.update({ where: { id: episodeId }, data: { scriptDraft: script } });
+      await prisma.episode.update({ where: { id: episodeId }, data: { scriptDraft: scriptToHtml(script) } });
       return ok("Script enregistré.");
     }
   );

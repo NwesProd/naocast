@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { scriptToPlainText } from "@/lib/scriptText";
 import { Prisma } from "@/app/generated/prisma/client";
 import { requireUserId, requirePodcast } from "@/lib/authz";
 import { jsonResponse } from "@/lib/json";
@@ -59,7 +60,7 @@ export async function GET(req: Request) {
     });
     if (episode) {
       const ideas = Array.isArray(episode.scriptAngleIdeas) ? (episode.scriptAngleIdeas as unknown[]).filter((i) => typeof i === "string") : [];
-      scriptText = [episode.scriptDraft ?? "", ...ideas].join("\n");
+      scriptText = [scriptToPlainText(episode.scriptDraft), ...ideas].join("\n");
     }
   }
 
