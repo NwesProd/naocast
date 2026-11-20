@@ -91,10 +91,7 @@ export default async function PodcastPage() {
 
   return (
     <main className="p-8 w-full">
-      <h1 className="text-2xl font-bold mb-1">Mon podcast</h1>
-      <p className="text-sm text-text-muted mb-6">
-        Ces éléments sont réutilisés automatiquement sur chaque épisode.
-      </p>
+      <h1 className="text-2xl font-bold mb-6">Mon podcast</h1>
       <PodcastTabs
         tabs={[
           {
