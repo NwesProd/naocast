@@ -4,6 +4,8 @@ import { prisma } from "@/lib/db";
 import { groupBySpeaker } from "@/lib/transcriptGrouping";
 import { episodeDisplayStatus, EPISODE_COUNTS_SELECT } from "@/lib/moduleProgress";
 import { normalizeTags } from "@/lib/guestRelevance";
+import { getObjectBuffer } from "@/lib/storage";
+import { extractDocumentText } from "@/lib/documentText";
 import { hasModuleAccess, PLAN_LABELS, type ModuleKey } from "@/lib/plan";
 import type { Plan } from "@/app/generated/prisma/client";
 
@@ -57,13 +59,21 @@ export function createNaocastMcpServer(user: McpUser): McpServer {
     "get_podcast",
     {
       title: "Mon podcast",
-      description: "Informations sur le podcast de l'utilisateur : titre, positionnement (ADN) et bible éditoriale. À lire avant d'écrire du contenu pour garder le ton du podcast.",
+      description: "Informations sur le podcast de l'utilisateur : titre, positionnement (ADN), bible éditoriale et documents joints à la bible (texte extrait). À lire avant d'écrire du contenu pour garder le ton du podcast.",
       annotations: { readOnlyHint: true },
     },
     async () => {
       const podcast = await prisma.podcast.findUnique({ where: { userId: user.userId } });
       if (!podcast) return fail("Aucun podcast configuré sur ce compte.");
-      return json({ title: podcast.title, dna: podcast.dna, bible: podcast.bible });
+      const files = (podcast.referenceFiles as { key: string; filename: string; text?: string | null }[] | null) ?? [];
+      const documents = await Promise.all(
+        files.map(async (f) => ({
+          filename: f.filename,
+          // Documents ajoutés avant l'extraction à l'envoi : le texte est lu à la demande.
+          text: f.text !== undefined ? f.text : await getObjectBuffer(f.key).then((b) => extractDocumentText(b, f.filename)).catch(() => null),
+        }))
+      );
+      return json({ title: podcast.title, dna: podcast.dna, bible: podcast.bible, documents });
     }
   );
 

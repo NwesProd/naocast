@@ -13,9 +13,8 @@ interface ReferenceFile {
   mimeType: string;
 }
 
-// Onglet "ADN" (Mon podcast) : titre + positionnement en texte libre +
-// documents de référence (bible existante, notes...), tout ce qui nourrit
-// ensuite la génération de la bible (cf. POST /api/podcast/bible). Route
+// Onglet "ADN" (Mon podcast) : titre + positionnement en texte libre (les
+// documents de la bible passent par POST /api/podcast/bible/files). Route
 // distincte de POST /api/podcast (onglet "Graphisme") : les deux onglets
 // s'enregistrent indépendamment plutôt que de partager un seul gros formulaire.
 export async function POST(req: Request) {

@@ -14,9 +14,8 @@ interface ReferenceFile {
 
 const bodySchema = z.object({ key: z.string().min(1) });
 
-// Retire un document de référence de l'onglet "ADN", n'affecte pas la bible
-// déjà générée (texte figé une fois écrit, cf. Podcast.bible), seulement les
-// documents disponibles pour une prochaine (ré)génération.
+// Retire un document de la bible du podcast (onglet "ADN") : le fichier est
+// supprimé du stockage, le texte de la bible n'est pas touché.
 export async function DELETE(req: Request) {
   const userId = await requireUserId();
   const podcast = await prisma.podcast.findUnique({ where: { userId } });

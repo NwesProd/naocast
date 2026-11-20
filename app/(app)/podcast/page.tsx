@@ -56,6 +56,17 @@ export default async function PodcastPage() {
         title: podcast.title,
         dna: podcast.dna || "",
         bible: podcast.bible || "",
+        documents: await Promise.all(
+          ((podcast.referenceFiles as { key: string; filename: string; mimeType: string; text?: string | null }[] | null) ?? []).map(
+            async (f) => ({
+              key: f.key,
+              filename: f.filename,
+              mimeType: f.mimeType,
+              text: f.text ?? null,
+              url: await getSignedDownloadUrl(f.key),
+            })
+          )
+        ),
       }
     : undefined;
 

@@ -8,15 +8,25 @@ const inputClass = "w-full rounded-md border border-border px-3 py-2 focus:outli
 const pillBtn =
   "text-xs font-semibold rounded-pill bg-white border border-border px-3 py-1.5 hover:bg-[#FAFAF8] transition disabled:opacity-50 disabled:cursor-not-allowed";
 
+interface BibleDocument {
+  key: string;
+  filename: string;
+  mimeType: string;
+  text: string | null;
+  url: string;
+}
+
 interface ExistingDna {
   title: string;
   dna: string;
   bible: string;
+  documents: BibleDocument[];
 }
 
 // Onglet "ADN" (Mon podcast) : titre, positionnement en texte libre (guidé
-// par des questions suggérées) et bible du podcast, à rédiger à la main. Le
-// connecteur Claude lit l'ADN et la bible pour garder le ton du podcast.
+// par des questions suggérées) et bible du podcast : texte libre et/ou
+// documents (PDF, Word, texte, Markdown). Le connecteur Claude lit l'ADN, la
+// bible et le texte des documents pour garder le ton du podcast.
 export function PodcastDnaForm({
   existing,
   onFirstSave,
@@ -35,6 +45,10 @@ export function PodcastDnaForm({
   const [draftBible, setDraftBible] = useState(existing?.bible || "");
 
   const [editingBible, setEditingBible] = useState(!existing?.bible);
+  const [documents, setDocuments] = useState<BibleDocument[]>(existing?.documents || []);
+  const [uploadingKey, setUploadingKey] = useState<string | null>(null); // "new" ou la clé du document remplacé
+  const [previewKey, setPreviewKey] = useState<string | null>(null);
+  const [confirmDeleteKey, setConfirmDeleteKey] = useState<string | null>(null);
 
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -108,6 +122,44 @@ export function PodcastDnaForm({
       setError("Échec de la suppression du podcast.");
       setDeleting(false);
       setConfirmingDelete(false);
+    }
+  }
+
+  async function uploadDocument(file: File, replaceKey?: string) {
+    setUploadingKey(replaceKey ?? "new");
+    setError(null);
+    try {
+      const data = new FormData();
+      if (replaceKey) data.set("replaceKey", replaceKey);
+      data.set("file", file);
+      const res = await fetch("/api/podcast/bible/files", { method: "POST", body: data });
+      const body = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(body?.error || "Échec de l'envoi du document.");
+      const doc = body.file as BibleDocument;
+      setDocuments((docs) => (replaceKey ? docs.map((d) => (d.key === replaceKey ? doc : d)) : [...docs, doc]));
+      setPreviewKey(doc.key);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setUploadingKey(null);
+    }
+  }
+
+  async function removeDocument(key: string) {
+    setError(null);
+    try {
+      const res = await fetch("/api/podcast/dna/reference-files", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key }),
+      });
+      if (!res.ok) throw new Error();
+      setDocuments((docs) => docs.filter((d) => d.key !== key));
+      if (previewKey === key) setPreviewKey(null);
+    } catch {
+      setError("Échec de la suppression du document.");
+    } finally {
+      setConfirmDeleteKey(null);
     }
   }
 
@@ -196,7 +248,7 @@ export function PodcastDnaForm({
               onChange={(e) => setDraftBible(e.target.value)}
               rows={20}
               placeholder="Ton, public, format, règles éditoriales..."
-              className={`${inputClass} bg-white font-mono text-sm`}
+              className={`${inputClass} bg-white text-sm`}
             />
             <div className="flex gap-2">
               <button type="button" onClick={saveBible} disabled={savingBible} className={pillBtn}>
@@ -211,7 +263,7 @@ export function PodcastDnaForm({
           </>
         ) : (
           <>
-            <pre className="whitespace-pre-wrap font-mono text-sm text-ink bg-white rounded-md border border-border p-4">
+            <pre className="whitespace-pre-wrap font-sans text-sm text-ink bg-white rounded-md border border-border p-4">
               {bible}
             </pre>
             <button
@@ -226,6 +278,82 @@ export function PodcastDnaForm({
             </button>
           </>
         )}
+
+        <div className="border-t border-border pt-3 space-y-2">
+          <p className="text-xs font-medium text-mint-ink">Documents (PDF, Word, .txt ou .md)</p>
+          {documents.map((d) => {
+            const isPdf = d.filename.toLowerCase().endsWith(".pdf");
+            return (
+              <div key={d.key} className="rounded-md border border-border bg-white">
+                <div className="flex flex-wrap items-center gap-2 px-3 py-2">
+                  <span className="text-sm text-ink truncate flex-1 min-w-0">{d.filename}</span>
+                  {confirmDeleteKey === d.key ? (
+                    <>
+                      <span className="text-xs text-text-muted">Supprimer ce document ?</span>
+                      <button type="button" onClick={() => removeDocument(d.key)} className={`${pillBtn} text-[#8A2E1F]`}>
+                        Supprimer
+                      </button>
+                      <button type="button" onClick={() => setConfirmDeleteKey(null)} className={pillBtn}>
+                        Annuler
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button type="button" onClick={() => setPreviewKey(previewKey === d.key ? null : d.key)} className={pillBtn}>
+                        {previewKey === d.key ? "Masquer" : "Aperçu"}
+                      </button>
+                      <label className={`${pillBtn} cursor-pointer`}>
+                        {uploadingKey === d.key ? "Envoi..." : "Remplacer"}
+                        <input
+                          type="file"
+                          accept=".pdf,.docx,.txt,.md"
+                          className="hidden"
+                          disabled={uploadingKey !== null}
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            e.target.value = "";
+                            if (f) uploadDocument(f, d.key);
+                          }}
+                        />
+                      </label>
+                      <button type="button" onClick={() => setConfirmDeleteKey(d.key)} className={pillBtn}>
+                        Supprimer
+                      </button>
+                    </>
+                  )}
+                </div>
+                {previewKey === d.key && (
+                  <div className="border-t border-border p-3">
+                    {isPdf ? (
+                      <iframe src={d.url} title={d.filename} className="w-full h-[480px] rounded-md border border-border" />
+                    ) : d.text ? (
+                      <pre className="whitespace-pre-wrap font-sans text-sm text-ink max-h-[480px] overflow-y-auto">{d.text}</pre>
+                    ) : (
+                      <p className="text-xs text-text-muted">Aperçu indisponible pour ce fichier.</p>
+                    )}
+                    <a href={d.url} target="_blank" rel="noreferrer" className="mt-2 inline-block text-xs text-accent-teal hover:underline">
+                      Ouvrir dans un nouvel onglet
+                    </a>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          <label className={`${pillBtn} inline-block cursor-pointer`}>
+            {uploadingKey === "new" ? "Envoi..." : documents.length > 0 ? "+ Ajouter un document" : "Importer un document"}
+            <input
+              type="file"
+              accept=".pdf,.docx,.txt,.md"
+              className="hidden"
+              disabled={uploadingKey !== null}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                e.target.value = "";
+                if (f) uploadDocument(f);
+              }}
+            />
+          </label>
+        </div>
       </div>
 
       <Button type="submit" form="podcast-dna-form" disabled={saving} variant="secondary" className="w-full max-w-md">
