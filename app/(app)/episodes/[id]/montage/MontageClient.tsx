@@ -37,6 +37,8 @@ function formatDuration(sec: number | null): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
+const optionCardClass = "rounded-xl border border-border bg-white p-4 text-left transition hover:bg-[#FAFAF8]";
+
 function OptionCard({ selected, onClick, title, description, disabled }: { selected: boolean; onClick: () => void; title: string; description: string; disabled?: boolean }) {
   return (
     <button
@@ -244,7 +246,11 @@ export function MontageClient({
 
 
   const editorSent = status === "HUMAN_EDITOR_REQUESTED";
-  const showChoice = !validated && !hasFinal && (!choice || changingChoice) && !editorSent;
+  const finalPhase = validated || hasFinal || processing || status === "FAILED";
+  // Départ (rien d'importé) : rushs ou épisode final ; une fois des rushs importés, on choisit la voie de montage.
+  const showStart = !finalPhase && rushes.length === 0 && !editorSent;
+  const inRushFlow = !finalPhase && (rushes.length > 0 || editorSent);
+  const showChoice = inRushFlow && (!choice || changingChoice) && !editorSent;
 
   return (
     <div className="space-y-6">
@@ -252,48 +258,36 @@ export function MontageClient({
 
       {error && <p className="text-sm text-[#8A2E1F]">{error}</p>}
 
-      {/* 1. Choix de la voie */}
-      {showChoice && (
-        <section className="space-y-3 rounded-xl border border-border bg-white p-5">
-          <h2 className="text-sm font-semibold text-ink">Comment veux-tu monter cet épisode ?</h2>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <OptionCard selected={choice === "NEED_EDITOR"} onClick={() => patchEditorChoice("NEED_EDITOR")} title="Monteur naocast" description="Un monteur de l'équipe s'occupe de tout." />
-            <OptionCard selected={choice === "HAS_EDITOR_SEND"} onClick={() => patchEditorChoice("HAS_EDITOR_SEND")} title="Mon monteur" description="Tu envoies les rushs et tes consignes à ton propre monteur." />
-            <OptionCard selected={choice === "CLAUDE"} onClick={() => patchEditorChoice("CLAUDE")} title="Monter avec Claude" description="Tu montes l'épisode toi-même avec Claude, à partir de tes fichiers." />
-          </div>
+      {/* 1. Départ : importer les rushs ou l'épisode final */}
+      {showStart && (
+        <section className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <label className={`${optionCardClass} cursor-pointer`}>
+            <p className="text-sm font-semibold text-ink">{uploading === "rush" ? `Envoi... ${uploadPercent}%` : "Importer mes rushs"}</p>
+            <p className="mt-1 text-xs text-text-muted">Les fichiers bruts de l&apos;enregistrement. Tu choisis ensuite comment les faire monter.</p>
+            <input type="file" multiple accept="video/*,audio/*" className="hidden" disabled={uploading !== null} onChange={(e) => { uploadRush(e.target.files); e.target.value = ""; }} />
+          </label>
+          <label className={`${optionCardClass} cursor-pointer`}>
+            <p className="text-sm font-semibold text-ink">{uploading === "video" ? `Envoi... ${uploadPercent}%` : "Importer mon épisode final"}</p>
+            <p className="mt-1 text-xs text-text-muted">Ton épisode est déjà monté : dépose la vidéo, naocast en extrait l&apos;audio.</p>
+            <input type="file" accept="video/*" className="hidden" disabled={uploading !== null} onChange={(e) => { uploadFinal(e.target.files?.[0]); e.target.value = ""; }} />
+          </label>
         </section>
       )}
 
-      {!showChoice && choice && !validated && !hasFinal && (
-        <p className="text-sm text-text-muted">
-          Voie choisie : <strong className="text-ink">{choice === "NEED_EDITOR" ? "monteur naocast" : choice === "HAS_EDITOR_SEND" ? "mon monteur" : "Claude"}</strong>
-          {!editorSent && (
-            <>
-              {" "}
-              <button type="button" onClick={() => setChangingChoice(true)} className={`${pillBtn} ml-1`}>
-                Changer
-              </button>
-            </>
-          )}
-        </p>
-      )}
-
-      {/* 2. Rushs + action propre à la voie choisie */}
-      {choice && !validated && !hasFinal && !showChoice && (
-        <section className="space-y-4 rounded-xl border border-border bg-white p-5">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold text-ink">Rushs de l&apos;épisode</h2>
-            {!editorSent && (
-              <label className={`${pillBtn} cursor-pointer`}>
-                {uploading === "rush" ? `Envoi... ${uploadPercent}%` : "+ Importer des rushs"}
-                <input type="file" multiple accept="video/*,audio/*" className="hidden" disabled={uploading !== null} onChange={(e) => { uploadRush(e.target.files); e.target.value = ""; }} />
-              </label>
-            )}
-          </div>
-          {choice === "CLAUDE" && <p className="text-sm text-text-muted">Importe ici tes rushs pour que Claude y ait accès facilement.</p>}
-          {rushes.length === 0 ? (
-            <p className="text-sm text-text-muted">Aucun rush importé pour le moment.</p>
-          ) : (
+      {/* 2. Rushs importés, puis choix de la voie de montage et action propre à cette voie */}
+      {inRushFlow && (
+        <>
+          <section className="space-y-3 rounded-xl border border-border bg-white p-5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold text-ink">Rushs de l&apos;épisode</h2>
+              {!editorSent && (
+                <label className={`${pillBtn} cursor-pointer`}>
+                  {uploading === "rush" ? `Envoi... ${uploadPercent}%` : "+ Importer des rushs"}
+                  <input type="file" multiple accept="video/*,audio/*" className="hidden" disabled={uploading !== null} onChange={(e) => { uploadRush(e.target.files); e.target.value = ""; }} />
+                </label>
+              )}
+            </div>
+            {choice === "CLAUDE" && <p className="text-sm text-text-muted">Importe ici tes rushs pour que Claude y ait accès facilement.</p>}
             <ul className="divide-y divide-border rounded-md border border-border text-sm">
               {rushes.map((r) => (
                 <li key={r.id} className="flex items-center justify-between gap-3 px-3 py-2">
@@ -309,38 +303,60 @@ export function MontageClient({
                 </li>
               ))}
             </ul>
+          </section>
+
+          {showChoice && (
+            <section className="space-y-3 rounded-xl border border-border bg-white p-5">
+              <h2 className="text-sm font-semibold text-ink">Comment veux-tu monter cet épisode ?</h2>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <OptionCard selected={choice === "NEED_EDITOR"} onClick={() => patchEditorChoice("NEED_EDITOR")} title="Monteur naocast" description="Un monteur de l'équipe s'occupe de tout." />
+                <OptionCard selected={choice === "HAS_EDITOR_SEND"} onClick={() => patchEditorChoice("HAS_EDITOR_SEND")} title="Mon monteur" description="Tu envoies les rushs et tes consignes à ton propre monteur." />
+                <OptionCard selected={choice === "CLAUDE"} onClick={() => patchEditorChoice("CLAUDE")} title="Monter avec Claude" description="Tu montes l'épisode toi-même avec Claude, à partir de tes fichiers." />
+              </div>
+            </section>
           )}
 
-          {choice === "NEED_EDITOR" &&
-            (editorSent ? (
-              <p className="rounded-md bg-mint p-3 text-sm text-mint-ink">{editingPaid ? "Demande envoyée et payée : l'équipe s'occupe du montage. Tu pourras déposer le résultat ci-dessous." : "Demande envoyée."}</p>
-            ) : (
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-ink">Tes consignes pour le monteur</label>
-                <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={4} maxLength={5000} placeholder="Ce qu'il faut couper, le ton, les génériques à utiliser..." className={inputClass} />
-                <button type="button" onClick={sendToNaocastEditor} disabled={busy || rushes.length === 0} className={primaryBtn}>
-                  {busy ? "Redirection vers le paiement..." : "Envoyer au monteur naocast"}
-                </button>
-                {rushes.length === 0 && <p className="text-xs text-text-muted">Importe d&apos;abord au moins un rush.</p>}
-              </div>
-            ))}
+          {!showChoice && choice && (
+            <section className="space-y-4 rounded-xl border border-border bg-white p-5">
+              <p className="text-sm text-text-muted">
+                Voie choisie : <strong className="text-ink">{choice === "NEED_EDITOR" ? "monteur naocast" : choice === "HAS_EDITOR_SEND" ? "mon monteur" : "Claude"}</strong>
+                {!editorSent && (
+                  <button type="button" onClick={() => setChangingChoice(true)} className={`${pillBtn} ml-2`}>
+                    Changer
+                  </button>
+                )}
+              </p>
 
-          {choice === "HAS_EDITOR_SEND" &&
-            (editorSent ? (
-              <p className="rounded-md bg-mint p-3 text-sm text-mint-ink">Envoyé à {ownEditorEmail}. Dès que ton monteur te rend l&apos;épisode, dépose-le ci-dessous.</p>
-            ) : (
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-ink">Email de ton monteur</label>
-                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="monteur@exemple.com" className={inputClass} />
-                <label className="block pt-1 text-sm font-medium text-ink">Tes consignes pour le monteur</label>
-                <textarea value={ownNotes} onChange={(e) => setOwnNotes(e.target.value)} rows={4} maxLength={5000} placeholder="Ce qu'il faut couper, le ton, les génériques à utiliser..." className={inputClass} />
-                <button type="button" onClick={sendToOwnEditor} disabled={busy || !email.trim() || rushes.length === 0} className={primaryBtn}>
-                  {busy ? "Envoi..." : "Envoyer à mon monteur"}
-                </button>
-                {rushes.length === 0 && <p className="text-xs text-text-muted">Importe d&apos;abord au moins un rush.</p>}
-              </div>
-            ))}
-        </section>
+              {choice === "NEED_EDITOR" &&
+                (editorSent ? (
+                  <p className="rounded-md bg-mint p-3 text-sm text-mint-ink">{editingPaid ? "Demande envoyée et payée : l'équipe s'occupe du montage. Tu pourras déposer le résultat ci-dessous." : "Demande envoyée."}</p>
+                ) : (
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-ink">Tes consignes pour le monteur</label>
+                    <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={4} maxLength={5000} placeholder="Ce qu'il faut couper, le ton, les génériques à utiliser..." className={inputClass} />
+                    <button type="button" onClick={sendToNaocastEditor} disabled={busy} className={primaryBtn}>
+                      {busy ? "Redirection vers le paiement..." : "Envoyer au monteur naocast"}
+                    </button>
+                  </div>
+                ))}
+
+              {choice === "HAS_EDITOR_SEND" &&
+                (editorSent ? (
+                  <p className="rounded-md bg-mint p-3 text-sm text-mint-ink">Envoyé à {ownEditorEmail}. Dès que ton monteur te rend l&apos;épisode, dépose-le ci-dessous.</p>
+                ) : (
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-ink">Email de ton monteur</label>
+                    <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="monteur@exemple.com" className={inputClass} />
+                    <label className="block pt-1 text-sm font-medium text-ink">Tes consignes pour le monteur</label>
+                    <textarea value={ownNotes} onChange={(e) => setOwnNotes(e.target.value)} rows={4} maxLength={5000} placeholder="Ce qu'il faut couper, le ton, les génériques à utiliser..." className={inputClass} />
+                    <button type="button" onClick={sendToOwnEditor} disabled={busy || !email.trim()} className={primaryBtn}>
+                      {busy ? "Envoi..." : "Envoyer à mon monteur"}
+                    </button>
+                  </div>
+                ))}
+            </section>
+          )}
+        </>
       )}
 
       {/* 3. Vidéo finale : dépôt */}
