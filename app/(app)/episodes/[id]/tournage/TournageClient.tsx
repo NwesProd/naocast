@@ -28,8 +28,8 @@ const primaryBtn =
 const inputClass = "w-full rounded-md border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-button/30";
 
 const MODES: { key: "STUDIO" | "HOME" | "REMOTE"; label: string; placeLabel: string }[] = [
-  { key: "STUDIO", label: "Studio", placeLabel: "Adresse du studio" },
-  { key: "HOME", label: "Chez moi", placeLabel: "Lieu" },
+  { key: "STUDIO", label: "Studio", placeLabel: "Nom et adresse du studio (ex. Le Studio Unique, 12 rue…)" },
+  { key: "HOME", label: "Chez moi", placeLabel: "Adresse" },
   { key: "REMOTE", label: "En visio", placeLabel: "Lien de la visio" },
 ];
 

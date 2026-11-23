@@ -5,8 +5,15 @@ import { useRef, useState } from "react";
 const inputClass = "w-full rounded-md border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-button/30";
 
 // Champ d'adresse avec suggestions (API Adresse du gouvernement, adresses en France, sans clé).
-// Les suggestions apparaissent après 3 caractères ; choisir une suggestion remplit le champ et
-// l'enregistre aussitôt, taper librement reste possible (autre pays, lieu sans adresse).
+// Les suggestions apparaissent après 3 caractères ; choisir une suggestion l'enregistre aussitôt,
+// taper librement reste possible (autre pays, lieu sans adresse). Le nom du lieu se garde : tout ce
+// qui précède la dernière virgule (« Le Studio Unique, ») est conservé, seule l'adresse qui suit est
+// cherchée puis remplacée.
+const splitAtLastComma = (text: string): { prefix: string; query: string } => {
+  const i = text.lastIndexOf(",");
+  return i === -1 ? { prefix: "", query: text } : { prefix: text.slice(0, i + 1) + " ", query: text.slice(i + 1).trimStart() };
+};
+
 export function AddressInput({
   value,
   onChange,
@@ -46,8 +53,9 @@ export function AddressInput({
   function pick(label: string) {
     requestId.current += 1;
     setSuggestions([]);
-    onChange(label);
-    onCommit(label);
+    const full = splitAtLastComma(value).prefix + label;
+    onChange(full);
+    onCommit(full);
   }
 
   return (
@@ -62,7 +70,7 @@ export function AddressInput({
         aria-autocomplete="list"
         onChange={(e) => {
           onChange(e.target.value);
-          search(e.target.value);
+          search(splitAtLastComma(e.target.value).query);
         }}
         onKeyDown={(e) => {
           if (suggestions.length === 0) return;
