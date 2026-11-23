@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { getSignedDownloadUrl } from "@/lib/storage";
+import { recordDownload } from "@/lib/audioStats";
 
 // Fichier audio d'un épisode publié dans le flux : redirige vers un lien de stockage frais.
 // C'est ici que passeront les téléchargements des plateformes (futur comptage des écoutes).
@@ -12,6 +13,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
   });
   const key = episode?.exports[0]?.storageKey;
   if (!key) return new Response("Introuvable.", { status: 404 });
+  await recordDownload(episode!.id, req);
   const url = await getSignedDownloadUrl(key, 6 * 3600);
   return Response.redirect(new URL(url, req.url).toString(), 302);
 }

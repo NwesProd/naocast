@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { runExportAudio, finalVideoPathFor } from "@/lib/pipeline/render";
 import { runManualTranscribe } from "@/lib/pipeline/manualTranscript";
+import { runImportAudio } from "@/lib/pipeline/importAudio";
 import type { ProcessingJob } from "@/app/generated/prisma/client";
 
 // Rapporte l'avancement (0-1) d'une étape ffmpeg dans ProcessingJob.progressPercent,
@@ -37,6 +38,10 @@ export async function runJob(job: ProcessingJob): Promise<void> {
       const episode = await prisma.episode.findUniqueOrThrow({ where: { id: episodeId } });
       if (!episode.transcriptRushId) throw new Error("Aucune source choisie pour la transcription.");
       await runManualTranscribe(episodeId, episode.transcriptRushId, episode.expectedSpeakerCount);
+      break;
+    }
+    case "IMPORT_AUDIO": {
+      await runImportAudio(episodeId);
       break;
     }
     default:

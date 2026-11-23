@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { RichTextEditor } from "@/components/RichTextEditor";
 import { PodcastHostingForm, type HostingValues } from "@/components/PodcastHostingForm";
 import { PLATFORMS } from "@/lib/rssConstants";
+import { MigrationAssistant } from "./MigrationAssistant";
 
 type Status = "none" | "pending" | "live";
 type Links = Partial<Record<"apple" | "spotify" | "deezer", { url?: string; status: Status }>>;
@@ -32,6 +33,8 @@ export function AudioHosting(props: {
   audioReady: boolean;
   published: boolean;
   description: string;
+  migrationStatus: string | null;
+  migrationFeedUrl: string | null;
 }) {
   const router = useRouter();
   const [mode, setMode] = useState(props.hostingMode);
@@ -122,15 +125,15 @@ export function AudioHosting(props: {
     );
   }
 
-  if (mode === "MIGRATE") {
+  if (mode === "MIGRATE" && props.migrationStatus !== "DONE") {
     return (
       <section className="space-y-3">
-        <h2 className="text-lg font-bold">Audio</h2>
-        <div className={card}>
-          <p className="font-semibold text-ink">Migration de ton podcast</p>
-          <p className="mt-1 text-sm text-text-muted">L&apos;assistant de migration (import de ton flux actuel, rapprochement des épisodes, copie des fichiers audio) arrive bientôt.</p>
-          <button type="button" onClick={() => chooseMode(null)} className={`${pillBtn} mt-3`}>Retour</button>
-        </div>
+        <MigrationAssistant
+          migrationStatus={props.migrationStatus}
+          migrationFeedUrl={props.migrationFeedUrl}
+          feedUrl={props.feedUrl}
+          onBack={() => chooseMode(null)}
+        />
         {error && <p className="text-sm text-red-600">{error}</p>}
       </section>
     );
@@ -140,7 +143,7 @@ export function AudioHosting(props: {
     <section className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold">Audio</h2>
-        <button type="button" onClick={() => chooseMode(null)} className="text-xs text-text-muted hover:text-ink underline">Changer de mode</button>
+        {props.migrationStatus !== "DONE" && <button type="button" onClick={() => chooseMode(null)} className="text-xs text-text-muted hover:text-ink underline">Changer de mode</button>}
       </div>
 
       {missing.length > 0 ? (

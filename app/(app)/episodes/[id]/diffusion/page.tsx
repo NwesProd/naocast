@@ -7,6 +7,7 @@ import { PlanLockedNotice } from "@/components/PlanLockedNotice";
 import { DiffusionClient } from "./DiffusionClient";
 import { AudioHosting } from "./AudioHosting";
 import { feedUrl, missingHostingFields } from "@/lib/rss";
+import { episodePlays } from "@/lib/audioStats";
 
 // Module « Diffusion » (catégorie Distri) : statistiques de l'épisode (vues YouTube pour l'instant),
 // avec leur évolution depuis la sortie.
@@ -37,11 +38,16 @@ export default async function DiffusionPage({ params }: { params: Promise<{ id: 
   }
 
   const p = episode.podcast;
+  const plays = p.hostingMode ? await episodePlays(id) : null;
   return (
     <main className="p-8 w-full">
       <DiffusionClient
+        plays={plays}
         audio={
           <AudioHosting
+            key={p.migrationStatus ?? "none"}
+            migrationStatus={p.migrationStatus}
+            migrationFeedUrl={p.migrationFeedUrl}
         episodeId={id}
         hostingMode={(p.hostingMode as "NAOCAST" | "MIGRATE" | null) ?? null}
         hosting={{

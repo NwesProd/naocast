@@ -200,6 +200,9 @@ model Podcast {
   website      String?
   // { apple|spotify|deezer: { url?: string, status: "none"|"pending"|"live" } }
   platformLinks Json?
+  // Migration depuis un autre hébergeur : adresse de l'ancien flux et avancement (IMPORTING, REDIRECT, DONE).
+  migrationFeedUrl String?
+  migrationStatus  String?
 }
 
 // Bibliothèque de médias du podcast : jingles, transitions, sons et musiques
@@ -317,6 +320,9 @@ model Episode {
   description      String?
   audioPublishedAt DateTime?
   rssGuid          String?
+  // Adresse du fichier audio chez l'ancien hébergeur, le temps de le copier (migration).
+  importAudioUrl   String?
+  audioDownloads   AudioDownload[]
 
   status      EpisodeStatus @default(DRAFT)
   cameraSetup CameraSetup?
@@ -656,6 +662,8 @@ enum JobType {
   // DRAFT ne voit jamais son statut changer à cause de ses jobs (cf.
   // worker/run.ts).
   PREVIEW_RENDER
+  // Migration d'un podcast : copie du fichier audio d'un épisode depuis l'ancien hébergeur (Episode.importAudioUrl).
+  IMPORT_AUDIO
 }
 
 enum JobStatus {
@@ -837,4 +845,19 @@ model EpisodeCredit {
   createdAt      DateTime @default(now())
 
   @@index([userId, createdAt])
+}
+
+// Téléchargements du fichier audio d'un épisode par les applications d'écoute (flux RSS) : un seul comptage par
+// auditeur (empreinte anonyme adresse IP + application) et par jour, robots exclus.
+model AudioDownload {
+  id          String   @id @default(cuid())
+  episodeId   String
+  episode     Episode  @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  day         DateTime @db.Date
+  visitorHash String
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  @@unique([episodeId, visitorHash, day])
+  @@index([episodeId, day])
 }

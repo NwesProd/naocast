@@ -160,6 +160,10 @@ export default async function PodcastDashboardPage() {
   const totalViewsAll = add(totalViews, relatedContents.length > 0 ? relatedContents.reduce((sum, r) => sum + r.views, 0) : null);
 
   // Dernier épisode : sa vidéo principale, puis avec ses annexes.
+  // Écoutes audio comptées par le flux naocast (null si le podcast n'est pas hébergé par naocast).
+  const hosted = !!podcast?.hostingMode;
+  const monthPlays = hosted && podcast ? await prisma.audioDownload.count({ where: { episode: { podcastId: podcast.id }, day: { gte: monthStart } } }) : null;
+  const lastEpisodePlays = hosted && lastEpisode ? await prisma.audioDownload.count({ where: { episodeId: lastEpisode.id } }) : null;
   const lastEpisodeViews = lastEpisode ? (latestViewsByEpisode.get(lastEpisode.id) ?? null) : null;
   const lastRelated = lastEpisode ? relatedContents.filter((r) => r.episodeId === lastEpisode.id) : [];
   const lastEpisodeViewsAll = add(lastEpisodeViews, lastRelated.length > 0 ? lastRelated.reduce((sum, r) => sum + r.views, 0) : null);
@@ -323,8 +327,8 @@ export default async function PodcastDashboardPage() {
                 <p className="text-xs text-mint-muted">Vues totales ce mois-ci</p>
               </HoverTip>
               <HoverTip text="Audio">
-                <p className="text-lg font-bold text-mint-ink/40">-</p>
-                <p className="text-xs text-mint-muted">Écoutes ce mois-ci · {STATS_UNAVAILABLE}</p>
+                <p className={`text-lg font-bold ${monthPlays === null ? "text-mint-ink/40" : "text-mint-ink"}`}>{fmt(monthPlays)}</p>
+                <p className="text-xs text-mint-muted">Écoutes ce mois-ci{monthPlays === null ? ` · ${STATS_UNAVAILABLE}` : ""}</p>
               </HoverTip>
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -358,7 +362,7 @@ export default async function PodcastDashboardPage() {
               <p className="font-semibold text-peach-ink">{episodeLabel(lastEpisode)}</p>
               <HoverTip text="YouTube"><p className="text-sm text-peach-muted mt-3">Vues : {fmt(lastEpisodeViews)}</p></HoverTip>
               <HoverTip text="YouTube + annexes"><p className="text-sm text-peach-muted">Vues totales : {fmt(lastEpisodeViewsAll)}</p></HoverTip>
-              <p className="text-sm text-peach-muted">Écoutes : {STATS_UNAVAILABLE}</p>
+              <HoverTip text="Audio"><p className="text-sm text-peach-muted">Écoutes : {lastEpisodePlays === null ? STATS_UNAVAILABLE : fmt(lastEpisodePlays)}</p></HoverTip>
             </div>
           </Link>
         ) : (
