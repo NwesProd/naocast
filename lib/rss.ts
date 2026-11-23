@@ -112,7 +112,9 @@ export async function buildFeed(slug: string): Promise<string | null> {
     if (!audio) continue;
     const size = (await getObjectSize(audio.storageKey)) ?? 0;
     const guid = e.rssGuid || e.id;
-    const pub = (e.releaseDate ?? e.audioPublishedAt ?? new Date()).toUTCString();
+    // Épisode repris d'un autre hébergeur : on garde sa date de publication d'origine (jour et heure), pour que les
+    // plateformes ne voient aucun changement. Sinon, la date de sortie choisie dans naocast.
+    const pub = (e.rssGuid ? (e.audioPublishedAt ?? e.releaseDate) : (e.releaseDate ?? e.audioPublishedAt) ?? new Date())?.toUTCString() ?? new Date().toUTCString();
     const html = e.description ? simpleHtml(e.description) : "";
     items.push(`    <item>
       <title>${escapeXml(e.audioTitle?.trim() || e.title || "Sans titre")}</title>

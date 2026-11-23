@@ -67,8 +67,9 @@ export async function POST(req: Request) {
         releaseDate: episode.releaseDate ?? item.pubDate,
         season: episode.season ?? item.season,
         episodeNumber: episode.episodeNumber ?? item.episode,
-        // Déjà publié chez l'ancien hébergeur : il entre dans le flux naocast avec sa date d'origine.
-        audioPublishedAt: hasAudio ? (item.pubDate ?? new Date()) : null,
+        // Déjà publié chez l'ancien hébergeur : il entre dans le flux naocast avec sa date d'origine (il n'y paraît
+        // qu'une fois son audio copié).
+        audioPublishedAt: item.pubDate ?? new Date(),
         importAudioUrl: hasAudio ? null : item.audioUrl,
       },
     });

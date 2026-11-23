@@ -35,11 +35,8 @@ export async function runImportAudio(episodeId: string): Promise<void> {
     await putLocalFile(storageKey, upload, "audio/mpeg");
     await prisma.exportAsset.deleteMany({ where: { episodeId, type: "AUDIO" } });
     await prisma.exportAsset.create({ data: { episodeId, type: "AUDIO", storageKey } });
-    // Déjà en ligne chez l'ancien hébergeur : l'épisode entre directement dans le flux, avec sa date d'origine.
-    await prisma.episode.update({
-      where: { id: episodeId },
-      data: { audioPublishedAt: episode.releaseDate ?? new Date(), importAudioUrl: null },
-    });
+    // La date de publication d'origine a été posée à l'import : on ne garde plus l'adresse de l'ancien fichier.
+    await prisma.episode.update({ where: { id: episodeId }, data: { importAudioUrl: null } });
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
