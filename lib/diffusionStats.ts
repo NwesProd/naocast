@@ -72,3 +72,16 @@ export function viewsGainedSince(
   }
   return total;
 }
+
+// Total de vues N jours après la sortie : le dernier relevé jusqu'à ce jour-là, à condition qu'il date
+// d'au plus 7 jours avant (sinon le chiffre serait trop ancien). Renvoie null si le jour n'est pas
+// encore atteint ou si aucun relevé ne tombe dans cette fenêtre (les relevés ne remontent pas avant
+// le branchement de la chaîne).
+export function viewsAtDaysAfter(rows: { day: Date; views: number }[], releaseDate: Date, days: number, today: Date): number | null {
+  const DAY = 86_400_000;
+  const target = new Date(Date.UTC(releaseDate.getUTCFullYear(), releaseDate.getUTCMonth(), releaseDate.getUTCDate()) + days * DAY);
+  if (target.getTime() > today.getTime()) return null;
+  const inWindow = rows.filter((r) => r.day.getTime() <= target.getTime() && r.day.getTime() >= target.getTime() - 7 * DAY);
+  if (inWindow.length === 0) return null;
+  return inWindow.reduce((latest, r) => (r.day.getTime() > latest.day.getTime() ? r : latest)).views;
+}

@@ -8,8 +8,8 @@ import { hasModuleAccess } from "@/lib/plan";
 import { statusLabel } from "@/components/StatusBadge";
 import { getEpisodeUsage } from "@/lib/entitlements";
 import { isMontageDone } from "@/lib/moduleProgress";
-import { GuestPool } from "./GuestPool";
-import { viewsGainedSince } from "@/lib/diffusionStats";
+import { todayInParis } from "@/lib/moduleProgress";
+import { viewsAtDaysAfter, viewsGainedSince } from "@/lib/diffusionStats";
 import { Checklist, HowItWorks, PlanStrip, type ChecklistStep } from "./OnboardingSections";
 import { FeedbackBanner } from "./FeedbackBanner";
 
@@ -58,6 +58,41 @@ function RhythmIcon() {
       <rect x="10" y="5" width="4" height="15" rx="1" fill="currentColor" />
       <rect x="16" y="13" width="4" height="7" rx="1" fill="currentColor" />
     </svg>
+  );
+}
+
+interface BestEpisode {
+  id: string;
+  label: string;
+  videoId: string | null;
+  views: number;
+  total: number;
+}
+
+// Carte d'un épisode « le plus performant » : miniature, titre et chiffres (vues YouTube, écoutes audio à venir,
+// vues totales avec les contenus annexes). Ouvre l'onglet Diffusion de l'épisode.
+function BestEpisodeCard({ title, empty, best }: { title: string; empty: string; best: BestEpisode | null }) {
+  const nf = (n: number) => n.toLocaleString("fr-FR");
+  return (
+    <div className="rounded-xl bg-sky p-6">
+      <p className="mb-2 text-sm text-sky-muted">{title}</p>
+      {best ? (
+        <Link href={`/episodes/${best.id}/diffusion`} className="flex flex-col gap-3 hover:opacity-90 transition">
+          {best.videoId && (
+            // eslint-disable-next-line @next/next/no-img-element -- miniature YouTube servie par i.ytimg.com
+            <img src={`https://i.ytimg.com/vi/${best.videoId}/mqdefault.jpg`} alt="" className="aspect-video w-full rounded-md border border-sky-ink/10 object-cover" />
+          )}
+          <div>
+            <p className="font-semibold text-sky-ink">{best.label}</p>
+            <p className="mt-2 text-sm text-sky-muted">Vues : {nf(best.views)}</p>
+            <p className="text-sm text-sky-muted">Écoutes : {STATS_UNAVAILABLE}</p>
+            <p className="text-sm text-sky-muted">Vues totales (YouTube + annexes) : {nf(best.total)}</p>
+          </div>
+        </Link>
+      ) : (
+        <p className="text-sm text-sky-muted">{empty}</p>
+      )}
+    </div>
   );
 }
 
@@ -128,6 +163,38 @@ export default async function PodcastDashboardPage() {
   const lastEpisodeViewsAll = add(lastEpisodeViews, lastRelated.length > 0 ? lastRelated.reduce((sum, r) => sum + r.views, 0) : null);
   const fmt = (n: number | null) => (n === null ? "-" : n.toLocaleString("fr-FR"));
 
+  // Épisodes les plus performants : celui qui a le plus de vues 30 jours après sa sortie, et celui qui en a le
+  // plus à ce jour. Classés sur les vues de la vidéo principale ; le total ajoute les contenus annexes.
+  const today = new Date(`${todayInParis()}T00:00:00Z`);
+  const annexByEpisode = new Map<string, Map<string, { day: Date; views: number }[]>>();
+  for (const r of annexRows) {
+    const series = annexByEpisode.get(r.episodeId) ?? new Map<string, { day: Date; views: number }[]>();
+    series.set(r.source, [...(series.get(r.source) ?? []), { day: r.day, views: r.views }]);
+    annexByEpisode.set(r.episodeId, series);
+  }
+  const relatedNowByEpisode = new Map<string, number>();
+  for (const r of relatedContents) relatedNowByEpisode.set(r.episodeId, (relatedNowByEpisode.get(r.episodeId) ?? 0) + r.views);
+  const card = (ep: (typeof episodes)[number], views: number, total: number): BestEpisode => ({
+    id: ep.id,
+    label: episodeLabel(ep),
+    videoId: ep.youtubeVideoId,
+    views,
+    total,
+  });
+  let best30: BestEpisode | null = null;
+  let bestAllTime: BestEpisode | null = null;
+  for (const ep of episodes) {
+    const rows = mainRows.filter((r) => r.episodeId === ep.id);
+    if (rows.length === 0) continue;
+    const now = latestViewsByEpisode.get(ep.id) ?? 0;
+    if (!bestAllTime || now > bestAllTime.views) bestAllTime = card(ep, now, now + (relatedNowByEpisode.get(ep.id) ?? 0));
+    if (!ep.releaseDate) continue;
+    const at30 = viewsAtDaysAfter(rows, ep.releaseDate, 30, today);
+    if (at30 === null) continue;
+    const annexAt30 = [...(annexByEpisode.get(ep.id)?.values() ?? [])].reduce((sum, series) => sum + (viewsAtDaysAfter(series, ep.releaseDate!, 30, today) ?? 0), 0);
+    if (!best30 || at30 > best30.views) best30 = card(ep, at30, at30 + annexAt30);
+  }
+
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
   const upcoming = episodes
@@ -190,21 +257,6 @@ export default async function PodcastDashboardPage() {
   ];
   const nextStep = steps.find((st) => !st.done);
 
-  // Pool d'invités du podcast (module Invités : forfaits qui l'incluent ou testeurs).
-  const guestRows = await prisma.guest.findMany({
-    where: { podcastId: podcast.id },
-    orderBy: { name: "asc" },
-    include: { _count: { select: { episodeGuests: true } } },
-  });
-  const poolGuests = guestRows.map((g) => ({
-    id: g.id,
-    name: g.name,
-    mediaName: g.mediaName,
-    tags: g.tags,
-    socialLinks: (g.socialLinks as { platform: string; url: string }[] | null) ?? [],
-    episodeCount: g._count.episodeGuests,
-  }));
-  const hasGuestsModule = hasModuleAccess(access.plan, "invites", access.extraModules);
   const allStepsDone = !nextStep;
 
   return (
@@ -348,7 +400,14 @@ export default async function PodcastDashboardPage() {
         </div>
       )}
 
-      <GuestPool initialGuests={poolGuests} hasAccess={hasGuestsModule} />
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <BestEpisodeCard
+          title="Ton épisode le plus performant J+30"
+          empty="Disponible dès qu'un épisode aura 30 jours de relevés après sa sortie."
+          best={best30}
+        />
+        <BestEpisodeCard title="Ton épisode le plus performant all time" empty="Aucune statistique YouTube pour le moment." best={bestAllTime} />
+      </div>
     </main>
   );
 }
