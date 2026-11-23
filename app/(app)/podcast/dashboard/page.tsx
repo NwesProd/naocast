@@ -9,6 +9,7 @@ import { statusLabel } from "@/components/StatusBadge";
 import { getEpisodeUsage } from "@/lib/entitlements";
 import { isMontageDone } from "@/lib/moduleProgress";
 import { GuestPool } from "./GuestPool";
+import { viewsGainedSince } from "@/lib/diffusionStats";
 import { Checklist, HowItWorks, PlanStrip, type ChecklistStep } from "./OnboardingSections";
 import { FeedbackBanner } from "./FeedbackBanner";
 
@@ -17,10 +18,9 @@ import { FeedbackBanner } from "./FeedbackBanner";
 // /podcast (paramètres du podcast), qu'on ouvre en cliquant sur le nom du
 // podcast tout en haut de la sidebar.
 
-// Les vues/écoutes nécessitent une intégration externe (YouTube Analytics,
-// Spotify for Podcasters...) qui n'existe pas encore : on ne fait pas
-// semblant d'avoir des chiffres, on l'indique clairement plutôt que
-// d'inventer des données.
+// Les vues YouTube viennent du module Diffusion (relevés quotidiens). Les écoutes audio nécessitent une
+// intégration d'hébergeur qui n'existe pas encore : on ne fait pas semblant d'avoir des chiffres, on
+// l'indique clairement plutôt que d'inventer des données.
 const STATS_UNAVAILABLE = "Bientôt disponible";
 
 // Même porte d'entrée que la liste des épisodes : le premier module non validé auquel le forfait
@@ -99,6 +99,15 @@ export default async function PodcastDashboardPage() {
   });
 
   const lastEpisode = exported.sort((a, b) => publishDate(b).getTime() - publishDate(a).getTime())[0] ?? null;
+
+  // Statistiques YouTube (module Diffusion) : vues gagnées ce mois-ci, et total du dernier épisode.
+  const youtubeSnapshots = await prisma.statSnapshot.findMany({
+    where: { source: "YOUTUBE", episodeId: { in: episodes.map((e) => e.id) } },
+    orderBy: { day: "asc" },
+  });
+  const monthViews = viewsGainedSince(youtubeSnapshots, new Map(episodes.map((e) => [e.id, publishDate(e)])), monthStart);
+  const lastEpisodeViews = lastEpisode ? ([...youtubeSnapshots].reverse().find((s) => s.episodeId === lastEpisode.id)?.views ?? null) : null;
+  const fmt = (n: number | null) => (n === null ? "-" : n.toLocaleString("fr-FR"));
 
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
@@ -232,8 +241,8 @@ export default async function PodcastDashboardPage() {
           </div>
           <div className="grid grid-cols-2 gap-4 mt-6 pt-4 border-t border-mint-ink/10">
             <div>
-              <p className="text-lg font-bold text-mint-ink/40">-</p>
-              <p className="text-xs text-mint-muted">Vues ce mois-ci (YouTube) · {STATS_UNAVAILABLE}</p>
+              <p className={`text-lg font-bold ${monthViews === null ? "text-mint-ink/40" : "text-mint-ink"}`}>{fmt(monthViews)}</p>
+              <p className="text-xs text-mint-muted">Vues ce mois-ci (YouTube){monthViews === null ? " · Connecte ta chaîne dans Mon podcast" : ""}</p>
             </div>
             <div>
               <p className="text-lg font-bold text-mint-ink/40">-</p>
@@ -250,7 +259,7 @@ export default async function PodcastDashboardPage() {
             <p className="text-sm text-peach-muted mb-2">Ton dernier épisode</p>
             <div>
               <p className="font-semibold text-peach-ink">{episodeLabel(lastEpisode)}</p>
-              <p className="text-sm text-peach-muted mt-3">Vues : {STATS_UNAVAILABLE}</p>
+              <p className="text-sm text-peach-muted mt-3">Vues : {lastEpisodeViews === null ? "-" : fmt(lastEpisodeViews)}</p>
               <p className="text-sm text-peach-muted">Écoutes : {STATS_UNAVAILABLE}</p>
             </div>
           </Link>

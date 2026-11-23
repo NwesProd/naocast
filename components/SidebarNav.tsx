@@ -18,6 +18,7 @@ const MODULE_KEY_BY_LABEL: Record<string, ModuleKey> = {
   Script: "script",
   Invités: "invites",
   Tournage: "tournage",
+  Diffusion: "diffusion",
   Montage: "montage",
   Transcript: "transcript",
 };
@@ -248,6 +249,7 @@ export function SidebarNav({
   const transcriptHref = episode ? `/episodes/${candidateId}/transcript` : null;
   const guestsHref = episode ? `/episodes/${candidateId}/guests` : null;
   const tournageHref = episode ? `/episodes/${candidateId}/tournage` : null;
+  const diffusionHref = episode ? `/episodes/${candidateId}/diffusion` : null;
   const scriptHref = episode ? `/episodes/${candidateId}/script` : null;
   // Le module "Montage" de la sidebar couvre deux routes : le tunnel
   // (/montage) ET la relecture qui le suit une fois l'épisode traité
@@ -260,7 +262,7 @@ export function SidebarNav({
     (!!montageHref && pathname.startsWith(montageHref)) || (!!reviewHref && pathname.startsWith(reviewHref));
   // Sur n'importe quel module (Script, Invités, Montage, Transcript), seul le module est
   // surligné : "Épisodes" ne l'est que sur la liste et la page d'infos d'un épisode.
-  const insideModule = insideMontage || /^\/episodes\/[^/]+\/(script|guests|tournage|transcript)(\/|$)/.test(pathname);
+  const insideModule = insideMontage || /^\/episodes\/[^/]+\/(script|guests|tournage|transcript|diffusion)(\/|$)/.test(pathname);
   const label =
     episode &&
     [episode.season != null ? `S${episode.season}` : null, episode.episodeNumber != null ? `E${episode.episodeNumber}` : null]
@@ -306,7 +308,7 @@ export function SidebarNav({
     {
       label: "Distri",
       modules: [
-        { label: "Diffusion", href: null },
+        { label: "Diffusion", href: diffusionHref },
         { label: "Lead magnet", href: null },
         { label: "Sponsoring", href: null },
       ],
@@ -413,6 +415,7 @@ export function SidebarNav({
                           mod.label === "Transcript" ||
                           mod.label === "Invités" ||
                           mod.label === "Tournage" ||
+                          mod.label === "Diffusion" ||
                           mod.label === "Script"
                         ? "Sélectionnez un épisode pour y accéder"
                         : "Bientôt disponible"

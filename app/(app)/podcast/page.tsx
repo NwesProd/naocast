@@ -6,6 +6,9 @@ import { PodcastForm } from "@/components/PodcastForm";
 import { PodcastDnaForm } from "@/components/PodcastDnaForm";
 import { PodcastTabs } from "@/components/PodcastTabs";
 import { MediaLibrary } from "@/components/MediaLibrary";
+import { DiffusionSources } from "@/components/DiffusionSources";
+import { getUserAccess } from "@/lib/entitlements";
+import { hasModuleAccess } from "@/lib/plan";
 import { LOGO_ASSET_ID } from "@/lib/mediaAssets";
 
 // Configuration du podcast, accessible à tout moment depuis la sidebar
@@ -81,6 +84,9 @@ export default async function PodcastPage() {
       ).then((rows) => (logoRow ? [logoRow, ...rows] : rows))
     : [];
 
+  const access = podcast ? await getUserAccess(session.user.id) : null;
+  const showDiffusion = !!access && hasModuleAccess(access.plan, "diffusion", access.extraModules);
+
   const existingDna = podcast
     ? {
         title: podcast.title,
@@ -121,6 +127,9 @@ export default async function PodcastPage() {
               </div>
             ),
           },
+          ...(podcast && showDiffusion
+            ? [{ key: "diffusion", label: "Sources de diffusion", content: <DiffusionSources channelTitle={podcast.youtubeChannelTitle} /> }]
+            : []),
         ]}
       />
     </main>

@@ -1,6 +1,8 @@
 import "dotenv/config";
 import { prisma } from "@/lib/db";
 import { runJob } from "@/worker/pipeline";
+import { snapshotYoutubeStats } from "@/lib/diffusionStats";
+import { todayInParis } from "@/lib/moduleProgress";
 
 // Worker minimal : interroge la table ProcessingJob toutes les POLL_INTERVAL_MS
 // et exécute le prochain job PENDING le plus ancien, épisode par épisode, dans
@@ -93,6 +95,24 @@ async function tick(): Promise<boolean> {
   return true;
 }
 
+// Relevé quotidien des statistiques YouTube des épisodes (module Diffusion) : une fois par jour (heure
+// de Paris), et au démarrage du worker. Rejouer le même jour met seulement le chiffre à jour. Un échec
+// (clé absente, quota) ne doit jamais perturber le traitement des jobs.
+let lastStatsDay = "";
+async function dailyStatsTick(): Promise<void> {
+  const today = todayInParis();
+  if (today === lastStatsDay) return;
+  lastStatsDay = today;
+  if (!process.env.YOUTUBE_API_KEY) return;
+  try {
+    const episodes = await prisma.episode.findMany({ where: { youtubeVideoId: { not: null } }, select: { id: true, youtubeVideoId: true } });
+    const written = await snapshotYoutubeStats(episodes);
+    console.log(`[worker] statistiques YouTube relevées pour ${written} épisode(s)`);
+  } catch (err) {
+    console.warn("[worker] relevé des statistiques YouTube échoué:", (err as Error).message);
+  }
+}
+
 async function loop() {
   console.log("[worker] démarré, en écoute des jobs...");
   for (;;) {
@@ -101,6 +121,7 @@ async function loop() {
     // ne doit pas planter silencieusement (promesse rejetée non gérée) et
     // arrêter tout traitement pour tous les épisodes, il boucle et retente.
     let didWork = false;
+    await dailyStatsTick();
     try {
       didWork = await tick();
     } catch (err) {

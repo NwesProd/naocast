@@ -180,6 +180,12 @@ model Podcast {
   episodes    Episode[]
   guests      Guest[]
   mediaAssets MediaAsset[]
+
+  // Module "Diffusion" : chaîne YouTube du podcast (statistiques publiques des vidéos, lues avec la clé
+  // d'API YOUTUBE_API_KEY de naocast). On garde l'identifiant de la chaîne et sa liste de vidéos (uploads).
+  youtubeChannelId       String?
+  youtubeChannelTitle    String?
+  youtubeUploadsPlaylist String?
 }
 
 // Bibliothèque de médias du podcast : jingles, transitions, sons et musiques
@@ -382,6 +388,11 @@ model Episode {
   shootPartIndex Int           @default(0)
   shootMarkers   ShootMarker[]
 
+  // Module "Diffusion" : vidéo YouTube de l'épisode (trouvée par son titre ou choisie à la main).
+  youtubeVideoId    String?
+  youtubeVideoTitle String?
+  statSnapshots     StatSnapshot[]
+
   // Module "Script" : idées d'angles/thèmes pour l'épisode, générées (API
   // Claude) à partir de la bible du podcast, s'ils existent déjà des invités
   // de l'épisode (cf. EpisodeGuest), et du brouillon ci-dessous s'il en
@@ -430,6 +441,22 @@ model EpisodeGuest {
   @@unique([episodeId, guestId])
   @@index([episodeId, order])
   @@index([guestId])
+}
+
+// Relevé quotidien des statistiques d'un épisode (total cumulé à cette date) : sert à tracer
+// la courbe d'évolution, les API ne donnant que le total à l'instant T. Un relevé par jour et par source.
+model StatSnapshot {
+  id        String   @id @default(cuid())
+  episodeId String
+  episode   Episode  @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  source    String // YOUTUBE
+  day       DateTime @db.Date
+  views     Int
+  likes     Int?
+  comments  Int?
+
+  @@unique([episodeId, source, day])
+  @@index([episodeId, day])
 }
 
 // Repère posé pendant le tournage (un seul bouton, sans type) : `atMs` est le temps écoulé depuis le
