@@ -68,6 +68,8 @@ interface BestEpisode {
   videoId: string | null;
   views: number;
   total: number;
+  // Écoutes audio de l'épisode à ce jour (null si inconnues).
+  plays: number | null;
 }
 
 // Carte d'un épisode « le plus performant » : miniature, titre et chiffres (vues YouTube, écoutes audio à venir,
@@ -86,8 +88,8 @@ function BestEpisodeCard({ title, empty, best }: { title: string; empty: string;
           <div>
             <p className="font-semibold text-sky-ink">{best.label}</p>
             <HoverTip text="YouTube"><p className="mt-2 text-sm text-sky-muted">Vues : {nf(best.views)}</p></HoverTip>
-            <HoverTip text="Audio"><p className="text-sm text-sky-muted">Écoutes : {STATS_UNAVAILABLE}</p></HoverTip>
-            <HoverTip text="YouTube + annexes"><p className="text-sm text-sky-muted">Vues totales : {nf(best.total)}</p></HoverTip>
+            {best.plays !== null && <HoverTip text="Audio"><p className="text-sm text-sky-muted">Écoutes : {nf(best.plays)}</p></HoverTip>}
+            <HoverTip text={best.plays !== null ? "YouTube + annexes + audio" : "YouTube + annexes"}><p className="text-sm text-sky-muted">Total : {nf(best.total)}</p></HoverTip>
           </div>
         </Link>
       ) : (
@@ -163,10 +165,22 @@ export default async function PodcastDashboardPage() {
   // Écoutes audio comptées par le flux naocast (null si le podcast n'est pas hébergé par naocast).
   const hosted = !!podcast?.hostingMode;
   const monthPlays = hosted && podcast ? await prisma.audioDownload.count({ where: { episode: { podcastId: podcast.id }, day: { gte: monthStart } } }) : null;
-  const lastEpisodePlays = hosted && lastEpisode ? await prisma.audioDownload.count({ where: { episodeId: lastEpisode.id } }) : null;
+  // Écoutes de chaque épisode à ce jour : celles comptées par naocast, plus celles reprises de l'ancien hébergeur.
+  const playsByEpisode = new Map<string, number>();
+  if (hosted && podcast) {
+    for (const ep of episodes) playsByEpisode.set(ep.id, ep.importedPlays);
+    const counted = await prisma.audioDownload.groupBy({ by: ["episodeId"], where: { episode: { podcastId: podcast.id } }, _count: { _all: true } });
+    for (const c of counted) playsByEpisode.set(c.episodeId, (playsByEpisode.get(c.episodeId) ?? 0) + c._count._all);
+  }
+  const totalPlays = hosted ? [...playsByEpisode.values()].reduce((sum, n) => sum + n, 0) : null;
+  const lastEpisodePlays = hosted && lastEpisode ? (playsByEpisode.get(lastEpisode.id) ?? 0) : null;
   const lastEpisodeViews = lastEpisode ? (latestViewsByEpisode.get(lastEpisode.id) ?? null) : null;
   const lastRelated = lastEpisode ? relatedContents.filter((r) => r.episodeId === lastEpisode.id) : [];
   const lastEpisodeViewsAll = add(lastEpisodeViews, lastRelated.length > 0 ? lastRelated.reduce((sum, r) => sum + r.views, 0) : null);
+  // Totaux avec l'audio : YouTube + annexes + écoutes.
+  const monthTotal = add(monthViewsAll, monthPlays);
+  const podcastTotal = add(totalViewsAll, totalPlays);
+  const lastEpisodeTotal = add(lastEpisodeViewsAll, lastEpisodePlays);
   const fmt = (n: number | null) => (n === null ? "-" : n.toLocaleString("fr-FR"));
 
   // Épisodes les plus performants : celui qui a le plus de vues 30 jours après sa sortie, et celui qui en a le
@@ -180,12 +194,13 @@ export default async function PodcastDashboardPage() {
   }
   const relatedNowByEpisode = new Map<string, number>();
   for (const r of relatedContents) relatedNowByEpisode.set(r.episodeId, (relatedNowByEpisode.get(r.episodeId) ?? 0) + r.views);
-  const card = (ep: (typeof episodes)[number], views: number, total: number): BestEpisode => ({
+  const card = (ep: (typeof episodes)[number], views: number, total: number, plays: number | null): BestEpisode => ({
     id: ep.id,
     label: episodeLabel(ep),
     videoId: ep.youtubeVideoId,
     views,
     total,
+    plays,
   });
   let best30: BestEpisode | null = null;
   let bestAllTime: BestEpisode | null = null;
@@ -193,12 +208,13 @@ export default async function PodcastDashboardPage() {
     const rows = mainRows.filter((r) => r.episodeId === ep.id);
     if (rows.length === 0) continue;
     const now = latestViewsByEpisode.get(ep.id) ?? 0;
-    if (!bestAllTime || now > bestAllTime.views) bestAllTime = card(ep, now, now + (relatedNowByEpisode.get(ep.id) ?? 0));
+    const plays = hosted ? (playsByEpisode.get(ep.id) ?? 0) : null;
+    if (!bestAllTime || now > bestAllTime.views) bestAllTime = card(ep, now, now + (relatedNowByEpisode.get(ep.id) ?? 0) + (plays ?? 0), plays);
     if (!ep.releaseDate) continue;
     const at30 = viewsAtDaysAfter(rows, ep.releaseDate, 30, today);
     if (at30 === null) continue;
     const annexAt30 = [...(annexByEpisode.get(ep.id)?.values() ?? [])].reduce((sum, series) => sum + (viewsAtDaysAfter(series, ep.releaseDate!, 30, today) ?? 0), 0);
-    if (!best30 || at30 > best30.views) best30 = card(ep, at30, at30 + annexAt30);
+    if (!best30 || at30 > best30.views) best30 = card(ep, at30, at30 + annexAt30, null);
   }
 
   const startOfToday = new Date();
@@ -322,9 +338,9 @@ export default async function PodcastDashboardPage() {
                 <p className={`text-lg font-bold ${monthViews === null ? "text-mint-ink/40" : "text-mint-ink"}`}>{fmt(monthViews)}</p>
                 <p className="text-xs text-mint-muted">Vues ce mois-ci{monthViews === null ? " · Connecte ta chaîne dans Mon podcast" : ""}</p>
               </HoverTip>
-              <HoverTip text="YouTube + annexes">
-                <p className={`text-lg font-bold ${monthViewsAll === null ? "text-mint-ink/40" : "text-mint-ink"}`}>{fmt(monthViewsAll)}</p>
-                <p className="text-xs text-mint-muted">Vues totales ce mois-ci</p>
+              <HoverTip text="YouTube + annexes + audio">
+                <p className={`text-lg font-bold ${monthTotal === null ? "text-mint-ink/40" : "text-mint-ink"}`}>{fmt(monthTotal)}</p>
+                <p className="text-xs text-mint-muted">Total ce mois-ci</p>
               </HoverTip>
               <HoverTip text="Audio">
                 <p className={`text-lg font-bold ${monthPlays === null ? "text-mint-ink/40" : "text-mint-ink"}`}>{fmt(monthPlays)}</p>
@@ -336,9 +352,9 @@ export default async function PodcastDashboardPage() {
                 <p className={`text-lg font-bold ${totalViews === null ? "text-mint-ink/40" : "text-mint-ink"}`}>{fmt(totalViews)}</p>
                 <p className="text-xs text-mint-muted">Vues du podcast</p>
               </HoverTip>
-              <HoverTip text="YouTube + annexes">
-                <p className={`text-lg font-bold ${totalViewsAll === null ? "text-mint-ink/40" : "text-mint-ink"}`}>{fmt(totalViewsAll)}</p>
-                <p className="text-xs text-mint-muted">Vues totales</p>
+              <HoverTip text="YouTube + annexes + audio">
+                <p className={`text-lg font-bold ${podcastTotal === null ? "text-mint-ink/40" : "text-mint-ink"}`}>{fmt(podcastTotal)}</p>
+                <p className="text-xs text-mint-muted">Total du podcast</p>
               </HoverTip>
             </div>
           </div>
@@ -361,8 +377,8 @@ export default async function PodcastDashboardPage() {
             <div>
               <p className="font-semibold text-peach-ink">{episodeLabel(lastEpisode)}</p>
               <HoverTip text="YouTube"><p className="text-sm text-peach-muted mt-3">Vues : {fmt(lastEpisodeViews)}</p></HoverTip>
-              <HoverTip text="YouTube + annexes"><p className="text-sm text-peach-muted">Vues totales : {fmt(lastEpisodeViewsAll)}</p></HoverTip>
               <HoverTip text="Audio"><p className="text-sm text-peach-muted">Écoutes : {lastEpisodePlays === null ? STATS_UNAVAILABLE : fmt(lastEpisodePlays)}</p></HoverTip>
+              <HoverTip text="YouTube + annexes + audio"><p className="text-sm text-peach-muted">Total : {fmt(lastEpisodeTotal)}</p></HoverTip>
             </div>
           </Link>
         ) : (

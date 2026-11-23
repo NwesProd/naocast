@@ -96,7 +96,7 @@ export function DiffusionClient({
   // Contenu de l'onglet Audio (hébergement et flux RSS), fourni par la page.
   audio: ReactNode;
   // Écoutes comptées par le flux naocast (null si le podcast n'est pas hébergé par naocast).
-  plays: { total: number; last30: number } | null;
+  plays: { total: number; last30: number; imported: number } | null;
 }) {
   const [tab, setTab] = useState<"audio" | "video">("audio");
   const router = useRouter();
@@ -225,7 +225,7 @@ export function DiffusionClient({
         <StatCard label="Vues YouTube" value={latest ? nf.format(latest.views) : "-"} />
         <StatCard label="Likes" value={latest?.likes != null ? nf.format(latest.likes) : "-"} />
         <StatCard label="Commentaires" value={latest?.comments != null ? nf.format(latest.comments) : "-"} />
-        <StatCard label="Écoutes audio" value={plays ? nf.format(plays.total) : "-"} hint={plays ? `${nf.format(plays.last30)} sur 30 jours` : "Avec l'hébergement naocast"} />
+        <StatCard label="Écoutes audio" value={plays ? nf.format(plays.total) : "-"} hint={plays ? `${nf.format(plays.last30)} sur 30 jours${plays.imported > 0 ? `, dont ${nf.format(plays.imported)} avant naocast` : ""}` : "Avec l'hébergement naocast"} />
       </div>
 
       <div className="flex gap-1 border-b border-border">

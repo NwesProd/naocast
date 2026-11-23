@@ -23,13 +23,15 @@ export async function recordDownload(episodeId: string, req: Request): Promise<v
   }
 }
 
-// Écoutes d'un épisode : total et 30 derniers jours.
-export async function episodePlays(episodeId: string): Promise<{ total: number; last30: number }> {
+// Écoutes d'un épisode : total (écoutes comptées chez l'ancien hébergeur comprises) et 30 derniers jours.
+export async function episodePlays(episodeId: string): Promise<{ total: number; last30: number; imported: number }> {
   const since = new Date(todayInParis());
   since.setUTCDate(since.getUTCDate() - 30);
-  const [total, last30] = await Promise.all([
+  const [counted, last30, episode] = await Promise.all([
     prisma.audioDownload.count({ where: { episodeId } }),
     prisma.audioDownload.count({ where: { episodeId, day: { gte: since } } }),
+    prisma.episode.findUnique({ where: { id: episodeId }, select: { importedPlays: true } }),
   ]);
-  return { total, last30 };
+  const imported = episode?.importedPlays ?? 0;
+  return { total: counted + imported, last30, imported };
 }
