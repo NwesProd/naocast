@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { PodcastHostingForm, type HostingValues } from "@/components/PodcastHostingForm";
 import { MigrationAssistant } from "@/components/MigrationAssistant";
-import { PLATFORMS } from "@/lib/rssConstants";
+import { PLATFORMS, PLATFORM_GUIDES } from "@/lib/rssConstants";
 
 type Status = "none" | "pending" | "live";
 type Links = Partial<Record<"apple" | "spotify" | "deezer", { url?: string; status: Status }>>;
@@ -37,6 +37,23 @@ export function AudioHostingSettings(props: {
   const [links, setLinks] = useState<Links>(props.platformLinks);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [openGuide, setOpenGuide] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [check, setCheck] = useState<{ items: { level: "ok" | "warn" | "error"; text: string }[]; ready: boolean } | null>(null);
+
+  async function runCheck() {
+    setChecking(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/podcast/hosting/check");
+      if (!res.ok) throw new Error("Contrôle impossible.");
+      setCheck(await res.json());
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setChecking(false);
+    }
+  }
 
   async function patchPodcast(body: object) {
     const res = await fetch("/api/podcast/hosting", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -149,6 +166,29 @@ export function AudioHostingSettings(props: {
                 ? "Tes plateformes suivent la redirection depuis ton ancien flux : tu n'as rien à soumettre. Note ici leur état pour t'y retrouver."
                 : "À faire une seule fois : colle le flux ci-dessus dans chaque outil."}
             </p>
+            <div className="mt-3 rounded-lg bg-[#FAFAF8] p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-ink">Avant de soumettre : vérifie ton flux</p>
+                <button type="button" onClick={runCheck} disabled={checking} className={pillBtn}>
+                  {checking ? "Vérification…" : check ? "Revérifier" : "Vérifier mon flux"}
+                </button>
+              </div>
+              {check && (
+                <>
+                  <p className={`mt-2 text-sm font-semibold ${check.ready ? "text-green-800" : "text-red-700"}`}>
+                    {check.ready ? "Ton flux est prêt à être soumis." : "Ton flux n'est pas prêt : corrige les points en rouge."}
+                  </p>
+                  <ul className="mt-1 space-y-1 text-sm">
+                    {[...check.items].sort((a, b) => ({ error: 0, warn: 1, ok: 2 })[a.level] - ({ error: 0, warn: 1, ok: 2 })[b.level]).map((i, k) => (
+                      <li key={k} className={i.level === "error" ? "text-red-700" : i.level === "warn" ? "text-amber-800" : "text-text-muted"}>
+                        {i.level === "error" ? "À corriger : " : i.level === "warn" ? "À améliorer : " : "OK : "}
+                        {i.text}
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </div>
             <div className="mt-2 divide-y divide-border">
               {PLATFORMS.map((p) => {
                 const status = links[p.key]?.status ?? "none";
@@ -169,8 +209,22 @@ export function AudioHostingSettings(props: {
                         <option value="pending">En attente</option>
                         <option value="live">Publié</option>
                       </select>
+                      <button type="button" onClick={() => setOpenGuide(openGuide === p.key ? null : p.key)} className={pillBtn}>
+                        {openGuide === p.key ? "Masquer le guide" : "Comment faire"}
+                      </button>
                       <a href={p.href} target="_blank" rel="noreferrer" className={pillBtn}>Ouvrir ↗</a>
                     </div>
+                    {openGuide === p.key && (
+                      <div className="basis-full rounded-lg bg-[#FAFAF8] p-3 text-sm text-text-muted">
+                        <ol className="list-decimal space-y-1 pl-5">
+                          {PLATFORM_GUIDES[p.key].steps.map((s, i) => (
+                            <li key={i}>{s}</li>
+                          ))}
+                        </ol>
+                        <p className="mt-2 text-xs">{PLATFORM_GUIDES[p.key].delay} Les intitulés exacts peuvent changer chez la plateforme.</p>
+                        <button type="button" onClick={copyFeed} className={`${pillBtn} mt-2`}>{copied ? "Flux copié" : "Copier l'adresse du flux"}</button>
+                      </div>
+                    )}
                   </div>
                 );
               })}

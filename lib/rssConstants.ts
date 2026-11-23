@@ -43,3 +43,33 @@ export const CATEGORIES: { value: string; label: string }[] = [
   { value: "True Crime", label: "Faits divers" },
   { value: "TV & Film", label: "Télévision et cinéma" },
 ];
+
+// Marche à suivre pour déclarer le flux chez chaque plateforme (les intitulés exacts peuvent évoluer chez elles).
+export const PLATFORM_GUIDES: Record<"apple" | "spotify" | "deezer", { steps: string[]; delay: string }> = {
+  apple: {
+    steps: [
+      "Connecte-toi à Apple Podcasts Connect avec un compte Apple (gratuit, tu peux en créer un sur la page de connexion).",
+      "Ajoute un nouveau programme et choisis l'option qui permet de le déclarer avec un flux RSS.",
+      "Colle l'adresse du flux de naocast et valide.",
+      "Apple contrôle le flux, puis le publie.",
+    ],
+    delay: "Compte en général quelques jours avant que le podcast apparaisse.",
+  },
+  spotify: {
+    steps: [
+      "Connecte-toi à Spotify for Creators avec un compte Spotify (gratuit).",
+      "Choisis d'ajouter un podcast existant et colle l'adresse du flux de naocast.",
+      "Spotify envoie un code de vérification à l'e-mail du propriétaire, celui renseigné dans les informations du podcast.",
+      "Saisis le code, puis termine la configuration.",
+    ],
+    delay: "Le podcast apparaît le plus souvent en quelques heures.",
+  },
+  deezer: {
+    steps: [
+      "Connecte-toi à Deezer for Creators (compte Deezer gratuit).",
+      "Ajoute un podcast et colle l'adresse du flux de naocast.",
+      "Deezer lit le flux et le rend disponible.",
+    ],
+    delay: "Compte en général de quelques heures à quelques jours.",
+  },
+};
