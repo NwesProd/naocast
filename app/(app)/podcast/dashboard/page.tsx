@@ -311,7 +311,7 @@ export default async function PodcastDashboardPage() {
               </p>
             </div>
           </div>
-          <div className="mt-6 pt-4 border-t border-mint-ink/10 space-y-5">
+          <div className="mt-6 pt-4 border-t border-mint-ink/10 flex flex-1 flex-col justify-between gap-5">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div>
                 <p className={`text-lg font-bold ${monthViews === null ? "text-mint-ink/40" : "text-mint-ink"}`}>{fmt(monthViews)}</p>
