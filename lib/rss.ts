@@ -99,8 +99,31 @@ function categoryXml(value: string | null): string {
     : `<itunes:category text="${escapeXml(main)}"/>`;
 }
 
-// Construit le flux d'un podcast (null si le podcast n'est pas hébergé par naocast).
+// Les applications et validateurs relisent le flux très souvent : on garde le résultat une minute, et la taille
+// de chaque fichier audio dix minutes (elle ne change qu'au remplacement du fichier).
+const FEED_TTL_MS = 60_000;
+const SIZE_TTL_MS = 10 * 60_000;
+const feedCache = new Map<string, { at: number; xml: string }>();
+const sizeCache = new Map<string, { at: number; size: number }>();
+
+async function cachedSize(key: string): Promise<number> {
+  const hit = sizeCache.get(key);
+  if (hit && Date.now() - hit.at < SIZE_TTL_MS) return hit.size;
+  const size = (await getObjectSize(key)) ?? 0;
+  if (size > 0) sizeCache.set(key, { at: Date.now(), size });
+  return size;
+}
+
 export async function buildFeed(slug: string): Promise<string | null> {
+  const hit = feedCache.get(slug);
+  if (hit && Date.now() - hit.at < FEED_TTL_MS) return hit.xml;
+  const xml = await buildFeedUncached(slug);
+  if (xml) feedCache.set(slug, { at: Date.now(), xml });
+  return xml;
+}
+
+// Construit le flux d'un podcast (null si le podcast n'est pas hébergé par naocast).
+async function buildFeedUncached(slug: string): Promise<string | null> {
   const podcast = await prisma.podcast.findUnique({ where: { rssSlug: slug } });
   if (!podcast || !podcast.hostingMode) return null;
 
@@ -115,11 +138,12 @@ export async function buildFeed(slug: string): Promise<string | null> {
   const coverUrl = podcast.coverKey ? `${base}/api/rss/${slug}/cover/cover.${coverExt}` : null;
   const explicit = podcast.explicit ? "true" : "false";
 
+  const sizes = await Promise.all(episodes.map((e) => (e.exports[0] ? cachedSize(e.exports[0].storageKey) : Promise.resolve(0))));
   const items: string[] = [];
-  for (const e of episodes) {
+  for (const [i, e] of episodes.entries()) {
     const audio = e.exports[0];
     if (!audio) continue;
-    const size = (await getObjectSize(audio.storageKey)) ?? 0;
+    const size = sizes[i];
     const guid = e.rssGuid || e.id;
     // Épisode repris d'un autre hébergeur : on garde sa date de publication d'origine (jour et heure), pour que les
     // plateformes ne voient aucun changement. Sinon, la date de sortie choisie dans naocast.
