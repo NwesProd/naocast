@@ -21,6 +21,9 @@ const pillBtn =
 
 const nf = new Intl.NumberFormat("fr-FR");
 
+// Miniature d'une vidéo YouTube : adresse publique à partir de son identifiant, sans appel à l'API.
+const thumb = (videoId: string, size: "mq" | "hq") => `https://i.ytimg.com/vi/${videoId}/${size}default.jpg`;
+
 function formatDay(day: string): string {
   return new Date(`${day}T12:00:00`).toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
 }
@@ -202,17 +205,23 @@ export function DiffusionClient({
             <h2 className="text-sm font-semibold text-ink">Vidéo YouTube{channelTitle ? ` de ${channelTitle}` : ""}</h2>
             {searching && <p className="text-sm text-text-muted">Recherche de la vidéo de cet épisode...</p>}
             {video ? (
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <a href={`https://www.youtube.com/watch?v=${video.id}`} target="_blank" rel="noreferrer" className="min-w-0 truncate text-sm text-ink underline">
-                  {video.title}
+              <div className="flex flex-wrap items-center gap-4">
+                <a href={`https://www.youtube.com/watch?v=${video.id}`} target="_blank" rel="noreferrer" className="shrink-0" title="Ouvrir la vidéo sur YouTube">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- miniature YouTube servie par i.ytimg.com */}
+                  <img src={thumb(video.id, "hq")} alt={video.title} className="aspect-video w-56 rounded-md border border-border object-cover" />
                 </a>
-                <div className="flex shrink-0 gap-2">
-                  <button type="button" onClick={openPicker} disabled={busy} className={pillBtn}>
-                    Choisir une autre vidéo
-                  </button>
-                  <button type="button" onClick={() => choose(null)} disabled={busy} className={pillBtn}>
-                    Retirer
-                  </button>
+                <div className="min-w-0 flex-1 space-y-3">
+                  <a href={`https://www.youtube.com/watch?v=${video.id}`} target="_blank" rel="noreferrer" className="block text-sm font-medium text-ink underline">
+                    {video.title}
+                  </a>
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" onClick={openPicker} disabled={busy} className={pillBtn}>
+                      Choisir une autre vidéo
+                    </button>
+                    <button type="button" onClick={() => choose(null)} disabled={busy} className={pillBtn}>
+                      Retirer
+                    </button>
+                  </div>
                 </div>
               </div>
             ) : (
@@ -234,8 +243,10 @@ export function DiffusionClient({
                   <ul className="max-h-72 divide-y divide-border overflow-y-auto text-sm">
                     {uploads.map((v) => (
                       <li key={v.videoId}>
-                        <button type="button" onClick={() => choose(v.videoId)} disabled={busy} className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-[#FAFAF8]">
-                          <span className="min-w-0 truncate text-ink">{v.title}</span>
+                        <button type="button" onClick={() => choose(v.videoId)} disabled={busy} className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-[#FAFAF8]">
+                          {/* eslint-disable-next-line @next/next/no-img-element -- miniature YouTube servie par i.ytimg.com */}
+                          <img src={thumb(v.videoId, "mq")} alt="" className="aspect-video w-24 shrink-0 rounded border border-border object-cover" loading="lazy" />
+                          <span className="min-w-0 flex-1 truncate text-ink">{v.title}</span>
                           <span className="shrink-0 text-xs text-text-muted">{v.publishedAt ? new Date(v.publishedAt).toLocaleDateString("fr-FR") : ""}</span>
                         </button>
                       </li>
