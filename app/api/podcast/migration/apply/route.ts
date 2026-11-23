@@ -6,6 +6,7 @@ import { fetchFeed } from "@/lib/feedImport";
 import { ensureRssSlug } from "@/lib/rss";
 import { putObject } from "@/lib/storage";
 import { safeFetch } from "@/lib/safeFetch";
+import { optimizeCover } from "@/lib/image";
 import { randomUUID } from "crypto";
 
 const schema = z.object({
@@ -88,10 +89,10 @@ export async function POST(req: Request) {
     try {
       const res = await safeFetch(c.imageUrl);
       if (res.ok) {
-        const type = res.headers.get("content-type") || "image/jpeg";
-        const ext = type.includes("png") ? "png" : "jpg";
-        coverKey = `podcast/cover/${randomUUID()}-pochette.${ext}`;
-        await putObject(coverKey, Buffer.from(await res.arrayBuffer()), type);
+        const type = (res.headers.get("content-type") || "image/jpeg").split(";")[0];
+        const img = await optimizeCover(Buffer.from(await res.arrayBuffer()), type);
+        coverKey = `podcast/cover/${randomUUID()}-pochette.${img.ext}`;
+        await putObject(coverKey, img.buffer, img.mimeType);
       }
     } catch {
       coverKey = podcast.coverKey;

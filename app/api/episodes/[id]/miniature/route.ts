@@ -6,7 +6,9 @@ import { pipeline } from "stream/promises";
 import { tmpdir } from "os";
 import path from "path";
 import { prisma } from "@/lib/db";
-import { deleteObject, getSignedDownloadUrl, putLocalFile } from "@/lib/storage";
+import { deleteObject, getSignedDownloadUrl, putLocalFile, putObject } from "@/lib/storage";
+import { optimizeCover } from "@/lib/image";
+import { readFile } from "fs/promises";
 import { parseMultipart } from "@/lib/parseMultipart";
 import { requireUserId, requireOwnedEpisode } from "@/lib/authz";
 
@@ -27,10 +29,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   const tmpDir = await mkdtemp(path.join(tmpdir(), "naocast-miniature-"));
   try {
-    let uploaded: { key: string; name: string } | null = null;
+    let received: { tmpPath: string; mimeType: string; filename: string } | null = null;
     let rejected = false;
     const fields = await parseMultipart(req, async (file) => {
-      if (file.fieldName !== "file" || !file.filename || uploaded) {
+      if (file.fieldName !== "file" || !file.filename || received) {
         file.stream.resume();
         return;
       }
@@ -41,15 +43,26 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       }
       const tmpPath = path.join(tmpDir, "upload");
       await pipeline(file.stream, createWriteStream(tmpPath));
-      const ext = file.mimeType === "image/png" ? "png" : file.mimeType === "image/webp" ? "webp" : "jpg";
-      const key = `episodes/${id}/miniature/${randomUUID()}-${file.filename.replace(/[^\w.\-]+/g, "_")}.${ext}`;
-      await putLocalFile(key, tmpPath, file.mimeType);
-      uploaded = { key, name: file.filename };
+      received = { tmpPath, mimeType: file.mimeType, filename: file.filename };
     });
     const kind = fields.kind as Kind;
     if (!(kind in FIELD)) return NextResponse.json({ error: "Requête invalide." }, { status: 400 });
-    if (!uploaded) return NextResponse.json({ error: rejected ? "Format non pris en charge : importe une image JPG, PNG ou WebP." : "Aucun fichier reçu." }, { status: 400 });
-    const up: { key: string; name: string } = uploaded;
+    if (!received) return NextResponse.json({ error: rejected ? "Format non pris en charge : importe une image JPG, PNG ou WebP." : "Aucun fichier reçu." }, { status: 400 });
+    const rec: { tmpPath: string; mimeType: string; filename: string } = received;
+
+    const base = `episodes/${id}/miniature/${randomUUID()}-${rec.filename.replace(/\.[^.]+$/, "").replace(/[^\w.\-]+/g, "_")}`;
+    let key: string;
+    if (kind === "cover") {
+      // La pochette audio est ramenée à environ 1 Mo si elle est plus lourde (cf. lib/image.ts).
+      const img = await optimizeCover(await readFile(rec.tmpPath), rec.mimeType);
+      key = `${base}.${img.ext}`;
+      await putObject(key, img.buffer, img.mimeType);
+    } else {
+      const ext = rec.mimeType === "image/png" ? "png" : rec.mimeType === "image/webp" ? "webp" : "jpg";
+      key = `${base}.${ext}`;
+      await putLocalFile(key, rec.tmpPath, rec.mimeType);
+    }
+    const up = { key, name: rec.filename };
 
     const previous = episode[FIELD[kind]];
     await prisma.episode.update({ where: { id }, data: { [FIELD[kind]]: up.key } });

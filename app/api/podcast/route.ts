@@ -5,6 +5,7 @@ import { deleteEpisodeStorage, deletePodcastFiles } from "@/lib/pipeline/cleanup
 import { parseMultipart } from "@/lib/parseMultipart";
 import { requireUserId, AuthError } from "@/lib/authz";
 import { transcodeForWebPreview } from "@/lib/pipeline/ffmpeg";
+import { optimizeCover } from "@/lib/image";
 import { randomUUID } from "crypto";
 import { mkdtemp, rm } from "fs/promises";
 import { createWriteStream } from "fs";
@@ -75,6 +76,14 @@ export async function POST(req: Request) {
         // or R2 refuse l'upload "chunked" sans longueur connue.
         const chunks: Buffer[] = [];
         for await (const chunk of file.stream) chunks.push(chunk as Buffer);
+        if (file.fieldName === "cover") {
+          // Pochette : ramenée à environ 1 Mo si elle est plus lourde (cf. lib/image.ts).
+          const img = await optimizeCover(Buffer.concat(chunks), file.mimeType);
+          const coverKey = `${prefix}/${randomUUID()}-${file.filename.replace(/\.[^.]+$/, "")}.${img.ext}`;
+          await putObject(coverKey, img.buffer, img.mimeType);
+          keys[file.fieldName] = coverKey;
+          return;
+        }
         await putObject(key, Buffer.concat(chunks), file.mimeType);
         keys[file.fieldName] = key;
         return;
