@@ -80,7 +80,7 @@ function BestEpisodeCard({ title, empty, best }: { title: string; empty: string;
         <Link href={`/episodes/${best.id}/diffusion`} className="flex flex-col gap-3 hover:opacity-90 transition">
           {best.videoId && (
             // eslint-disable-next-line @next/next/no-img-element -- miniature YouTube servie par i.ytimg.com
-            <img src={`https://i.ytimg.com/vi/${best.videoId}/mqdefault.jpg`} alt="" className="aspect-video w-full rounded-md border border-sky-ink/10 object-cover" />
+            <img src={`https://i.ytimg.com/vi/${best.videoId}/mqdefault.jpg`} alt="" className="aspect-video w-56 max-w-full rounded-md border border-sky-ink/10 object-cover" />
           )}
           <div>
             <p className="font-semibold text-sky-ink">{best.label}</p>
