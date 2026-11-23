@@ -28,7 +28,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: "Cette demande a déjà été envoyée." }, { status: 409 });
   }
 
-  const alreadyPaid = await prisma.editingRequest.findFirst({ where: { episodeId, status: "PAID" } });
+  const alreadyPaid = await prisma.editingRequest.findFirst({ where: { episodeId, status: "PAID", kind: "EPISODE" } });
   if (alreadyPaid) return NextResponse.json({ error: "Cette demande a déjà été payée." }, { status: 409 });
 
   const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
@@ -42,7 +42,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
 
   // Une seule demande en attente par épisode : on la réutilise (nouvelles remarques, nouveau paiement).
-  const pending = await prisma.editingRequest.findFirst({ where: { episodeId, status: "PENDING_PAYMENT" }, orderBy: { createdAt: "desc" } });
+  const pending = await prisma.editingRequest.findFirst({ where: { episodeId, status: "PENDING_PAYMENT", kind: "EPISODE" }, orderBy: { createdAt: "desc" } });
   const request = pending
     ? await prisma.editingRequest.update({
         where: { id: pending.id },

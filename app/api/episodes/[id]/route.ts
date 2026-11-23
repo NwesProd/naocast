@@ -83,7 +83,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   // Montage validé hors naocast : les rushs importés ne servent plus à rien, on libère le stockage
   // (sauf si un traitement ou un monteur naocast. travaille dessus).
   if (parsed.data.montageValidatedExternally === true && !existing.montageValidatedExternally && existing.status === "DRAFT") {
-    const paidRequest = await prisma.editingRequest.findFirst({ where: { episodeId: id, status: "PAID" }, select: { id: true } });
+    const paidRequest = await prisma.editingRequest.findFirst({ where: { episodeId: id, status: "PAID", kind: "EPISODE" }, select: { id: true } });
     if (!paidRequest) {
       await purgeEpisodeRushes(id).catch((err) => console.warn(`[episode] purge des rushs échouée pour ${id}:`, err));
     }

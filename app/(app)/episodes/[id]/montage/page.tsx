@@ -32,9 +32,9 @@ export default async function MontagePage({
   // Les informations de base (titre obligatoire) doivent être renseignées avant le montage.
   if (!episode.title) redirect(`/episodes/${id}/new`);
 
-  const paidRequest = await prisma.editingRequest.findFirst({ where: { episodeId: id, status: "PAID" }, select: { id: true } });
+  const paidRequest = await prisma.editingRequest.findFirst({ where: { episodeId: id, status: "PAID", kind: "EPISODE" }, select: { id: true } });
   const pendingRequest = await prisma.editingRequest.findFirst({
-    where: { episodeId: id, status: "PENDING_PAYMENT" },
+    where: { episodeId: id, status: "PENDING_PAYMENT", kind: "EPISODE" },
     orderBy: { createdAt: "desc" },
     select: { notes: true },
   });

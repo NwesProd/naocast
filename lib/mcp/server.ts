@@ -472,5 +472,62 @@ export function createNaocastMcpServer(user: McpUser): McpServer {
     }
   );
 
+  // Extraits : passages de l'épisode à sortir en vidéos courtes. Claude peut lire le tableau et proposer des idées
+  // (statut « Idée », mention « Proposé par Claude »), que l'utilisateur garde ou écarte dans naocast.
+  server.registerTool(
+    "list_clips",
+    {
+      title: "Extraits d'un épisode",
+      description: "Liste les extraits (idées, à monter, prêts, publiés) d'un épisode, avec leur titre, leur passage [mm:ss] et leur statut.",
+      inputSchema: { episodeId: z.string() },
+      annotations: { readOnlyHint: true },
+    },
+    async ({ episodeId }) => {
+      const lock = locked("extraits", "Extraits");
+      if (lock) return lock;
+      const episode = await ownedEpisode(user.userId, episodeId);
+      if (!episode) return fail("Épisode introuvable.");
+      const clips = await prisma.clip.findMany({ where: { episodeId }, orderBy: { createdAt: "asc" } });
+      return json(
+        clips.map((c) => ({ id: c.id, title: c.title, start: formatTime(c.startMs), end: formatTime(c.endMs), status: c.status, source: c.source, excerpt: c.excerpt }))
+      );
+    }
+  );
+
+  server.registerTool(
+    "create_clip",
+    {
+      title: "Proposer un extrait",
+      description:
+        "Ajoute une idée d'extrait à un épisode : un passage du transcript, du début à la fin, avec un titre accrocheur. Les bornes sont les horodatages [mm:ss] ou [h:mm:ss] lus dans get_transcript. L'extrait arrive dans la colonne « Idées » ; l'utilisateur décide de le garder.",
+      inputSchema: {
+        episodeId: z.string(),
+        title: z.string().min(1).max(200),
+        start: z.string().describe("Début du passage, par exemple 09:40"),
+        end: z.string().describe("Fin du passage, par exemple 10:22"),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    },
+    async ({ episodeId, title, start, end }) => {
+      const lock = locked("extraits", "Extraits");
+      if (lock) return lock;
+      const episode = await ownedEpisode(user.userId, episodeId);
+      if (!episode) return fail("Épisode introuvable.");
+      const toMs = (value: string): number | null => {
+        const parts = value.trim().split(":").map(Number);
+        if (parts.length < 2 || parts.length > 3 || parts.some((n) => !Number.isFinite(n) || n < 0)) return null;
+        return parts.reduce((acc, n) => acc * 60 + n, 0) * 1000;
+      };
+      const startMs = toMs(start);
+      const endMs = toMs(end);
+      if (startMs === null || endMs === null || endMs <= startMs) return fail("Passage invalide : donne un début et une fin au format mm:ss, la fin après le début.");
+      const segments = await prisma.transcriptSegment.findMany({ where: { episodeId, endMs: { gt: startMs }, startMs: { lt: endMs } }, orderBy: { startMs: "asc" }, select: { text: true } });
+      const clip = await prisma.clip.create({
+        data: { episodeId, title, startMs, endMs, excerpt: segments.map((s) => s.text.trim()).join(" ").slice(0, 5000), source: "CLAUDE" },
+      });
+      return ok(`Extrait ajouté aux idées (id ${clip.id}).`);
+    }
+  );
+
   return server;
 }

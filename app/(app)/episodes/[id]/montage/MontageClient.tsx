@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { EPISODE_UPDATED_EVENT } from "@/components/SidebarNav";
 import { uploadFinalDirect, uploadRushDirect } from "@/lib/directUpload";
+import { EPISODE_EDITING_PRICE_LABEL } from "./prices";
 
 type Choice = "NEED_EDITOR" | "HAS_EDITOR_SEND" | "CLAUDE";
 
@@ -308,7 +309,7 @@ export function MontageClient({
             <section className="space-y-3 rounded-xl border border-border bg-white p-5">
               <h2 className="text-sm font-semibold text-ink">Comment veux-tu monter cet épisode ?</h2>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <OptionCard selected={choice === "NEED_EDITOR"} onClick={() => patchEditorChoice("NEED_EDITOR")} title="Monteur naocast" description="Un monteur de l'équipe s'occupe de tout." />
+                <OptionCard selected={choice === "NEED_EDITOR"} onClick={() => patchEditorChoice("NEED_EDITOR")} title={`Monteur naocast - ${EPISODE_EDITING_PRICE_LABEL}`} description="Un monteur de l'équipe s'occupe de tout." />
                 <OptionCard selected={choice === "HAS_EDITOR_SEND"} onClick={() => patchEditorChoice("HAS_EDITOR_SEND")} title="Mon monteur" description="Tu envoies les rushs et tes consignes à ton propre monteur." />
                 <OptionCard selected={choice === "CLAUDE"} onClick={() => patchEditorChoice("CLAUDE")} title="Monter avec Claude" description="Tu montes l'épisode toi-même avec Claude, à partir de tes fichiers." />
               </div>

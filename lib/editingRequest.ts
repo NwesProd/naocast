@@ -126,6 +126,22 @@ export async function finalizeEditingRequest(requestId: string, session: Stripe.
   const request = await prisma.editingRequest.findUnique({ where: { id: requestId } });
   if (!request || request.status !== "PAID") return;
 
+  // Demande de montage d'un extrait : l'extrait passe « À monter », le statut de l'épisode ne change pas.
+  if (request.kind === "CLIP" && request.clipId) {
+    await prisma.clip.updateMany({ where: { id: request.clipId, status: "IDEA" }, data: { status: "TO_EDIT", editor: "NAOCAST" } });
+    const claimedClip = await prisma.editingRequest.updateMany({ where: { id: requestId, emailSentAt: null }, data: { emailSentAt: new Date() } });
+    if (claimedClip.count === 0) return;
+    try {
+      const { renderClipBrief } = await import("@/lib/clips");
+      const { subject, html } = await renderClipBrief(request.clipId, request.notes, `Demande payée par ${request.userEmail}.`);
+      await sendEmail({ to: EDITING_REQUEST_EMAIL, subject: `Demande de montage d'extrait : ${subject}`, html });
+    } catch (err) {
+      await prisma.editingRequest.update({ where: { id: requestId }, data: { emailSentAt: null } });
+      console.error("[editing-request] email d'extrait non envoyé:", (err as Error).message);
+    }
+    return;
+  }
+
   if (request.episodeId) {
     await prisma.episode.updateMany({
       where: { id: request.episodeId, status: { notIn: ["EXPORTED"] } },

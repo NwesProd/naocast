@@ -393,6 +393,7 @@ model Episode {
   youtubeVideoTitle String?
   statSnapshots     StatSnapshot[]
   relatedContents   RelatedContent[]
+  clips             Clip[]
 
   // Module "Script" : idées d'angles/thèmes pour l'épisode, générées (API
   // Claude) à partir de la bible du podcast, s'ils existent déjà des invités
@@ -442,6 +443,30 @@ model EpisodeGuest {
   @@unique([episodeId, guestId])
   @@index([episodeId, order])
   @@index([guestId])
+}
+
+// Extrait d'un épisode (module Extraits) : un passage du transcript à sortir en vidéo courte. Montage hors de
+// naocast (monteur, Claude). Statuts : IDEA (idée), TO_EDIT (à monter), READY (prêt), PUBLISHED (publié, lié à
+// une vidéo YouTube devenue contenu annexe dans Diffusion). Pas de durée affichée : elle change au montage.
+model Clip {
+  id             String   @id @default(cuid())
+  episodeId      String
+  episode        Episode  @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  title          String
+  startMs        Int
+  endMs          Int
+  excerpt        String // texte du passage dans le transcript, au moment de la création
+  status         String   @default("IDEA")
+  source         String   @default("MANUAL") // MANUAL | CLAUDE
+  editor         String? // OWN | NAOCAST
+  fileKey        String? // short monté déposé (facultatif)
+  fileName       String?
+  publishedUrl   String?
+  youtubeVideoId String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([episodeId, status])
 }
 
 // Contenu annexe d'un épisode (module Diffusion) : par exemple un short extrait de l'épisode, relié à une
@@ -677,6 +702,11 @@ model EditingRequest {
 
   // Remarques libres du podcasteur pour le monteur.
   notes String?
+
+  // Demande de montage d'un épisode (EPISODE) ou d'un extrait (CLIP, cf. clipId : aucune incidence sur le statut
+  // de l'épisode).
+  kind   String  @default("EPISODE")
+  clipId String?
 
   status          EditingRequestStatus @default(PENDING_PAYMENT)
   stripeSessionId String?              @unique
