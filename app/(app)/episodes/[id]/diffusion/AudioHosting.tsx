@@ -180,7 +180,11 @@ export function AudioHosting(props: {
 
           <div className={card}>
             <p className="font-semibold text-ink">Plateformes</p>
-            <p className="text-xs text-text-muted">À faire une seule fois : colle le flux ci-dessus dans chaque outil.</p>
+            <p className="text-xs text-text-muted">
+              {props.migrationStatus === "DONE"
+                ? "Tes plateformes suivent la redirection depuis ton ancien flux : tu n'as rien à soumettre. Note ici leur état pour t'y retrouver."
+                : "À faire une seule fois : colle le flux ci-dessus dans chaque outil."}
+            </p>
             <div className="mt-2 divide-y divide-border">
               {PLATFORMS.map((p) => {
                 const link = links[p.key];
@@ -192,12 +196,11 @@ export function AudioHosting(props: {
                       <p className="text-xs text-text-muted">{p.tool}</p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className={`rounded-pill px-2.5 py-0.5 text-xs font-semibold ${STATUS_STYLE[status]}`}>{STATUS_LABEL[status]}</span>
                       <select
                         aria-label={`État sur ${p.label}`}
                         value={status}
                         onChange={(e) => updateLink(p.key, { status: e.target.value as Status })}
-                        className="rounded-lg border border-border bg-white px-2 py-1 text-xs"
+                        className={`rounded-pill border-0 px-3 py-1 text-xs font-semibold cursor-pointer ${STATUS_STYLE[status]}`}
                       >
                         <option value="none">Pas encore soumis</option>
                         <option value="pending">En attente</option>
