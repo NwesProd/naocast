@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db";
 import { requireUserId, requireOwnedEpisode } from "@/lib/authz";
 import { missingHostingFields } from "@/lib/rss";
 
-const schema = z.object({ description: z.string().max(20000).optional(), publish: z.boolean().optional() });
+const schema = z.object({ title: z.string().max(300).optional(), description: z.string().max(20000).optional(), publish: z.boolean().optional() });
 
 // Diffusion audio d'un épisode : description (HTML) et mise dans le flux RSS (ou retrait).
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -18,7 +18,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
   const parsed = schema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: "Requête invalide." }, { status: 400 });
-  const { description, publish } = parsed.data;
+  const { title, description, publish } = parsed.data;
 
   if (publish === true) {
     const audio = await prisma.exportAsset.findFirst({ where: { episodeId: id, type: "AUDIO" } });
@@ -31,6 +31,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const updated = await prisma.episode.update({
     where: { id },
     data: {
+      ...(title !== undefined ? { audioTitle: title.trim() || null } : {}),
       ...(description !== undefined ? { description: description || null } : {}),
       ...(publish === true ? { audioPublishedAt: episode.audioPublishedAt ?? new Date() } : {}),
       ...(publish === false ? { audioPublishedAt: null } : {}),

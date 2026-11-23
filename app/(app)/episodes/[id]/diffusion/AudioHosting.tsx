@@ -33,6 +33,8 @@ export function AudioHosting(props: {
   audioReady: boolean;
   published: boolean;
   description: string;
+  audioTitle: string;
+  episodeTitle: string;
   migrationStatus: string | null;
   migrationFeedUrl: string | null;
 }) {
@@ -47,6 +49,16 @@ export function AudioHosting(props: {
   const descRef = useRef<string>(props.description);
   const [descState, setDescState] = useState<"idle" | "saving" | "saved">("idle");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [audioTitle, setAudioTitle] = useState(props.audioTitle);
+  const titleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function saveTitle(value: string) {
+    setAudioTitle(value);
+    if (titleTimer.current) clearTimeout(titleTimer.current);
+    titleTimer.current = setTimeout(() => {
+      fetch(`/api/episodes/${props.episodeId}/audio`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: value }) }).catch(() => {});
+    }, 700);
+  }
 
   async function patchPodcast(body: object) {
     const res = await fetch("/api/podcast/hosting", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -204,6 +216,14 @@ export function AudioHosting(props: {
               <p className="font-semibold text-ink">Cet épisode</p>
               <span className={`rounded-pill px-2.5 py-0.5 text-xs font-semibold ${published ? STATUS_STYLE.live : STATUS_STYLE.none}`}>{published ? "Dans le flux" : "Pas dans le flux"}</span>
             </div>
+            <p className="mt-3 text-xs font-semibold text-text-muted">Titre</p>
+            <input
+              value={audioTitle}
+              onChange={(e) => saveTitle(e.target.value)}
+              placeholder={props.episodeTitle || "Titre de l'épisode"}
+              className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm focus:outline-none focus:border-primary-button"
+            />
+            <p className="mt-1 text-xs text-text-muted">Le titre affiché sur Apple, Spotify et Deezer. Laisse vide pour reprendre le titre de l&apos;épisode.</p>
             <p className="mt-3 text-xs font-semibold text-text-muted">Description de l&apos;épisode</p>
             <div className="mt-1">
               <RichTextEditor initialContent={props.description} placeholder="Ce que l'auditeur va trouver dans cet épisode…" onChange={saveDescription} minHeight={160} />

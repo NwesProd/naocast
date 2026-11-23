@@ -320,6 +320,8 @@ model Episode {
   description      String?
   audioPublishedAt DateTime?
   rssGuid          String?
+  // Titre affiché sur les plateformes d'écoute quand il diffère du titre de l'épisode (vide : le titre de l'épisode).
+  audioTitle       String?
   // Adresse du fichier audio chez l'ancien hébergeur, le temps de le copier (migration).
   importAudioUrl   String?
   audioDownloads   AudioDownload[]

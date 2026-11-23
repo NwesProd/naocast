@@ -61,6 +61,8 @@ export async function POST(req: Request) {
       where: { id: episodeId },
       data: {
         rssGuid: item.guid,
+        // Titre tel qu'il est publié chez l'ancien hébergeur, s'il diffère de celui de l'épisode.
+        audioTitle: (episode.title ?? "").trim() !== item.title.trim() ? item.title : episode.audioTitle,
         description: episode.description || item.description,
         releaseDate: episode.releaseDate ?? item.pubDate,
         season: episode.season ?? item.season,

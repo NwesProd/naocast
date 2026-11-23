@@ -65,6 +65,8 @@ export default async function DiffusionPage({ params }: { params: Promise<{ id: 
         audioReady={episode.exports.length > 0}
         published={!!episode.audioPublishedAt}
         description={episode.description ?? ""}
+        audioTitle={episode.audioTitle ?? ""}
+        episodeTitle={episode.title ?? ""}
       />
         }
         episodeId={id}

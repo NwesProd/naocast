@@ -115,7 +115,7 @@ export async function buildFeed(slug: string): Promise<string | null> {
     const pub = (e.releaseDate ?? e.audioPublishedAt ?? new Date()).toUTCString();
     const html = e.description ? simpleHtml(e.description) : "";
     items.push(`    <item>
-      <title>${escapeXml(e.title || "Sans titre")}</title>
+      <title>${escapeXml(e.audioTitle?.trim() || e.title || "Sans titre")}</title>
       <guid isPermaLink="false">${escapeXml(guid)}</guid>
       <pubDate>${pub}</pubDate>
       <enclosure url="${base}/api/rss/${slug}/audio/${e.id}.mp3" length="${size}" type="audio/mpeg"/>
