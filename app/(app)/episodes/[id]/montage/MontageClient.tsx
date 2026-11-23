@@ -87,8 +87,9 @@ export function MontageClient({
   const processing = status === "QUEUED" || status === "PROCESSING";
   const hasFinal = !!video;
   const serverChoice: Choice | null = editorChoice === "NEED_EDITOR" || editorChoice === "HAS_EDITOR_SEND" || editorChoice === "CLAUDE" ? editorChoice : null;
-  // Le choix s'affiche tout de suite (avant la réponse du serveur) : pas d'ancien choix qui réapparaît le temps du rechargement.
-  const [localChoice, setLocalChoice] = useState<Choice | null>(serverChoice);
+  // Aucun choix présélectionné à l'ouverture de la page (sauf demande déjà envoyée). Un choix s'affiche tout de
+  // suite, avant la réponse du serveur : pas d'ancien choix qui réapparaît le temps du rechargement.
+  const [localChoice, setLocalChoice] = useState<Choice | null>(status === "HUMAN_EDITOR_REQUESTED" ? serverChoice : null);
   const choice = localChoice;
 
   const [error, setError] = useState<string | null>(null);
@@ -98,7 +99,6 @@ export function MontageClient({
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState<string | null>(null); // "rush" | "video"
   const [uploadPercent, setUploadPercent] = useState(0);
-  const [changingChoice, setChangingChoice] = useState(false);
   const confirmedPayment = useRef(false);
 
   // Retour de Stripe Checkout : vérifie le paiement auprès du serveur, puis recharge la page.
@@ -125,7 +125,6 @@ export function MontageClient({
     const previous = localChoice;
     setError(null);
     setLocalChoice(value);
-    setChangingChoice(false);
     try {
       const res = await fetch(`/api/episodes/${episodeId}`, {
         method: "PATCH",
@@ -250,7 +249,7 @@ export function MontageClient({
   // Départ (rien d'importé) : rushs ou épisode final ; une fois des rushs importés, on choisit la voie de montage.
   const showStart = !finalPhase && rushes.length === 0 && !editorSent;
   const inRushFlow = !finalPhase && (rushes.length > 0 || editorSent);
-  const showChoice = inRushFlow && (!choice || changingChoice) && !editorSent;
+  const showChoice = inRushFlow && !choice && !editorSent;
 
   return (
     <div className="space-y-6">
@@ -268,7 +267,7 @@ export function MontageClient({
           </label>
           <label className={`${optionCardClass} cursor-pointer`}>
             <p className="text-sm font-semibold text-ink">{uploading === "video" ? `Envoi... ${uploadPercent}%` : "Importer mon épisode final"}</p>
-            <p className="mt-1 text-xs text-text-muted">Ton épisode est déjà monté : dépose la vidéo, naocast en extrait l&apos;audio.</p>
+            <p className="mt-1 text-xs text-text-muted">Ton épisode est déjà monté : dépose la vidéo.</p>
             <input type="file" accept="video/*" className="hidden" disabled={uploading !== null} onChange={(e) => { uploadFinal(e.target.files?.[0]); e.target.value = ""; }} />
           </label>
         </section>
@@ -318,14 +317,20 @@ export function MontageClient({
 
           {!showChoice && choice && (
             <section className="space-y-4 rounded-xl border border-border bg-white p-5">
-              <p className="text-sm text-text-muted">
-                Voie choisie : <strong className="text-ink">{choice === "NEED_EDITOR" ? "monteur naocast" : choice === "HAS_EDITOR_SEND" ? "mon monteur" : "Claude"}</strong>
-                {!editorSent && (
-                  <button type="button" onClick={() => setChangingChoice(true)} className={`${pillBtn} ml-2`}>
-                    Changer
-                  </button>
-                )}
-              </p>
+              {!editorSent && (
+                <button
+                  type="button"
+                  onClick={() => setLocalChoice(null)}
+                  title="Revenir au choix du montage"
+                  className="inline-flex items-center gap-2 rounded-pill bg-primary-button px-3.5 py-1.5 text-sm font-semibold text-white transition hover:brightness-110"
+                >
+                  {choice === "NEED_EDITOR" ? "Monteur naocast" : choice === "HAS_EDITOR_SEND" ? "Mon monteur" : "Monter avec Claude"}
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M9 14L4 9l5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M4 9h10a6 6 0 010 12h-3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+              )}
 
               {choice === "NEED_EDITOR" &&
                 (editorSent ? (
