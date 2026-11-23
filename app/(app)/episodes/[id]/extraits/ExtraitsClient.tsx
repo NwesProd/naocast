@@ -189,16 +189,35 @@ function NewClip({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Mots à plat (un mot = un jeton cliquable) ; une phrase sans horodatage de mots forme un seul jeton.
-  const tokens = useMemo<Token[]>(
-    () =>
-      transcript.flatMap((s, seg) =>
-        s.words && s.words.length > 0
-          ? s.words.map((w) => ({ seg, text: w.text, startMs: w.startMs, endMs: w.endMs }))
-          : [{ seg, text: s.text, startMs: s.startMs, endMs: s.endMs }]
-      ),
-    [transcript]
-  );
+  // Phrases à plat (une phrase = un jeton cliquable) : on coupe chaque passage du transcript à la ponctuation
+  // de fin de phrase. Avec les mots horodatés, les bornes sont exactes ; sinon elles sont estimées au prorata.
+  const tokens = useMemo<Token[]>(() => {
+    const END = /[.!?…]["'»”)\]]*$/;
+    return transcript.flatMap((s, seg) => {
+      const out: Token[] = [];
+      if (s.words && s.words.length > 0) {
+        let buf: typeof s.words = [];
+        for (const w of s.words) {
+          buf.push(w);
+          if (END.test(w.text.trim())) {
+            out.push({ seg, text: buf.map((b) => b.text).join(" "), startMs: buf[0].startMs, endMs: w.endMs });
+            buf = [];
+          }
+        }
+        if (buf.length) out.push({ seg, text: buf.map((b) => b.text).join(" "), startMs: buf[0].startMs, endMs: buf[buf.length - 1].endMs });
+      } else {
+        const parts = s.text.split(/(?<=[.!?…])\s+/).filter(Boolean);
+        const total = parts.reduce((n, t) => n + t.length, 0) || 1;
+        let cursor = s.startMs;
+        for (const part of parts) {
+          const end = cursor + Math.round(((s.endMs - s.startMs) * part.length) / total);
+          out.push({ seg, text: part, startMs: cursor, endMs: end });
+          cursor = end;
+        }
+      }
+      return out.length ? out : [{ seg, text: s.text, startMs: s.startMs, endMs: s.endMs }];
+    });
+  }, [transcript]);
   const firstTokenOfSegment = useMemo(() => {
     const map = new Map<number, number>();
     tokens.forEach((t, i) => {
@@ -279,7 +298,7 @@ function NewClip({
           Annuler
         </button>
       </div>
-      <p className="text-sm text-text-muted">Clique sur le premier mot du passage, puis sur le dernier. Un troisième clic recommence.</p>
+      <p className="text-sm text-text-muted">Clique sur la première phrase du passage, puis sur la dernière. Un troisième clic recommence.</p>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <div className="space-y-3 rounded-xl border border-border bg-white p-4">
