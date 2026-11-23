@@ -9,6 +9,7 @@ import { statusLabel } from "@/components/StatusBadge";
 import { getEpisodeUsage } from "@/lib/entitlements";
 import { isMontageDone } from "@/lib/moduleProgress";
 import { todayInParis } from "@/lib/moduleProgress";
+import { HoverTip } from "@/components/HoverTip";
 import { viewsAtDaysAfter, viewsGainedSince } from "@/lib/diffusionStats";
 import { Checklist, HowItWorks, PlanStrip, type ChecklistStep } from "./OnboardingSections";
 import { FeedbackBanner } from "./FeedbackBanner";
@@ -84,9 +85,9 @@ function BestEpisodeCard({ title, empty, best }: { title: string; empty: string;
           )}
           <div>
             <p className="font-semibold text-sky-ink">{best.label}</p>
-            <p className="mt-2 text-sm text-sky-muted" title="YouTube">Vues : {nf(best.views)}</p>
-            <p className="text-sm text-sky-muted" title="Audio">Écoutes : {STATS_UNAVAILABLE}</p>
-            <p className="text-sm text-sky-muted" title="YouTube + annexes">Vues totales : {nf(best.total)}</p>
+            <HoverTip text="YouTube"><p className="mt-2 text-sm text-sky-muted">Vues : {nf(best.views)}</p></HoverTip>
+            <HoverTip text="Audio"><p className="text-sm text-sky-muted">Écoutes : {STATS_UNAVAILABLE}</p></HoverTip>
+            <HoverTip text="YouTube + annexes"><p className="text-sm text-sky-muted">Vues totales : {nf(best.total)}</p></HoverTip>
           </div>
         </Link>
       ) : (
@@ -313,28 +314,28 @@ export default async function PodcastDashboardPage() {
           </div>
           <div className="mt-6 pt-4 border-t border-mint-ink/10 flex flex-1 flex-col justify-between gap-5">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <div title="YouTube">
+              <HoverTip text="YouTube">
                 <p className={`text-lg font-bold ${monthViews === null ? "text-mint-ink/40" : "text-mint-ink"}`}>{fmt(monthViews)}</p>
                 <p className="text-xs text-mint-muted">Vues ce mois-ci{monthViews === null ? " · Connecte ta chaîne dans Mon podcast" : ""}</p>
-              </div>
-              <div title="YouTube + annexes">
+              </HoverTip>
+              <HoverTip text="YouTube + annexes">
                 <p className={`text-lg font-bold ${monthViewsAll === null ? "text-mint-ink/40" : "text-mint-ink"}`}>{fmt(monthViewsAll)}</p>
                 <p className="text-xs text-mint-muted">Vues totales ce mois-ci</p>
-              </div>
-              <div title="Audio">
+              </HoverTip>
+              <HoverTip text="Audio">
                 <p className="text-lg font-bold text-mint-ink/40">-</p>
                 <p className="text-xs text-mint-muted">Écoutes ce mois-ci · {STATS_UNAVAILABLE}</p>
-              </div>
+              </HoverTip>
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <div title="YouTube">
+              <HoverTip text="YouTube">
                 <p className={`text-lg font-bold ${totalViews === null ? "text-mint-ink/40" : "text-mint-ink"}`}>{fmt(totalViews)}</p>
                 <p className="text-xs text-mint-muted">Vues du podcast</p>
-              </div>
-              <div title="YouTube + annexes">
+              </HoverTip>
+              <HoverTip text="YouTube + annexes">
                 <p className={`text-lg font-bold ${totalViewsAll === null ? "text-mint-ink/40" : "text-mint-ink"}`}>{fmt(totalViewsAll)}</p>
                 <p className="text-xs text-mint-muted">Vues totales</p>
-              </div>
+              </HoverTip>
             </div>
           </div>
         </div>
@@ -355,8 +356,8 @@ export default async function PodcastDashboardPage() {
             )}
             <div>
               <p className="font-semibold text-peach-ink">{episodeLabel(lastEpisode)}</p>
-              <p className="text-sm text-peach-muted mt-3" title="YouTube">Vues : {fmt(lastEpisodeViews)}</p>
-              <p className="text-sm text-peach-muted" title="YouTube + annexes">Vues totales : {fmt(lastEpisodeViewsAll)}</p>
+              <HoverTip text="YouTube"><p className="text-sm text-peach-muted mt-3">Vues : {fmt(lastEpisodeViews)}</p></HoverTip>
+              <HoverTip text="YouTube + annexes"><p className="text-sm text-peach-muted">Vues totales : {fmt(lastEpisodeViewsAll)}</p></HoverTip>
               <p className="text-sm text-peach-muted">Écoutes : {STATS_UNAVAILABLE}</p>
             </div>
           </Link>
