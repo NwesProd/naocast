@@ -188,6 +188,8 @@ export function TranscriptModuleClient({
       const data = await episodeRes.json();
       setTranscript(data.transcriptSegments);
       setSpeakers(data.speakers);
+      // Le tick vert du module dans la sidebar suit la présence du transcript.
+      window.dispatchEvent(new Event(EPISODE_UPDATED_EVENT));
     } catch (e) {
       setError((e as Error).message);
     } finally {

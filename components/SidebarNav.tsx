@@ -52,11 +52,12 @@ function LockIcon() {
 
 // Pastille "module terminé" (ex. intro validée, épisode exporté), un simple
 // repère visuel dans la sidebar, pas un lien ni une action.
-function CheckIcon() {
+// `onActive` : sur l'élément orange sélectionné, pastille blanche pour rester lisible.
+function CheckIcon({ onActive = false }: { onActive?: boolean }) {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="shrink-0 text-accent-teal">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className={`shrink-0 ${onActive ? "text-white" : "text-accent-teal"}`}>
       <circle cx="12" cy="12" r="10" fill="currentColor" />
-      <path d="M8 12.5l2.5 2.5 5.5-6" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M8 12.5l2.5 2.5 5.5-6" stroke={onActive ? "#e85a2a" : "white"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -401,7 +402,7 @@ export function SidebarNav({
                     }`}
                   >
                     <span>{mod.label}</span>
-                    {mod.done && <CheckIcon />}
+                    {mod.done && <CheckIcon onActive={mod.label === "Montage" ? insideMontage : pathname.startsWith(mod.href)} />}
                   </Link>
                 );
               }
