@@ -76,7 +76,7 @@ export function createNaocastMcpServer(user: McpUser): McpServer {
           text: f.text !== undefined ? f.text : await getObjectBuffer(f.key).then((b) => extractDocumentText(b, f.filename)).catch(() => null),
         }))
       );
-      return json({ title: podcast.title, dna: podcast.dna, bible: podcast.bible, documents });
+      return json({ title: podcast.title, dna: podcast.dna, bible: scriptToPlainText(podcast.bible), documents });
     }
   );
 

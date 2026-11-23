@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { RichTextEditor } from "@/components/RichTextEditor";
 
 const inputClass = "w-full rounded-md border border-border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-button/30";
 const BIBLE_PLACEHOLDER =
@@ -39,10 +40,8 @@ export function PodcastDnaForm({
   // serveur), permettant de basculer vers l'onglet Bibliothèque de médias une seule fois.
   const [isFirstSave] = useState(!existing);
   const [title, setTitle] = useState(existing?.title || "");
-  const [bible, setBible] = useState(existing?.bible || "");
   const [draftBible, setDraftBible] = useState(existing?.bible || "");
-
-  const [editingBible, setEditingBible] = useState(false);
+  const [savedBible, setSavedBible] = useState(false);
   const [documents, setDocuments] = useState<BibleDocument[]>(existing?.documents || []);
   const [uploadingKey, setUploadingKey] = useState<string | null>(null); // "new" ou la clé du document remplacé
   const [previewKey, setPreviewKey] = useState<string | null>(null);
@@ -145,8 +144,7 @@ export function PodcastDnaForm({
         body: JSON.stringify({ bible: draftBible }),
       });
       if (!res.ok) throw new Error();
-      setBible(draftBible);
-      setEditingBible(false);
+      setSavedBible(true);
     } catch {
       setError("Échec de l'enregistrement de la bible.");
     } finally {
@@ -193,43 +191,21 @@ export function PodcastDnaForm({
 
       <div className="rounded-xl bg-mint p-5 space-y-3">
         <h2 className="font-medium text-mint-ink text-sm">Bible du podcast</h2>
-        {editingBible || !bible ? (
-          <>
-            <textarea
-              value={draftBible}
-              onChange={(e) => setDraftBible(e.target.value)}
-              rows={14}
-              placeholder={BIBLE_PLACEHOLDER}
-              className={`${inputClass} bg-white text-sm`}
-            />
-            <div className="flex gap-2">
-              <button type="button" onClick={saveBible} disabled={savingBible} className={pillBtn}>
-                {savingBible ? "Enregistrement..." : "Enregistrer"}
-              </button>
-              {bible && (
-                <button type="button" onClick={() => setEditingBible(false)} className={pillBtn}>
-                  Annuler
-                </button>
-              )}
-            </div>
-          </>
-        ) : (
-          <>
-            <pre className="whitespace-pre-wrap font-sans text-sm text-ink bg-white rounded-md border border-border p-4">
-              {bible}
-            </pre>
-            <button
-              type="button"
-              onClick={() => {
-                setDraftBible(bible);
-                setEditingBible(true);
-              }}
-              className={pillBtn}
-            >
-              Modifier la bible
-            </button>
-          </>
-        )}
+        <RichTextEditor
+          initialContent={existing?.bible || ""}
+          placeholder={BIBLE_PLACEHOLDER}
+          onChange={(html) => {
+            setDraftBible(html);
+            setSavedBible(false);
+          }}
+          minHeight={320}
+        />
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={saveBible} disabled={savingBible} className={pillBtn}>
+            {savingBible ? "Enregistrement..." : "Enregistrer"}
+          </button>
+          {savedBible && <span className="text-xs text-[#0F6B67]">Enregistré.</span>}
+        </div>
 
         <div className="border-t border-border pt-3 space-y-2">
           <p className="text-xs font-medium text-mint-ink">Documents (PDF, Word, .txt ou .md)</p>
