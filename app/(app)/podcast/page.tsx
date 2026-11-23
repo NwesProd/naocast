@@ -7,7 +7,7 @@ import { PodcastDnaForm } from "@/components/PodcastDnaForm";
 import { PodcastTabs } from "@/components/PodcastTabs";
 import { MediaLibrary } from "@/components/MediaLibrary";
 import { DiffusionSources } from "@/components/DiffusionSources";
-import { PodcastHostingForm } from "@/components/PodcastHostingForm";
+import { feedUrl } from "@/lib/rss";
 import { getUserAccess } from "@/lib/entitlements";
 import { hasModuleAccess } from "@/lib/plan";
 import { LOGO_ASSET_ID } from "@/lib/mediaAssets";
@@ -130,15 +130,16 @@ export default async function PodcastPage() {
           },
           ...(podcast && showDiffusion
             ? [
-                { key: "diffusion", label: "Sources de diffusion", content: <DiffusionSources channelTitle={podcast.youtubeChannelTitle} /> },
                 {
-                  key: "hebergement",
-                  label: "Hébergement audio",
+                  key: "diffusion",
+                  label: "Sources de diffusion",
                   content: (
-                    <div className="max-w-2xl space-y-3">
-                      <p className="text-sm text-text-muted">Informations demandées par Apple Podcasts, Spotify et Deezer. Le titre et la pochette sont repris de ton podcast.</p>
-                      <PodcastHostingForm
-                        initial={{
+                    <DiffusionSources
+                      channelTitle={podcast.youtubeChannelTitle}
+                      hosting={{
+                        mode: (podcast.hostingMode as "NAOCAST" | "MIGRATE" | null) ?? null,
+                        feedUrl: podcast.rssSlug ? feedUrl(podcast.rssSlug) : null,
+                        values: {
                           author: podcast.author ?? "",
                           ownerEmail: podcast.ownerEmail ?? "",
                           description: podcast.description ?? "",
@@ -146,9 +147,9 @@ export default async function PodcastPage() {
                           category: podcast.category ?? "",
                           explicit: podcast.explicit,
                           website: podcast.website ?? "",
-                        }}
-                      />
-                    </div>
+                        },
+                      }}
+                    />
                   ),
                 },
               ]
