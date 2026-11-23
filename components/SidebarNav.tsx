@@ -20,6 +20,7 @@ const MODULE_KEY_BY_LABEL: Record<string, ModuleKey> = {
   Tournage: "tournage",
   Diffusion: "diffusion",
   Extraits: "extraits",
+  Miniature: "miniature",
   Montage: "montage",
   Transcript: "transcript",
 };
@@ -149,6 +150,8 @@ interface SelectedEpisode {
   shootDone: boolean;
   transcriptSegments: unknown[];
   scriptValidated: boolean;
+  coverKey: string | null;
+  thumbnailKey: string | null;
 }
 
 interface PodcastHeader {
@@ -253,6 +256,7 @@ export function SidebarNav({
   const tournageHref = episode ? `/episodes/${candidateId}/tournage` : null;
   const diffusionHref = episode ? `/episodes/${candidateId}/diffusion` : null;
   const extraitsHref = episode ? `/episodes/${candidateId}/extraits` : null;
+  const miniatureHref = episode ? `/episodes/${candidateId}/miniature` : null;
   const scriptHref = episode ? `/episodes/${candidateId}/script` : null;
   // Le module "Montage" de la sidebar couvre deux routes : le tunnel
   // (/montage) ET la relecture qui le suit une fois l'épisode traité
@@ -265,7 +269,7 @@ export function SidebarNav({
     (!!montageHref && pathname.startsWith(montageHref)) || (!!reviewHref && pathname.startsWith(reviewHref));
   // Sur n'importe quel module (Script, Invités, Montage, Transcript), seul le module est
   // surligné : "Épisodes" ne l'est que sur la liste et la page d'infos d'un épisode.
-  const insideModule = insideMontage || /^\/episodes\/[^/]+\/(script|guests|tournage|transcript|diffusion|extraits)(\/|$)/.test(pathname);
+  const insideModule = insideMontage || /^\/episodes\/[^/]+\/(script|guests|tournage|transcript|diffusion|extraits|miniature)(\/|$)/.test(pathname);
   const label =
     episode &&
     [episode.season != null ? `S${episode.season}` : null, episode.episodeNumber != null ? `E${episode.episodeNumber}` : null]
@@ -285,6 +289,7 @@ export function SidebarNav({
   // considérer terminé.
   const transcriptDone = !!episode && episode.transcriptSegments.length > 0;
   const scriptDone = !!episode && episode.scriptValidated;
+  const miniatureDone = !!episode && (!!episode.coverKey || !!episode.thumbnailKey);
 
   // Modules du parcours épisode, groupés par phase de production. "Montage"
   // et "Transcript" sont construits (déverrouillés une fois un
@@ -305,7 +310,7 @@ export function SidebarNav({
         { label: "Montage", href: montageHref, done: montageDone },
         { label: "Transcript", href: transcriptHref, done: transcriptDone },
         { label: "Extraits", href: extraitsHref },
-        { label: "Miniature", href: null },
+        { label: "Miniature", href: miniatureHref, done: miniatureDone },
       ],
     },
     {

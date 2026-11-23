@@ -322,6 +322,9 @@ model Episode {
   rssGuid          String?
   // Titre affiché sur les plateformes d'écoute quand il diffère du titre de l'épisode (vide : le titre de l'épisode).
   audioTitle       String?
+  // Module Miniature : pochette audio (carrée, affichée par les applications d'écoute) et miniature vidéo (16:9).
+  coverKey         String?
+  thumbnailKey     String?
   // Adresse du fichier audio chez l'ancien hébergeur, le temps de le copier (migration).
   importAudioUrl   String?
   audioDownloads   AudioDownload[]

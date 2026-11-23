@@ -126,7 +126,7 @@ export async function buildFeed(slug: string): Promise<string | null> {
       <itunes:episodeType>full</itunes:episodeType>
       ${e.episodeNumber != null ? `<itunes:episode>${e.episodeNumber}</itunes:episode>` : ""}
       ${e.season != null ? `<itunes:season>${e.season}</itunes:season>` : ""}
-      ${coverUrl ? `<itunes:image href="${coverUrl}"/>` : ""}
+      ${e.coverKey ? `<itunes:image href="${base}/api/rss/${slug}/episode-cover/${e.id}.${e.coverKey.split(".").pop()?.toLowerCase() || "jpg"}"/>` : coverUrl ? `<itunes:image href="${coverUrl}"/>` : ""}
     </item>`);
   }
 

@@ -78,6 +78,7 @@ export const BUILT_MODULES: { key: ModuleKey; label: string }[] = [
   { key: "montage", label: "Montage" },
   { key: "transcript", label: "Transcript" },
   { key: "extraits", label: "Extraits" },
+  { key: "miniature", label: "Miniature" },
   { key: "mcp", label: "Connecteur Claude" },
 ];
 
