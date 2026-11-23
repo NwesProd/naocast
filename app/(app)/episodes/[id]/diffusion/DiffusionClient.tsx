@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 
 interface Snapshot {
@@ -82,6 +82,7 @@ export function DiffusionClient({
   releaseDate,
   snapshots,
   related,
+  audio,
 }: {
   episodeId: string;
   connected: boolean;
@@ -91,7 +92,10 @@ export function DiffusionClient({
   releaseDate: string | null;
   snapshots: Snapshot[];
   related: Related[];
+  // Contenu de l'onglet Audio (hébergement et flux RSS), fourni par la page.
+  audio: ReactNode;
 }) {
+  const [tab, setTab] = useState<"audio" | "video">("audio");
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [searching, setSearching] = useState(connected && !video && apiConfigured);
@@ -214,6 +218,31 @@ export function DiffusionClient({
 
       {error && <p className="text-sm text-[#8A2E1F]">{error}</p>}
 
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatCard label="Vues YouTube" value={latest ? nf.format(latest.views) : "-"} />
+        <StatCard label="Likes" value={latest?.likes != null ? nf.format(latest.likes) : "-"} />
+        <StatCard label="Commentaires" value={latest?.comments != null ? nf.format(latest.comments) : "-"} />
+        <StatCard label="Écoutes audio" value="-" hint="Bientôt, avec les hébergeurs" />
+      </div>
+
+      <div className="flex gap-1 border-b border-border">
+        {(["audio", "video"] as const).map((key) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setTab(key)}
+            className={`px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition ${
+              tab === key ? "border-primary-button text-ink" : "border-transparent text-text-muted hover:text-ink"
+            }`}
+          >
+            {key === "audio" ? "Audio" : "Vidéo"}
+          </button>
+        ))}
+      </div>
+
+      <div className={tab === "audio" ? "" : "hidden"}>{audio}</div>
+
+      <div className={tab === "video" ? "space-y-6" : "hidden"}>
       {!connected && (
         <section className="space-y-2 rounded-xl border border-border bg-white p-5">
           <h2 className="text-sm font-semibold text-ink">Connecte ta chaîne YouTube</h2>
@@ -230,13 +259,6 @@ export function DiffusionClient({
 
       {connected && apiConfigured && (
         <>
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <StatCard label="Vues YouTube" value={latest ? nf.format(latest.views) : "-"} />
-            <StatCard label="Likes" value={latest?.likes != null ? nf.format(latest.likes) : "-"} />
-            <StatCard label="Commentaires" value={latest?.comments != null ? nf.format(latest.comments) : "-"} />
-            <StatCard label="Écoutes audio" value="-" hint="Bientôt, avec les hébergeurs" />
-          </div>
-
           {video && (
             <section className="space-y-3 rounded-xl border border-border bg-white p-5">
               <h2 className="text-sm font-semibold text-ink">Évolution des vues{releaseDate ? ` depuis la sortie (${formatDay(releaseDate)})` : ""}</h2>
@@ -321,6 +343,7 @@ export function DiffusionClient({
           </section>
         </>
       )}
+      </div>
     </div>
   );
 }

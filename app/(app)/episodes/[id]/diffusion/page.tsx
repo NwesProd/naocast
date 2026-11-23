@@ -38,8 +38,10 @@ export default async function DiffusionPage({ params }: { params: Promise<{ id: 
 
   const p = episode.podcast;
   return (
-    <main className="p-8 w-full space-y-10">
-      <AudioHosting
+    <main className="p-8 w-full">
+      <DiffusionClient
+        audio={
+          <AudioHosting
         episodeId={id}
         hostingMode={(p.hostingMode as "NAOCAST" | "MIGRATE" | null) ?? null}
         hosting={{
@@ -58,7 +60,7 @@ export default async function DiffusionPage({ params }: { params: Promise<{ id: 
         published={!!episode.audioPublishedAt}
         description={episode.description ?? ""}
       />
-      <DiffusionClient
+        }
         episodeId={id}
         connected={!!episode.podcast.youtubeUploadsPlaylist}
         channelTitle={episode.podcast.youtubeChannelTitle}

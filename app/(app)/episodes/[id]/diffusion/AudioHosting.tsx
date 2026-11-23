@@ -106,7 +106,6 @@ export function AudioHosting(props: {
   if (!mode) {
     return (
       <section className="space-y-3">
-        <h2 className="text-lg font-bold">Audio</h2>
         <p className="text-sm text-text-muted">Pour que ton podcast soit écouté sur Apple Podcasts, Spotify et Deezer, il lui faut un hébergeur audio.</p>
         <div className="grid gap-3 sm:grid-cols-2">
           <button type="button" onClick={() => chooseMode("MIGRATE")} className={`${card} text-left hover:bg-[#FAFAF8] transition`}>
