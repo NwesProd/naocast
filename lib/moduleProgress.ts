@@ -103,15 +103,15 @@ export function episodeDisplayStatus(
 
 // Épisode pas encore paramétré (pas de titre) : direction la page d'infos,
 // aucun module n'est déverrouillé avant ça (cf. sidebar : "Sélectionne un
-// épisode pour débloquer les modules"). Sinon, le premier module déverrouillé
-// (Script/Tournage/Extraits/Miniature/Distri restent verrouillés, jamais
-// proposés) qui n'est pas encore "terminé" ; si tous le sont, direction le
-// tunnel de montage/relecture (page centrale de l'épisode).
+// épisode pour débloquer les modules"). Sinon, le premier module à valider
+// (Script, Invités, Montage, Transcript ; Tournage est facultatif et n'en fait pas partie,
+// Extraits et Miniature ne sont pas encore construits) qui n'est pas encore "terminé" ; si tous le
+// sont, direction Diffusion (ou Montage si le forfait n'y donne pas accès).
 export function firstOpenModuleHref(
   episodeId: string,
   state: EpisodeModuleState,
   // Sans accès à Script/Invités (free, basic), on commence au Montage : jamais un module verrouillé.
-  opts: { prodEnabled?: boolean } = {}
+  opts: { prodEnabled?: boolean; diffusionEnabled?: boolean } = {}
 ): string {
   if (!state.title) return `/episodes/${episodeId}/new`;
 
@@ -128,5 +128,6 @@ export function firstOpenModuleHref(
     { done: state.hasTranscript, href: `/episodes/${episodeId}/transcript` },
   ];
 
-  return modules.find((m) => !m.done)?.href ?? montageHref;
+  // Tout est validé : on arrive sur Diffusion (statistiques de l'épisode) quand le forfait y donne accès.
+  return modules.find((m) => !m.done)?.href ?? (opts.diffusionEnabled ? `/episodes/${episodeId}/diffusion` : montageHref);
 }

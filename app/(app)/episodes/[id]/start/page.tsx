@@ -34,7 +34,7 @@ export default async function EpisodeStartPage({ params }: { params: Promise<{ i
         hasTranscript: episode._count.transcriptSegments > 0,
         scriptValidated: episode.scriptValidated,
       },
-      { prodEnabled }
+      { prodEnabled, diffusionEnabled: hasModuleAccess(access.plan, "diffusion", access.extraModules) }
     )
   );
 }
