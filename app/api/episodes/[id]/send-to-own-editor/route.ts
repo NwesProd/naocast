@@ -3,12 +3,13 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireUserId, requireOwnedEpisode } from "@/lib/authz";
 import { sendEpisodeToOwnEditor } from "@/lib/email";
+import { escapeHtml } from "@/lib/editingRequest";
 import { getSignedDownloadUrl } from "@/lib/storage";
 
 // Module Montage → « Mon monteur » : envoie par email au monteur personnel de l'utilisateur les
 // liens de téléchargement des rushs et des médias du podcast (valables 7 jours). Aucune
 // facturation naocast, aucun traitement automatique ; l'épisode attend le montage final.
-const bodySchema = z.object({ email: z.string().email() });
+const bodySchema = z.object({ email: z.string().email(), notes: z.string().max(5000).optional() });
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const userId = await requireUserId();
@@ -45,6 +46,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const html = `
     <h1>Nouvel épisode à monter : ${episode.podcast.title}</h1>
     <h2>${episode.title || "Sans titre"}</h2>
+    ${parsed.data.notes?.trim() ? `<h3>Consignes</h3><p style="white-space:pre-wrap">${escapeHtml(parsed.data.notes.trim())}</p>` : ""}
     <h3>Rushs</h3>
     <ul>${rushesList || "<li>Aucun</li>"}</ul>
     <h3>Génériques, logo et sons du podcast</h3>

@@ -84,11 +84,15 @@ export function MontageClient({
   const validated = status === "EXPORTED";
   const processing = status === "QUEUED" || status === "PROCESSING";
   const hasFinal = !!video;
-  const choice: Choice | null = editorChoice === "NEED_EDITOR" || editorChoice === "HAS_EDITOR_SEND" || editorChoice === "CLAUDE" ? editorChoice : null;
+  const serverChoice: Choice | null = editorChoice === "NEED_EDITOR" || editorChoice === "HAS_EDITOR_SEND" || editorChoice === "CLAUDE" ? editorChoice : null;
+  // Le choix s'affiche tout de suite (avant la réponse du serveur) : pas d'ancien choix qui réapparaît le temps du rechargement.
+  const [localChoice, setLocalChoice] = useState<Choice | null>(serverChoice);
+  const choice = localChoice;
 
   const [error, setError] = useState<string | null>(null);
   const [notes, setNotes] = useState(initialNotes);
   const [email, setEmail] = useState(ownEditorEmail ?? "");
+  const [ownNotes, setOwnNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState<string | null>(null); // "rush" | "video"
   const [uploadPercent, setUploadPercent] = useState(0);
@@ -116,15 +120,22 @@ export function MontageClient({
   }, [processing, router]);
 
   async function patchEditorChoice(value: Choice) {
+    const previous = localChoice;
     setError(null);
+    setLocalChoice(value);
     setChangingChoice(false);
-    const res = await fetch(`/api/episodes/${episodeId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ editorChoice: value }),
-    });
-    if (!res.ok) setError("Impossible d'enregistrer ce choix.");
-    router.refresh();
+    try {
+      const res = await fetch(`/api/episodes/${episodeId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ editorChoice: value }),
+      });
+      if (!res.ok) throw new Error();
+      router.refresh();
+    } catch {
+      setLocalChoice(previous);
+      setError("Impossible d'enregistrer ce choix.");
+    }
   }
 
   async function uploadRush(files: FileList | null) {
@@ -204,7 +215,7 @@ export function MontageClient({
       const res = await fetch(`/api/episodes/${episodeId}/send-to-own-editor`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, notes: ownNotes }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => null))?.error || "Envoi impossible.");
       window.dispatchEvent(new Event(EPISODE_UPDATED_EVENT));
@@ -237,10 +248,7 @@ export function MontageClient({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-lg font-bold text-ink">Montage</h1>
-        <p className="text-sm text-text-muted">Le montage se fait hors de naocast. Ici, tu choisis comment, tu déposes le résultat, tu le valides et tu le télécharges.</p>
-      </div>
+      <h1 className="text-lg font-bold text-ink">Montage</h1>
 
       {error && <p className="text-sm text-[#8A2E1F]">{error}</p>}
 
@@ -249,7 +257,7 @@ export function MontageClient({
         <section className="space-y-3 rounded-xl border border-border bg-white p-5">
           <h2 className="text-sm font-semibold text-ink">Comment veux-tu monter cet épisode ?</h2>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <OptionCard selected={choice === "NEED_EDITOR"} onClick={() => patchEditorChoice("NEED_EDITOR")} title="Monteur naocast" description="Un monteur de l'équipe s'en occupe (prestation payante)." />
+            <OptionCard selected={choice === "NEED_EDITOR"} onClick={() => patchEditorChoice("NEED_EDITOR")} title="Monteur naocast" description="Un monteur de l'équipe s'occupe de tout." />
             <OptionCard selected={choice === "HAS_EDITOR_SEND"} onClick={() => patchEditorChoice("HAS_EDITOR_SEND")} title="Mon monteur" description="Tu envoies les rushs et tes consignes à ton propre monteur." />
             <OptionCard selected={choice === "CLAUDE"} onClick={() => patchEditorChoice("CLAUDE")} title="Monter avec Claude" description="Tu montes l'épisode toi-même avec Claude, à partir de tes fichiers." />
           </div>
@@ -262,7 +270,7 @@ export function MontageClient({
           {!editorSent && (
             <>
               {" "}
-              <button type="button" onClick={() => setChangingChoice(true)} className="underline">
+              <button type="button" onClick={() => setChangingChoice(true)} className={`${pillBtn} ml-1`}>
                 Changer
               </button>
             </>
@@ -282,6 +290,7 @@ export function MontageClient({
               </label>
             )}
           </div>
+          {choice === "CLAUDE" && <p className="text-sm text-text-muted">Importe ici tes rushs pour que Claude y ait accès facilement.</p>}
           {rushes.length === 0 ? (
             <p className="text-sm text-text-muted">Aucun rush importé pour le moment.</p>
           ) : (
@@ -323,6 +332,8 @@ export function MontageClient({
               <div className="space-y-2">
                 <label className="block text-sm font-medium text-ink">Email de ton monteur</label>
                 <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="monteur@exemple.com" className={inputClass} />
+                <label className="block pt-1 text-sm font-medium text-ink">Tes consignes pour le monteur</label>
+                <textarea value={ownNotes} onChange={(e) => setOwnNotes(e.target.value)} rows={4} maxLength={5000} placeholder="Ce qu'il faut couper, le ton, les génériques à utiliser..." className={inputClass} />
                 <button type="button" onClick={sendToOwnEditor} disabled={busy || !email.trim() || rushes.length === 0} className={primaryBtn}>
                   {busy ? "Envoi..." : "Envoyer à mon monteur"}
                 </button>
@@ -333,7 +344,7 @@ export function MontageClient({
       )}
 
       {/* 3. Vidéo finale : dépôt */}
-      {!validated && (
+      {!validated && (editorSent || hasFinal || processing || status === "FAILED") && (
         <section className="space-y-3 rounded-xl border border-border bg-white p-5">
           <h2 className="text-sm font-semibold text-ink">Épisode final</h2>
           {processing ? (
