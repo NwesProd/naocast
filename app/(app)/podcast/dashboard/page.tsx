@@ -100,17 +100,32 @@ export default async function PodcastDashboardPage() {
 
   const lastEpisode = exported.sort((a, b) => publishDate(b).getTime() - publishDate(a).getTime())[0] ?? null;
 
-  // Statistiques YouTube (module Diffusion) : vues gagnées ce mois-ci, et total du dernier épisode.
-  const youtubeSnapshots = await prisma.statSnapshot.findMany({
-    where: { source: "YOUTUBE", episodeId: { in: episodes.map((e) => e.id) } },
+  // Statistiques YouTube (module Diffusion) : vidéos principales des épisodes, et contenus annexes
+  // (shorts extraits...) dont les relevés ont une source « RELATED:<vidéo> ».
+  const episodeIds = episodes.map((e) => e.id);
+  const snapshotRows = await prisma.statSnapshot.findMany({
+    where: { episodeId: { in: episodeIds }, OR: [{ source: "YOUTUBE" }, { source: { startsWith: "RELATED:" } }] },
     orderBy: { day: "asc" },
   });
-  const monthViews = viewsGainedSince(youtubeSnapshots, new Map(episodes.map((e) => [e.id, publishDate(e)])), monthStart);
-  const lastEpisodeViews = lastEpisode ? ([...youtubeSnapshots].reverse().find((s) => s.episodeId === lastEpisode.id)?.views ?? null) : null;
-  // Vues totales : dernier total connu de chaque épisode, additionnés.
+  const mainRows = snapshotRows.filter((s) => s.source === "YOUTUBE");
+  const annexRows = snapshotRows.filter((s) => s.source !== "YOUTUBE");
+  const relatedContents = await prisma.relatedContent.findMany({ where: { episodeId: { in: episodeIds } }, select: { episodeId: true, views: true } });
+  const add = (a: number | null, b: number | null) => (a === null && b === null ? null : (a ?? 0) + (b ?? 0));
+
+  // Ce mois-ci : vues gagnées, vidéos principales seules puis avec les annexes.
+  const monthViews = viewsGainedSince(mainRows, new Map(episodes.map((e) => [e.id, publishDate(e)])), monthStart);
+  const monthViewsAll = add(monthViews, viewsGainedSince(annexRows, new Map(), monthStart));
+
+  // Totaux : dernier total connu de chaque vidéo principale, additionné, puis avec les annexes.
   const latestViewsByEpisode = new Map<string, number>();
-  for (const s of youtubeSnapshots) latestViewsByEpisode.set(s.episodeId, s.views);
+  for (const s of mainRows) latestViewsByEpisode.set(s.episodeId, s.views);
   const totalViews = latestViewsByEpisode.size > 0 ? [...latestViewsByEpisode.values()].reduce((sum, v) => sum + v, 0) : null;
+  const totalViewsAll = add(totalViews, relatedContents.length > 0 ? relatedContents.reduce((sum, r) => sum + r.views, 0) : null);
+
+  // Dernier épisode : sa vidéo principale, puis avec ses annexes.
+  const lastEpisodeViews = lastEpisode ? (latestViewsByEpisode.get(lastEpisode.id) ?? null) : null;
+  const lastRelated = lastEpisode ? relatedContents.filter((r) => r.episodeId === lastEpisode.id) : [];
+  const lastEpisodeViewsAll = add(lastEpisodeViews, lastRelated.length > 0 ? lastRelated.reduce((sum, r) => sum + r.views, 0) : null);
   const fmt = (n: number | null) => (n === null ? "-" : n.toLocaleString("fr-FR"));
 
   const startOfToday = new Date();
@@ -243,18 +258,30 @@ export default async function PodcastDashboardPage() {
               </p>
             </div>
           </div>
-          <div className="grid grid-cols-1 gap-4 mt-6 pt-4 border-t border-mint-ink/10 sm:grid-cols-3">
-            <div>
-              <p className={`text-lg font-bold ${monthViews === null ? "text-mint-ink/40" : "text-mint-ink"}`}>{fmt(monthViews)}</p>
-              <p className="text-xs text-mint-muted">Vues ce mois-ci (YouTube){monthViews === null ? " · Connecte ta chaîne dans Mon podcast" : ""}</p>
+          <div className="mt-6 pt-4 border-t border-mint-ink/10 space-y-5">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div>
+                <p className={`text-lg font-bold ${monthViews === null ? "text-mint-ink/40" : "text-mint-ink"}`}>{fmt(monthViews)}</p>
+                <p className="text-xs text-mint-muted">Vues ce mois-ci (YouTube){monthViews === null ? " · Connecte ta chaîne dans Mon podcast" : ""}</p>
+              </div>
+              <div>
+                <p className={`text-lg font-bold ${monthViewsAll === null ? "text-mint-ink/40" : "text-mint-ink"}`}>{fmt(monthViewsAll)}</p>
+                <p className="text-xs text-mint-muted">Vues totales ce mois-ci (YouTube + annexes)</p>
+              </div>
+              <div>
+                <p className="text-lg font-bold text-mint-ink/40">-</p>
+                <p className="text-xs text-mint-muted">Écoutes ce mois-ci (Audio) · {STATS_UNAVAILABLE}</p>
+              </div>
             </div>
-            <div>
-              <p className={`text-lg font-bold ${totalViews === null ? "text-mint-ink/40" : "text-mint-ink"}`}>{fmt(totalViews)}</p>
-              <p className="text-xs text-mint-muted">Vues totales du podcast (YouTube)</p>
-            </div>
-            <div>
-              <p className="text-lg font-bold text-mint-ink/40">-</p>
-              <p className="text-xs text-mint-muted">Écoutes ce mois-ci (plateformes audio) · {STATS_UNAVAILABLE}</p>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div>
+                <p className={`text-lg font-bold ${totalViews === null ? "text-mint-ink/40" : "text-mint-ink"}`}>{fmt(totalViews)}</p>
+                <p className="text-xs text-mint-muted">Vues du podcast (YouTube)</p>
+              </div>
+              <div>
+                <p className={`text-lg font-bold ${totalViewsAll === null ? "text-mint-ink/40" : "text-mint-ink"}`}>{fmt(totalViewsAll)}</p>
+                <p className="text-xs text-mint-muted">Vues totales (YouTube + annexes)</p>
+              </div>
             </div>
           </div>
         </div>
@@ -275,7 +302,8 @@ export default async function PodcastDashboardPage() {
             )}
             <div>
               <p className="font-semibold text-peach-ink">{episodeLabel(lastEpisode)}</p>
-              <p className="text-sm text-peach-muted mt-3">Vues : {lastEpisodeViews === null ? "-" : fmt(lastEpisodeViews)}</p>
+              <p className="text-sm text-peach-muted mt-3">Vues : {fmt(lastEpisodeViews)}</p>
+              <p className="text-sm text-peach-muted">Vues totales (YouTube + annexes) : {fmt(lastEpisodeViewsAll)}</p>
               <p className="text-sm text-peach-muted">Écoutes : {STATS_UNAVAILABLE}</p>
             </div>
           </Link>

@@ -5,7 +5,8 @@ import { jsonResponse } from "@/lib/json";
 import { requireUserId, requireOwnedEpisode } from "@/lib/authz";
 import { assertModuleAccess, ModuleLockedError } from "@/lib/entitlements";
 import { listUploads, matchVideo, fetchVideoStats, YouTubeError } from "@/lib/youtube";
-import { snapshotYoutubeStats } from "@/lib/diffusionStats";
+import { snapshotYoutubeStats, relatedSource } from "@/lib/diffusionStats";
+import { todayInParis } from "@/lib/moduleProgress";
 
 // Module Diffusion, par épisode : retrouver la vidéo YouTube par le titre (« match »), la choisir à la
 // main ou la retirer (« set »), relever les chiffres du jour (« refresh »), ou gérer ses contenus annexes.
@@ -71,11 +72,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         update: { title: stats.title, views: stats.views, likes: stats.likes, comments: stats.comments },
         create: { episodeId, videoId, title: stats.title, views: stats.views, likes: stats.likes, comments: stats.comments },
       });
+      const day = new Date(todayInParis());
+      await prisma.statSnapshot.upsert({
+        where: { episodeId_source_day: { episodeId, source: relatedSource(videoId), day } },
+        update: { views: stats.views, likes: stats.likes, comments: stats.comments },
+        create: { episodeId, source: relatedSource(videoId), day, views: stats.views, likes: stats.likes, comments: stats.comments },
+      });
       return jsonResponse({ ok: true });
     }
 
     if (parsed.data.action === "removeRelated") {
+      const removed = await prisma.relatedContent.findFirst({ where: { id: parsed.data.id, episodeId } });
       await prisma.relatedContent.deleteMany({ where: { id: parsed.data.id, episodeId } });
+      if (removed) await prisma.statSnapshot.deleteMany({ where: { episodeId, source: relatedSource(removed.videoId) } });
       return jsonResponse({ ok: true });
     }
 

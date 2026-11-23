@@ -2,19 +2,29 @@ import { prisma } from "@/lib/db";
 import { fetchVideoStats } from "@/lib/youtube";
 import { todayInParis } from "@/lib/moduleProgress";
 
+// Source des relevés d'un contenu annexe (la vidéo principale de l'épisode a la source « YOUTUBE »).
+export const relatedSource = (videoId: string) => `RELATED:${videoId}`;
+
 // Enregistre le relevé du jour (totaux YouTube) pour les épisodes qui ont une vidéo rattachée.
 // Un relevé par épisode et par jour : le relancer le même jour met simplement à jour le chiffre.
 export async function snapshotYoutubeStats(episodes: { id: string; youtubeVideoId: string | null }[]): Promise<number> {
   const linked = episodes.filter((e): e is { id: string; youtubeVideoId: string } => !!e.youtubeVideoId);
   // Les contenus annexes de ces épisodes (shorts extraits...) sont mis à jour en même temps.
-  const related = await prisma.relatedContent.findMany({ where: { episodeId: { in: episodes.map((e) => e.id) } }, select: { id: true, videoId: true } });
+  const related = await prisma.relatedContent.findMany({ where: { episodeId: { in: episodes.map((e) => e.id) } }, select: { id: true, episodeId: true, videoId: true } });
   if (linked.length === 0 && related.length === 0) return 0;
   const stats = await fetchVideoStats([...new Set([...linked.map((e) => e.youtubeVideoId), ...related.map((r) => r.videoId)])]);
+  const day = new Date(todayInParis());
   for (const item of related) {
     const s = stats.get(item.videoId);
-    if (s) await prisma.relatedContent.update({ where: { id: item.id }, data: { title: s.title, views: s.views, likes: s.likes, comments: s.comments } });
+    if (!s) continue;
+    await prisma.relatedContent.update({ where: { id: item.id }, data: { title: s.title, views: s.views, likes: s.likes, comments: s.comments } });
+    // Historique des contenus annexes : un relevé par jour aussi, sous la source « RELATED:<vidéo> ».
+    await prisma.statSnapshot.upsert({
+      where: { episodeId_source_day: { episodeId: item.episodeId, source: relatedSource(item.videoId), day } },
+      update: { views: s.views, likes: s.likes, comments: s.comments },
+      create: { episodeId: item.episodeId, source: relatedSource(item.videoId), day, views: s.views, likes: s.likes, comments: s.comments },
+    });
   }
-  const day = new Date(todayInParis());
   let written = 0;
   for (const episode of linked) {
     const s = stats.get(episode.youtubeVideoId);
@@ -32,6 +42,7 @@ export async function snapshotYoutubeStats(episodes: { id: string; youtubeVideoI
 
 interface SnapshotRow {
   episodeId: string;
+  source: string;
   day: Date;
   views: number;
 }
@@ -44,15 +55,18 @@ export function viewsGainedSince(
   publishedAt: Map<string, Date>,
   monthStart: Date
 ): number | null {
-  const byEpisode = new Map<string, SnapshotRow[]>();
-  for (const s of snapshots) byEpisode.set(s.episodeId, [...(byEpisode.get(s.episodeId) ?? []), s]);
-  if (byEpisode.size === 0) return null;
+  // Une série par vidéo suivie : la vidéo principale d'un épisode, ou chacun de ses contenus annexes.
+  const bySeries = new Map<string, SnapshotRow[]>();
+  for (const s of snapshots) bySeries.set(`${s.episodeId}|${s.source}`, [...(bySeries.get(`${s.episodeId}|${s.source}`) ?? []), s]);
+  if (bySeries.size === 0) return null;
   let total = 0;
-  for (const [episodeId, rows] of byEpisode) {
+  for (const rows of bySeries.values()) {
+    const episodeId = rows[0].episodeId;
     const sorted = [...rows].sort((a, b) => a.day.getTime() - b.day.getTime());
     const latest = sorted[sorted.length - 1];
     const before = [...sorted].reverse().find((r) => r.day < monthStart);
-    const published = publishedAt.get(episodeId);
+    // La date de sortie ne vaut que pour la vidéo principale ; un contenu annexe compte depuis son premier relevé.
+    const published = rows[0].source === "YOUTUBE" ? publishedAt.get(episodeId) : undefined;
     const baseline = before ? before.views : published && published >= monthStart ? 0 : sorted[0].views;
     total += Math.max(0, latest.views - baseline);
   }
