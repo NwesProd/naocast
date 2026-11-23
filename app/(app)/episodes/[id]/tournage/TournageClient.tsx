@@ -68,6 +68,7 @@ export function TournageClient({
   startedAtMs,
   endedAtMs,
   initialPartIndex,
+  initialDone,
   markers: initialMarkers,
   guests: initialGuests,
   parts,
@@ -80,6 +81,7 @@ export function TournageClient({
   startedAtMs: number | null;
   endedAtMs: number | null;
   initialPartIndex: number;
+  initialDone: boolean;
   markers: Marker[];
   guests: Guest[];
   parts: Part[];
@@ -95,6 +97,7 @@ export function TournageClient({
   const [markers, setMarkers] = useState(initialMarkers);
   const [partIndex, setPartIndex] = useState(Math.min(initialPartIndex, Math.max(0, parts.length - 1)));
   const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(initialDone);
   const [confirmEnd, setConfirmEnd] = useState(false);
   const [confirmRestart, setConfirmRestart] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -128,6 +131,18 @@ export function TournageClient({
     await call(`/api/episodes/${episodeId}/shoot`, { method: "PATCH", body: JSON.stringify(patch) });
   }
 
+  // « Tournage terminé » : coche le module (tick dans le menu), que le jour J ait été lancé ou non.
+  async function setShootDone(next: boolean) {
+    setDone(next);
+    const res = await call(`/api/episodes/${episodeId}/shoot`, { method: "PATCH", body: JSON.stringify({ shootDone: next }) });
+    if (!res) {
+      setDone(!next);
+      return;
+    }
+    window.dispatchEvent(new Event(EPISODE_UPDATED_EVENT));
+    router.refresh();
+  }
+
   async function toggleNotified(guest: Guest) {
     const next = !guest.notified;
     setGuests((g) => g.map((x) => (x.id === guest.id ? { ...x, notified: next } : x)));
@@ -142,6 +157,7 @@ export function TournageClient({
     setConfirmEnd(false);
     setConfirmRestart(false);
     if (!res) return;
+    setDone(action === "end");
     if (action !== "end") {
       setMarkers([]);
       setPartIndex(0);
@@ -174,6 +190,25 @@ export function TournageClient({
 
   const mono = "tabular-nums";
   const placeLabel = MODES.find((m) => m.key === mode)?.placeLabel ?? "Lieu";
+
+  const doneButton = (
+    <div className="flex shrink-0 flex-col items-end gap-1">
+      <button
+        type="button"
+        onClick={() => !done && setShootDone(true)}
+        className={`text-sm font-semibold rounded-[10px] px-4 py-2 transition ${
+          done ? "bg-accent-teal text-white cursor-default" : "bg-primary-button text-white hover:brightness-110"
+        }`}
+      >
+        {done ? "✓ Tournage terminé" : "Tournage terminé"}
+      </button>
+      {done && (
+        <button type="button" onClick={() => setShootDone(false)} className="text-xs text-text-muted underline">
+          Retirer la validation
+        </button>
+      )}
+    </div>
+  );
 
   // ---------- Jour J ----------
   if (live) {
@@ -290,7 +325,10 @@ export function TournageClient({
   if (ended) {
     return (
       <div className="space-y-6">
-        <h1 className="text-lg font-bold text-ink">Tournage</h1>
+        <div className="flex items-start justify-between gap-3">
+          <h1 className="text-lg font-bold text-ink">Tournage</h1>
+          {doneButton}
+        </div>
         {error && <p className="text-sm text-[#8A2E1F]">{error}</p>}
         <section className="space-y-4 rounded-xl border border-border bg-white p-5">
           <h2 className="text-sm font-semibold text-ink">Tournage terminé</h2>
@@ -341,7 +379,10 @@ export function TournageClient({
   // ---------- Préparer ----------
   return (
     <div className="space-y-6">
-      <h1 className="text-lg font-bold text-ink">Tournage</h1>
+      <div className="flex items-start justify-between gap-3">
+        <h1 className="text-lg font-bold text-ink">Tournage</h1>
+        {doneButton}
+      </div>
       {error && <p className="text-sm text-[#8A2E1F]">{error}</p>}
 
       <section className="space-y-3 rounded-xl border border-border bg-white p-5">

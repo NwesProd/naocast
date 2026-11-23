@@ -22,6 +22,7 @@ const patchSchema = z.object({
   shootMode: z.enum(["STUDIO", "HOME", "REMOTE"]).nullable().optional(),
   shootPlace: z.string().max(500).nullable().optional(),
   shootPartIndex: z.number().int().min(0).max(200).optional(),
+  shootDone: z.boolean().optional(),
 });
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -58,17 +59,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (parsed.data.action === "start") {
     // Déjà en cours : on ne remet pas le chrono à zéro (double clic, page rechargée).
     if (running) return jsonResponse(episode);
-    const updated = await prisma.episode.update({ where: { id: episodeId }, data: { shootStartedAt: new Date(), shootEndedAt: null, shootPartIndex: 0 } });
+    const updated = await prisma.episode.update({ where: { id: episodeId }, data: { shootStartedAt: new Date(), shootEndedAt: null, shootPartIndex: 0, shootDone: false } });
     await prisma.shootMarker.deleteMany({ where: { episodeId } });
     return jsonResponse(updated);
   }
 
   if (parsed.data.action === "end") {
     if (!running) return jsonResponse(episode);
-    return jsonResponse(await prisma.episode.update({ where: { id: episodeId }, data: { shootEndedAt: new Date() } }));
+    return jsonResponse(await prisma.episode.update({ where: { id: episodeId }, data: { shootEndedAt: new Date(), shootDone: true } }));
   }
 
   // restart : nouveau tournage, chrono et repères remis à zéro.
   await prisma.shootMarker.deleteMany({ where: { episodeId } });
-  return jsonResponse(await prisma.episode.update({ where: { id: episodeId }, data: { shootStartedAt: new Date(), shootEndedAt: null, shootPartIndex: 0 } }));
+  return jsonResponse(await prisma.episode.update({ where: { id: episodeId }, data: { shootStartedAt: new Date(), shootEndedAt: null, shootPartIndex: 0, shootDone: false } }));
 }

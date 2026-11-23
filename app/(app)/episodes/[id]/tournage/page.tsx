@@ -46,6 +46,7 @@ export default async function TournagePage({ params }: { params: Promise<{ id: s
         startedAtMs={episode.shootStartedAt ? episode.shootStartedAt.getTime() : null}
         endedAtMs={episode.shootEndedAt ? episode.shootEndedAt.getTime() : null}
         initialPartIndex={episode.shootPartIndex}
+        initialDone={episode.shootDone}
         markers={episode.shootMarkers.map((m) => ({ id: m.id, atMs: m.atMs }))}
         guests={episode.episodeGuests.map((eg) => ({ id: eg.id, name: eg.guest.name, media: eg.guest.mediaName, notified: eg.notified }))}
         parts={splitScriptParts(episode.scriptDraft)}

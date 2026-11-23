@@ -377,6 +377,8 @@ model Episode {
   shootPlace     String? // adresse ou lien de visio
   shootStartedAt DateTime?
   shootEndedAt   DateTime?
+  // Module marqué « Tournage terminé » (bouton en haut de la page, ou fin du chrono) : tick dans la sidebar.
+  shootDone      Boolean       @default(false)
   shootPartIndex Int           @default(0)
   shootMarkers   ShootMarker[]
 

@@ -143,7 +143,7 @@ interface SelectedEpisode {
   status: string;
   montageValidatedExternally: boolean;
   guestsCastingValidated: boolean;
-  shootEndedAt: string | null;
+  shootDone: boolean;
   transcriptSegments: unknown[];
   scriptValidated: boolean;
 }
@@ -274,7 +274,7 @@ export function SidebarNav({
   // avoir fait le module.
   const montageDone = !!episode && (episode.montageValidatedExternally || episode.status === "EXPORTED");
   const guestsDone = !!episode && episode.guestsCastingValidated;
-  const tournageDone = !!episode && !!episode.shootEndedAt;
+  const tournageDone = !!episode && episode.shootDone;
   // Pas de notion de "validation" dédiée pour le transcript (contrairement au
   // casting) : la présence d'un transcript suffit à le
   // considérer terminé.
