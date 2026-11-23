@@ -64,6 +64,7 @@ function Slot({ kind, episodeId, image, note }: { kind: Kind; episodeId: string;
   const [error, setError] = useState<string | null>(null);
   const [warn, setWarn] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const [over, setOver] = useState(false);
   const cfg = CONFIG[kind];
 
   async function upload(file: File) {
@@ -105,7 +106,28 @@ function Slot({ kind, episodeId, image, note }: { kind: Kind; episodeId: string;
   }
 
   return (
-    <section className="space-y-3 rounded-xl border border-border bg-white p-5">
+    <section
+      className={`space-y-3 rounded-xl border bg-white p-5 transition ${over ? "border-primary-button ring-2 ring-primary-button/20" : "border-border"}`}
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes("Files")) return;
+        e.preventDefault();
+        setOver(true);
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver(false);
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        setOver(false);
+        const f = e.dataTransfer.files?.[0];
+        if (!f || busy) return;
+        if (!["image/jpeg", "image/png", "image/webp"].includes(f.type)) {
+          setError("Format non pris en charge : dépose une image JPG, PNG ou WebP.");
+          return;
+        }
+        upload(f);
+      }}
+    >
       <div>
         <h2 className="text-sm font-semibold text-ink">{cfg.title}</h2>
         <p className="mt-0.5 text-xs text-text-muted">{cfg.hint}</p>
@@ -155,8 +177,8 @@ function Slot({ kind, episodeId, image, note }: { kind: Kind; episodeId: string;
           onClick={() => input.current?.click()}
           className={`${cfg.ratio} ${cfg.box} flex w-full flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-border-strong bg-[#FAFAF8] text-sm text-text-muted hover:bg-[#F4F1EC] transition`}
         >
-          <span className="font-semibold text-ink">{busy ? "Envoi…" : "Importer une image"}</span>
-          <span className="text-xs">JPG, PNG ou WebP</span>
+          <span className="font-semibold text-ink">{busy ? "Envoi…" : over ? "Dépose l'image ici" : "Importer une image"}</span>
+          <span className="text-xs">Clique ou glisse une image ici (JPG, PNG ou WebP)</span>
         </button>
       )}
       {note && !image && <p className="text-xs text-text-muted">{note}</p>}
