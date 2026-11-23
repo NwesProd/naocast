@@ -48,8 +48,8 @@ interface SnapshotRow {
 }
 
 // Vues YouTube gagnées pendant le mois, tous épisodes confondus : dernier total moins le total à la
-// fin du mois précédent. Sans relevé avant le mois, un épisode sorti ce mois-ci compte toutes ses
-// vues ; un plus ancien compte seulement ce qui a été gagné depuis le premier relevé.
+// fin du mois précédent. Sans relevé avant le mois, une vidéo d'un épisode sorti ce mois-ci compte toutes
+// ses vues ; celle d'un épisode plus ancien compte seulement ce qui a été gagné depuis le premier relevé.
 export function viewsGainedSince(
   snapshots: SnapshotRow[],
   publishedAt: Map<string, Date>,
@@ -65,8 +65,9 @@ export function viewsGainedSince(
     const sorted = [...rows].sort((a, b) => a.day.getTime() - b.day.getTime());
     const latest = sorted[sorted.length - 1];
     const before = [...sorted].reverse().find((r) => r.day < monthStart);
-    // La date de sortie ne vaut que pour la vidéo principale ; un contenu annexe compte depuis son premier relevé.
-    const published = rows[0].source === "YOUTUBE" ? publishedAt.get(episodeId) : undefined;
+    // Un contenu annexe (short extrait...) est publié après la sortie de son épisode : si l'épisode est sorti
+    // ce mois-ci, l'annexe l'est aussi et compte toutes ses vues ce mois-ci.
+    const published = publishedAt.get(episodeId);
     const baseline = before ? before.views : published && published >= monthStart ? 0 : sorted[0].views;
     total += Math.max(0, latest.views - baseline);
   }

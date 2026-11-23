@@ -148,8 +148,9 @@ export default async function PodcastDashboardPage() {
   const add = (a: number | null, b: number | null) => (a === null && b === null ? null : (a ?? 0) + (b ?? 0));
 
   // Ce mois-ci : vues gagnées, vidéos principales seules puis avec les annexes.
-  const monthViews = viewsGainedSince(mainRows, new Map(episodes.map((e) => [e.id, publishDate(e)])), monthStart);
-  const monthViewsAll = add(monthViews, viewsGainedSince(annexRows, new Map(), monthStart));
+  const publishedByEpisode = new Map(episodes.map((e) => [e.id, publishDate(e)]));
+  const monthViews = viewsGainedSince(mainRows, publishedByEpisode, monthStart);
+  const monthViewsAll = add(monthViews, viewsGainedSince(annexRows, publishedByEpisode, monthStart));
 
   // Totaux : dernier total connu de chaque vidéo principale, additionné, puis avec les annexes.
   const latestViewsByEpisode = new Map<string, number>();
