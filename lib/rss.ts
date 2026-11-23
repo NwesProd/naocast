@@ -90,6 +90,15 @@ export function plainText(html: string): string {
     .trim();
 }
 
+// Catégorie Apple, avec sa sous-catégorie quand elle est choisie (« Business/Marketing »).
+function categoryXml(value: string | null): string {
+  if (!value) return "";
+  const [main, sub] = value.split("/");
+  return sub
+    ? `<itunes:category text="${escapeXml(main)}"><itunes:category text="${escapeXml(sub)}"/></itunes:category>`
+    : `<itunes:category text="${escapeXml(main)}"/>`;
+}
+
 // Construit le flux d'un podcast (null si le podcast n'est pas hébergé par naocast).
 export async function buildFeed(slug: string): Promise<string | null> {
   const podcast = await prisma.podcast.findUnique({ where: { rssSlug: slug } });
@@ -118,6 +127,7 @@ export async function buildFeed(slug: string): Promise<string | null> {
     const html = e.description ? simpleHtml(e.description) : "";
     items.push(`    <item>
       <title>${escapeXml(e.audioTitle?.trim() || e.title || "Sans titre")}</title>
+      <link>${escapeXml(podcast.website || base)}</link>
       <guid isPermaLink="false">${escapeXml(guid)}</guid>
       <pubDate>${pub}</pubDate>
       <enclosure url="${base}/api/rss/${slug}/audio/${e.id}.mp3" length="${size}" type="audio/mpeg"/>
@@ -147,7 +157,7 @@ export async function buildFeed(slug: string): Promise<string | null> {
     </itunes:owner>
     <itunes:explicit>${explicit}</itunes:explicit>
     <itunes:type>episodic</itunes:type>
-    ${podcast.category ? `<itunes:category text="${escapeXml(podcast.category)}"/>` : ""}
+    ${categoryXml(podcast.category)}
     ${coverUrl ? `<itunes:image href="${coverUrl}"/>\n    <image><url>${coverUrl}</url><title>${escapeXml(podcast.title)}</title><link>${escapeXml(podcast.website || base)}</link></image>` : ""}
 ${items.join("\n")}
   </channel>

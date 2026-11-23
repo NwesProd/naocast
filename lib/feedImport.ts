@@ -47,6 +47,16 @@ function attr(block: string, name: string, attribute: string): string | null {
   return m ? decode(m[1]) : null;
 }
 
+// Mention ajoutée automatiquement par l'ancien hébergeur en fin de description (« Hébergé par X. Visitez ... pour plus
+// d'informations. ») : sans objet une fois le podcast chez naocast.
+export function stripHostFooter(text: string): string {
+  return text
+    .replace(/(?:<br\s*\/?>\s*)*<p>\s*Hébergé par [^<]*\.\s*Visitez[\s\S]*?pour plus d'informations\.\s*<\/p>/gi, "")
+    .replace(/\s*Hébergé par [^\n<]*\.\s*Visitez [^\n<]* pour plus d'informations\.\s*$/i, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 export function parseFeed(xml: string): { channel: FeedChannel; items: FeedItem[] } {
   if (!/<rss[\s>]/i.test(xml) && !/<channel[\s>]/i.test(xml)) throw new Error("Cette adresse ne ressemble pas à un flux de podcast (RSS).");
   const firstItem = xml.search(/<item[\s>]/i);
@@ -55,7 +65,7 @@ export function parseFeed(xml: string): { channel: FeedChannel; items: FeedItem[
     title: tag(head, "title") ?? "",
     author: tag(head, "itunes:author"),
     ownerEmail: tag(tag(head, "itunes:owner") ?? "", "itunes:email"),
-    description: tag(head, "description") ?? tag(head, "itunes:summary"),
+    description: stripHostFooter(tag(head, "description") ?? tag(head, "itunes:summary") ?? "") || null,
     language: tag(head, "language"),
     category: attr(head, "itunes:category", "text"),
     explicit: /^(true|yes)$/i.test(tag(head, "itunes:explicit") ?? ""),
@@ -80,7 +90,7 @@ export function parseFeed(xml: string): { channel: FeedChannel; items: FeedItem[
       sizeBytes: num(attr(block, "enclosure", "length")),
       season: num(tag(block, "itunes:season")),
       episode: num(tag(block, "itunes:episode")),
-      description: html ? simpleHtml(html) || null : null,
+      description: html ? simpleHtml(stripHostFooter(html)) || null : null,
     });
   }
   return { channel, items };

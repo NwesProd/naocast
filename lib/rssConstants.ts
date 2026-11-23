@@ -18,7 +18,13 @@ export const LANGUAGES: { code: string; label: string }[] = [
 // Catégories Apple Podcasts les plus courantes : la valeur va dans le flux, le libellé s'affiche.
 export const CATEGORIES: { value: string; label: string }[] = [
   { value: "Arts", label: "Arts" },
-  { value: "Business", label: "Entreprise" },
+  { value: "Business", label: "Entreprise (sans sous-catégorie)" },
+  { value: "Business/Entrepreneurship", label: "Entreprise : entrepreneuriat" },
+  { value: "Business/Marketing", label: "Entreprise : marketing" },
+  { value: "Business/Careers", label: "Entreprise : carrières" },
+  { value: "Business/Investing", label: "Entreprise : investissement" },
+  { value: "Business/Management", label: "Entreprise : management" },
+  { value: "Business/Non-Profit", label: "Entreprise : associations" },
   { value: "Comedy", label: "Humour" },
   { value: "Education", label: "Éducation" },
   { value: "Fiction", label: "Fiction" },
