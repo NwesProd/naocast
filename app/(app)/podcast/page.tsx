@@ -7,7 +7,7 @@ import { PodcastDnaForm } from "@/components/PodcastDnaForm";
 import { PodcastTabs } from "@/components/PodcastTabs";
 import { MediaLibrary } from "@/components/MediaLibrary";
 import { DiffusionSources } from "@/components/DiffusionSources";
-import { feedUrl } from "@/lib/rss";
+import { feedUrl, missingHostingFields } from "@/lib/rss";
 import { getUserAccess } from "@/lib/entitlements";
 import { hasModuleAccess } from "@/lib/plan";
 import { LOGO_ASSET_ID } from "@/lib/mediaAssets";
@@ -139,6 +139,10 @@ export default async function PodcastPage() {
                       hosting={{
                         mode: (podcast.hostingMode as "NAOCAST" | "MIGRATE" | null) ?? null,
                         feedUrl: podcast.rssSlug ? feedUrl(podcast.rssSlug) : null,
+                        missing: missingHostingFields(podcast),
+                        platformLinks: (podcast.platformLinks as never) ?? {},
+                        migrationStatus: podcast.migrationStatus,
+                        migrationFeedUrl: podcast.migrationFeedUrl,
                         values: {
                           author: podcast.author ?? "",
                           ownerEmail: podcast.ownerEmail ?? "",

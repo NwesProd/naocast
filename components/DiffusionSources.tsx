@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { PodcastHostingForm, type HostingValues } from "@/components/PodcastHostingForm";
+import { AudioHostingSettings } from "@/components/AudioHostingSettings";
+import type { HostingValues } from "@/components/PodcastHostingForm";
 
 const pillBtn =
   "text-xs font-semibold rounded-pill bg-white border border-border px-3 py-1.5 hover:bg-[#FAFAF8] transition disabled:opacity-50 disabled:cursor-not-allowed";
@@ -15,7 +16,15 @@ export function DiffusionSources({
   hosting,
 }: {
   channelTitle: string | null;
-  hosting: { mode: "NAOCAST" | "MIGRATE" | null; feedUrl: string | null; values: HostingValues };
+  hosting: {
+    mode: "NAOCAST" | "MIGRATE" | null;
+    feedUrl: string | null;
+    values: HostingValues;
+    missing: string[];
+    platformLinks: Partial<Record<"apple" | "spotify" | "deezer", { url?: string; status: "none" | "pending" | "live" }>>;
+    migrationStatus: string | null;
+    migrationFeedUrl: string | null;
+  };
 }) {
   const router = useRouter();
   const [url, setUrl] = useState("");
@@ -79,38 +88,18 @@ export function DiffusionSources({
         {error && <p className="text-sm text-[#8A2E1F]">{error}</p>}
       </section>
 
-      <section className="space-y-2 rounded-xl border border-border bg-white p-5">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold text-ink">Hébergeur audio</h2>
-          {hosting.mode ? (
-            <span className="rounded-pill bg-[#DDEFE3] px-2.5 py-0.5 text-xs font-semibold text-[#1F5C3A]">naocast</span>
-          ) : (
-            <span className="rounded-pill bg-[#F4F1EC] px-2.5 py-0.5 text-xs font-semibold text-text-muted">Pas encore choisi</span>
-          )}
-        </div>
-        {hosting.mode ? (
-          <>
-            <p className="text-sm text-text-muted">naocast héberge ton podcast : Apple Podcasts, Spotify et Deezer lisent ce flux, et les écoutes sont comptées par naocast.</p>
-            {hosting.feedUrl && <input readOnly value={hosting.feedUrl} onFocus={(e) => e.currentTarget.select()} className="w-full rounded-md border border-border bg-[#FAFAF8] px-3 py-2 font-mono text-xs" />}
-          </>
-        ) : (
-          <p className="text-sm text-text-muted">
-            Pour héberger ton podcast chez naocast, ouvre la Diffusion d&apos;un épisode, onglet Audio, et choisis de migrer ton podcast ou de partir de zéro.
-          </p>
-        )}
-      </section>
-
-      {hosting.mode && (
-        <section className="space-y-3 rounded-xl border border-border bg-white p-5 lg:col-span-2">
-          <div>
-            <h2 className="text-sm font-semibold text-ink">Informations pour les plateformes</h2>
-            <p className="mt-0.5 text-xs text-text-muted">Demandées par Apple Podcasts, Spotify et Deezer. Le titre et la pochette sont repris de ton podcast.</p>
-          </div>
-          <div className="max-w-2xl">
-            <PodcastHostingForm initial={hosting.values} />
-          </div>
-        </section>
-      )}
+      <div className="lg:col-span-2">
+        <AudioHostingSettings
+          key={hosting.migrationStatus ?? "none"}
+          hostingMode={hosting.mode}
+          hosting={hosting.values}
+          missing={hosting.missing}
+          feedUrl={hosting.feedUrl}
+          platformLinks={hosting.platformLinks}
+          migrationStatus={hosting.migrationStatus}
+          migrationFeedUrl={hosting.migrationFeedUrl}
+        />
+      </div>
     </div>
   );
 }

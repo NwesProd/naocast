@@ -8,7 +8,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
   const { slug, file } = await params;
   const episodeId = file.replace(/\.mp3$/i, "");
   const episode = await prisma.episode.findFirst({
-    where: { id: episodeId, audioPublishedAt: { not: null }, podcast: { rssSlug: slug } },
+    where: { id: episodeId, audioPublishedAt: { not: null, lte: new Date() }, podcast: { rssSlug: slug } },
     include: { exports: { where: { type: "AUDIO" }, take: 1 } },
   });
   const key = episode?.exports[0]?.storageKey;
@@ -23,7 +23,7 @@ export async function HEAD(_req: Request, { params }: { params: Promise<{ slug: 
   const { slug, file } = await params;
   const episodeId = file.replace(/\.mp3$/i, "");
   const episode = await prisma.episode.findFirst({
-    where: { id: episodeId, audioPublishedAt: { not: null }, podcast: { rssSlug: slug } },
+    where: { id: episodeId, audioPublishedAt: { not: null, lte: new Date() }, podcast: { rssSlug: slug } },
     include: { exports: { where: { type: "AUDIO" }, take: 1 } },
   });
   const key = episode?.exports[0]?.storageKey;

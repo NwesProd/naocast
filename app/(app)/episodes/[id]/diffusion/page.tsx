@@ -6,7 +6,8 @@ import { hasModuleAccess } from "@/lib/plan";
 import { PlanLockedNotice } from "@/components/PlanLockedNotice";
 import { DiffusionClient } from "./DiffusionClient";
 import { AudioHosting } from "./AudioHosting";
-import { feedUrl, missingHostingFields } from "@/lib/rss";
+import { missingHostingFields } from "@/lib/rss";
+import { serverNow } from "@/lib/serverNow";
 import { episodePlays } from "@/lib/audioStats";
 
 // Module « Diffusion » (catégorie Distri) : statistiques de l'épisode (vues YouTube pour l'instant),
@@ -39,35 +40,23 @@ export default async function DiffusionPage({ params }: { params: Promise<{ id: 
 
   const p = episode.podcast;
   const plays = p.hostingMode ? await episodePlays(id) : null;
+  // Hébergement prêt : mode choisi (migration terminée le cas échéant) et informations du podcast complètes.
+  const hostingReady = !!p.hostingMode && (p.hostingMode !== "MIGRATE" || p.migrationStatus === "DONE") && missingHostingFields(p).length === 0;
   return (
     <main className="p-8 w-full">
       <DiffusionClient
         plays={plays}
         audio={
           <AudioHosting
-            key={p.migrationStatus ?? "none"}
-            migrationStatus={p.migrationStatus}
-            migrationFeedUrl={p.migrationFeedUrl}
-        episodeId={id}
-        hostingMode={(p.hostingMode as "NAOCAST" | "MIGRATE" | null) ?? null}
-        hosting={{
-          author: p.author ?? "",
-          ownerEmail: p.ownerEmail ?? "",
-          description: p.description ?? "",
-          language: p.language,
-          category: p.category ?? "",
-          explicit: p.explicit,
-          website: p.website ?? "",
-        }}
-        missing={missingHostingFields(p)}
-        feedUrl={p.rssSlug ? feedUrl(p.rssSlug) : null}
-        platformLinks={(p.platformLinks as never) ?? {}}
-        audioReady={episode.exports.length > 0}
-        published={!!episode.audioPublishedAt}
-        description={episode.description ?? ""}
-        audioTitle={episode.audioTitle ?? ""}
-        episodeTitle={episode.title ?? ""}
-      />
+            episodeId={id}
+            hostingReady={hostingReady}
+            audioReady={episode.exports.length > 0}
+            publishedAt={episode.audioPublishedAt ? episode.audioPublishedAt.toISOString() : null}
+            serverNow={serverNow()}
+            description={episode.description ?? ""}
+            audioTitle={episode.audioTitle ?? ""}
+            episodeTitle={episode.title ?? ""}
+          />
         }
         episodeId={id}
         connected={!!episode.podcast.youtubeUploadsPlaylist}

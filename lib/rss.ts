@@ -128,7 +128,7 @@ async function buildFeedUncached(slug: string): Promise<string | null> {
   if (!podcast || !podcast.hostingMode) return null;
 
   const episodes = await prisma.episode.findMany({
-    where: { podcastId: podcast.id, audioPublishedAt: { not: null } },
+    where: { podcastId: podcast.id, audioPublishedAt: { not: null, lte: new Date() } },
     include: { exports: { where: { type: "AUDIO" }, take: 1 } },
     orderBy: { releaseDate: "desc" },
   });
@@ -148,9 +148,8 @@ async function buildFeedUncached(slug: string): Promise<string | null> {
     if (!audio) continue;
     const size = sizes[i];
     const guid = e.rssGuid || e.id;
-    // Épisode repris d'un autre hébergeur : on garde sa date de publication d'origine (jour et heure), pour que les
-    // plateformes ne voient aucun changement. Sinon, la date de sortie choisie dans naocast.
-    const pub = (e.rssGuid ? (e.audioPublishedAt ?? e.releaseDate) : (e.releaseDate ?? e.audioPublishedAt) ?? new Date())?.toUTCString() ?? new Date().toUTCString();
+    // Date de publication : celle choisie (ou reprise de l'ancien hébergeur), sinon la date de sortie.
+    const pub = (e.audioPublishedAt ?? e.releaseDate ?? new Date()).toUTCString();
     const html = e.description ? simpleHtml(e.description) : "";
     items.push(`    <item>
       <title>${escapeXml(e.audioTitle?.trim() || e.title || "Sans titre")}</title>
