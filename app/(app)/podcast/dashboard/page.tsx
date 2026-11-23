@@ -257,6 +257,14 @@ export default async function PodcastDashboardPage() {
             className="col-span-1 rounded-xl bg-peach p-6 flex flex-col hover:brightness-95 transition"
           >
             <p className="text-sm text-peach-muted mb-2">Ton dernier épisode</p>
+            {lastEpisode.youtubeVideoId && (
+              // eslint-disable-next-line @next/next/no-img-element -- miniature YouTube servie par i.ytimg.com
+              <img
+                src={`https://i.ytimg.com/vi/${lastEpisode.youtubeVideoId}/mqdefault.jpg`}
+                alt=""
+                className="mb-3 aspect-video w-full rounded-md border border-peach-ink/10 object-cover"
+              />
+            )}
             <div>
               <p className="font-semibold text-peach-ink">{episodeLabel(lastEpisode)}</p>
               <p className="text-sm text-peach-muted mt-3">Vues : {lastEpisodeViews === null ? "-" : fmt(lastEpisodeViews)}</p>
