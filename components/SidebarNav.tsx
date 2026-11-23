@@ -17,6 +17,7 @@ const LINKS = [
 const MODULE_KEY_BY_LABEL: Record<string, ModuleKey> = {
   Script: "script",
   Invités: "invites",
+  Tournage: "tournage",
   Montage: "montage",
   Transcript: "transcript",
 };
@@ -142,6 +143,7 @@ interface SelectedEpisode {
   status: string;
   montageValidatedExternally: boolean;
   guestsCastingValidated: boolean;
+  shootEndedAt: string | null;
   transcriptSegments: unknown[];
   scriptValidated: boolean;
 }
@@ -245,6 +247,7 @@ export function SidebarNav({
   const reviewHref = episode ? `/episodes/${candidateId}/review` : null;
   const transcriptHref = episode ? `/episodes/${candidateId}/transcript` : null;
   const guestsHref = episode ? `/episodes/${candidateId}/guests` : null;
+  const tournageHref = episode ? `/episodes/${candidateId}/tournage` : null;
   const scriptHref = episode ? `/episodes/${candidateId}/script` : null;
   // Le module "Montage" de la sidebar couvre deux routes : le tunnel
   // (/montage) ET la relecture qui le suit une fois l'épisode traité
@@ -257,7 +260,7 @@ export function SidebarNav({
     (!!montageHref && pathname.startsWith(montageHref)) || (!!reviewHref && pathname.startsWith(reviewHref));
   // Sur n'importe quel module (Script, Invités, Montage, Transcript), seul le module est
   // surligné : "Épisodes" ne l'est que sur la liste et la page d'infos d'un épisode.
-  const insideModule = insideMontage || /^\/episodes\/[^/]+\/(script|guests|transcript)(\/|$)/.test(pathname);
+  const insideModule = insideMontage || /^\/episodes\/[^/]+\/(script|guests|tournage|transcript)(\/|$)/.test(pathname);
   const label =
     episode &&
     [episode.season != null ? `S${episode.season}` : null, episode.episodeNumber != null ? `E${episode.episodeNumber}` : null]
@@ -271,6 +274,7 @@ export function SidebarNav({
   // avoir fait le module.
   const montageDone = !!episode && (episode.montageValidatedExternally || episode.status === "EXPORTED");
   const guestsDone = !!episode && episode.guestsCastingValidated;
+  const tournageDone = !!episode && !!episode.shootEndedAt;
   // Pas de notion de "validation" dédiée pour le transcript (contrairement au
   // casting) : la présence d'un transcript suffit à le
   // considérer terminé.
@@ -287,7 +291,7 @@ export function SidebarNav({
       modules: [
         { label: "Script", href: scriptHref, done: scriptDone },
         { label: "Invités", href: guestsHref, done: guestsDone },
-        { label: "Tournage", href: null },
+        { label: "Tournage", href: tournageHref, done: tournageDone },
       ],
     },
     {
@@ -408,6 +412,7 @@ export function SidebarNav({
                       : mod.label === "Montage" ||
                           mod.label === "Transcript" ||
                           mod.label === "Invités" ||
+                          mod.label === "Tournage" ||
                           mod.label === "Script"
                         ? "Sélectionnez un épisode pour y accéder"
                         : "Bientôt disponible"

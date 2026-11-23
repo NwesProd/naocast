@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { requireUserId, requireOwnedEpisode } from "@/lib/authz";
 import { sendEpisodeToOwnEditor } from "@/lib/email";
 import { escapeHtml } from "@/lib/editingRequest";
+import { formatShootTime } from "@/lib/shootMarkers";
 import { getSignedDownloadUrl } from "@/lib/storage";
 
 // Module Montage → « Mon monteur » : envoie par email au monteur personnel de l'utilisateur les
@@ -24,6 +25,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     include: {
       podcast: { include: { user: true, mediaAssets: { orderBy: { createdAt: "asc" } } } },
       rushes: { orderBy: { createdAt: "asc" } },
+      shootMarkers: { orderBy: { atMs: "asc" } },
     },
   });
 
@@ -47,6 +49,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     <h1>Nouvel épisode à monter : ${episode.podcast.title}</h1>
     <h2>${episode.title || "Sans titre"}</h2>
     ${parsed.data.notes?.trim() ? `<h3>Consignes</h3><p style="white-space:pre-wrap">${escapeHtml(parsed.data.notes.trim())}</p>` : ""}
+    ${episode.shootMarkers.length ? `<h3>Repères de tournage</h3><p>Moments marqués pendant le tournage (temps depuis le départ du chrono) : ${episode.shootMarkers.map((m) => formatShootTime(m.atMs)).join(", ")}.</p>` : ""}
     <h3>Rushs</h3>
     <ul>${rushesList || "<li>Aucun</li>"}</ul>
     <h3>Génériques, logo et sons du podcast</h3>

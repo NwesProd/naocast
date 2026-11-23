@@ -369,6 +369,17 @@ model Episode {
   // validée ou l'épisode exporté (cf. components/SidebarNav.tsx).
   guestsCastingValidated           Boolean   @default(false)
 
+  // Module "Tournage" : préparation (date, lieu), puis le jour J un chrono (shootStartedAt) avec des
+  // repères horodatés (ShootMarker) et la partie du script en cours (shootPartIndex, selon les titres
+  // du script). shootEndedAt marque le tournage comme terminé (tick dans la sidebar).
+  shootAt        DateTime?
+  shootMode      String? // STUDIO | HOME | REMOTE
+  shootPlace     String? // adresse ou lien de visio
+  shootStartedAt DateTime?
+  shootEndedAt   DateTime?
+  shootPartIndex Int           @default(0)
+  shootMarkers   ShootMarker[]
+
   // Module "Script" : idées d'angles/thèmes pour l'épisode, générées (API
   // Claude) à partir de la bible du podcast, s'ils existent déjà des invités
   // de l'épisode (cf. EpisodeGuest), et du brouillon ci-dessous s'il en
@@ -410,11 +421,25 @@ model EpisodeGuest {
   guestId   String
   guest     Guest    @relation(fields: [guestId], references: [id], onDelete: Cascade)
   order     Int      @default(0)
+  // Invité prévenu de la date et du lieu du tournage (case cochée à la main dans le module Tournage).
+  notified  Boolean  @default(false)
   createdAt DateTime @default(now())
 
   @@unique([episodeId, guestId])
   @@index([episodeId, order])
   @@index([guestId])
+}
+
+// Repère posé pendant le tournage (un seul bouton, sans type) : `atMs` est le temps écoulé depuis le
+// départ du chrono.
+model ShootMarker {
+  id        String   @id @default(cuid())
+  episodeId String
+  episode   Episode  @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  atMs      Int
+  createdAt DateTime @default(now())
+
+  @@index([episodeId, atMs])
 }
 
 enum RushSourceType {

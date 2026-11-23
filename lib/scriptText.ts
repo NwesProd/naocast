@@ -75,3 +75,23 @@ export function scriptToPlainText(stored: string | null): string {
     .replace(/<(?!\/?u>)[^>]+>/g, "");
   return decodeEntities(text).replace(/\n{3,}/g, "\n\n").trim();
 }
+
+// Découpe le script en parties selon ses titres (H1 et H2), pour suivre l'avancement pendant le
+// tournage. Le texte avant le premier titre forme une partie « Début ». Chaque partie garde son HTML.
+export interface ScriptPart {
+  title: string;
+  html: string;
+}
+
+export function splitScriptParts(stored: string | null): ScriptPart[] {
+  const html = scriptToHtml(stored ?? "");
+  if (!html.trim()) return [];
+  const parts: ScriptPart[] = [];
+  for (const chunk of html.split(/(?=<h[12][^>]*>)/)) {
+    if (!chunk.trim()) continue;
+    const heading = /^<h[12][^>]*>([\s\S]*?)<\/h[12]>/.exec(chunk);
+    const title = heading ? decodeEntities(heading[1].replace(/<[^>]+>/g, "")).trim() : "Début";
+    parts.push({ title: title || "Sans titre", html: chunk });
+  }
+  return parts;
+}

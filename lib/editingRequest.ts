@@ -1,6 +1,7 @@
 import type Stripe from "stripe";
 import { prisma } from "@/lib/db";
 import { appUrl, sendEmail } from "@/lib/email";
+import { formatShootTime } from "@/lib/shootMarkers";
 
 // Demande de montage par un monteur naocast. (tunnel "J'ai besoin d'un monteur",
 // étape "Envoi") : l'utilisateur ajoute ses remarques, paie via Stripe Checkout,
@@ -36,6 +37,7 @@ export interface EditingSummary {
   rushes: { id: string; name: string; type: string; externalRef: string | null; storageKey: string | null; durationSec: number | null; sizeBytes: number | null; selected: boolean }[];
   generics: { label: string; text: string }[];
   logo: string;
+  shootMarkers: string[];
 }
 
 // Récapitulatif de l'épisode tel qu'il est au moment de la lecture (rushs, voix, génériques,
@@ -45,6 +47,7 @@ export async function buildEditingSummary(episodeId: string): Promise<EditingSum
   if (!episode) return null;
   const podcast = await prisma.podcast.findUnique({ where: { id: episode.podcastId } });
   const rushes = await prisma.rushSource.findMany({ where: { episodeId }, orderBy: { createdAt: "asc" } });
+  const markers = await prisma.shootMarker.findMany({ where: { episodeId }, orderBy: { atMs: "asc" } });
   const speakers = await prisma.episodeSpeaker.findMany({ where: { episodeId }, orderBy: { label: "asc" } });
   const transcriptCount = await prisma.transcriptSegment.count({ where: { episodeId } });
 
@@ -75,6 +78,7 @@ export async function buildEditingSummary(episodeId: string): Promise<EditingSum
       { label: "Début", text: podcast?.introKey ? "Générique de début du podcast (bibliothèque de médias)" : "Pas de générique de début" },
       { label: "Fin", text: podcast?.outroKey ? "Générique de fin du podcast (bibliothèque de médias)" : "Pas de générique de fin" },
     ],
+    shootMarkers: markers.map((m) => formatShootTime(m.atMs)),
     logo: podcast?.logoKey ? "Logo permanent du podcast (bibliothèque de médias)" : "Pas de logo",
   };
 }
@@ -100,6 +104,7 @@ export function renderEditingEmail(
     ${section("Remarques du podcasteur", request.notes ? `<p style="white-space:pre-wrap">${escapeHtml(request.notes)}</p>` : "<p><em>Aucune remarque.</em></p>")}
     ${section("Rushs", `<ul>${rushes || "<li>Aucun</li>"}</ul>${summary.cameraSetup ? `<p>${escapeHtml(summary.cameraSetup)}</p>` : ""}`)}
     ${section("Voix", `<p>${summary.expectedSpeakerCount ? `${summary.expectedSpeakerCount} voix attendues` : "Nombre de voix non précisé"}${summary.speakers.length ? ` : ${escapeHtml(summary.speakers.join(", "))}` : ""}. ${summary.hasTranscript ? "Transcript disponible." : "Pas de transcript."}</p>`)}
+    ${summary.shootMarkers.length ? section("Repères de tournage", `<p>Moments marqués pendant le tournage (temps depuis le départ du chrono) : ${summary.shootMarkers.join(", ")}.</p>`) : ""}
     ${section("Génériques et logo", `<ul>${summary.generics.map((g) => `<li>Générique de ${g.label.toLowerCase()} : ${escapeHtml(g.text)}</li>`).join("")}<li>${escapeHtml(summary.logo)}</li></ul>`)}
     <p style="margin-top:24px"><a href="${appUrl()}/admin/montages/${request.id}">Voir la demande dans le back office</a> (rushs téléchargeables)</p>
   `;
@@ -146,6 +151,7 @@ export async function finalizeEditingRequest(requestId: string, session: Stripe.
       rushes: [],
       generics: [],
       logo: "",
+      shootMarkers: [],
     });
     await sendEmail({ to: EDITING_REQUEST_EMAIL, subject, html });
   } catch (err) {

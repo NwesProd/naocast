@@ -7,6 +7,7 @@ import { normalizeTags } from "@/lib/guestRelevance";
 import { getObjectBuffer, getSignedDownloadUrl, getSignedUploadUrl, listAllObjects, storageMode } from "@/lib/storage";
 import { randomUUID } from "crypto";
 import { registerFinalVideo } from "@/lib/finalDelivery";
+import { formatShootTime } from "@/lib/shootMarkers";
 import { scriptToHtml, scriptToPlainText } from "@/lib/scriptText";
 import { extractDocumentText } from "@/lib/documentText";
 import { hasModuleAccess, PLAN_LABELS, type ModuleKey } from "@/lib/plan";
@@ -127,6 +128,7 @@ export function createNaocastMcpServer(user: McpUser): McpServer {
         prisma.rushSource.count({ where: { episodeId } }),
       ]);
       const count = transcriptSegments;
+      const shootMarkers = await prisma.shootMarker.findMany({ where: { episodeId }, orderBy: { atMs: "asc" } });
       return json({
         id: episode.id,
         podcast: episode.podcast.title,
@@ -139,6 +141,12 @@ export function createNaocastMcpServer(user: McpUser): McpServer {
         guests: guests.map((g) => ({ id: g.guest.id, name: g.guest.name, media: g.guest.mediaName, tags: g.guest.tags, socialLinks: g.guest.socialLinks })),
         speakers: [...names.values()],
         hasTranscript: count > 0,
+        // Repères posés pendant le tournage (temps depuis le départ du chrono, pas forcément calé sur le début des rushs).
+        shoot: {
+          startedAt: episode.shootStartedAt ? episode.shootStartedAt.toISOString() : null,
+          endedAt: episode.shootEndedAt ? episode.shootEndedAt.toISOString() : null,
+          markers: shootMarkers.map((m) => formatShootTime(m.atMs)),
+        },
       });
     }
   );

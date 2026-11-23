@@ -73,6 +73,7 @@ export const LIFETIME_SEATS_LIMIT = 50;
 export const BUILT_MODULES: { key: ModuleKey; label: string }[] = [
   { key: "script", label: "Script" },
   { key: "invites", label: "Invités" },
+  { key: "tournage", label: "Tournage" },
   { key: "montage", label: "Montage" },
   { key: "transcript", label: "Transcript" },
   { key: "mcp", label: "Connecteur Claude" },
