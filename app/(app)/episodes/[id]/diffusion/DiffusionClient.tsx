@@ -10,6 +10,14 @@ interface Snapshot {
   likes: number | null;
   comments: number | null;
 }
+interface Related {
+  id: string;
+  videoId: string;
+  title: string;
+  views: number;
+  likes: number | null;
+  comments: number | null;
+}
 interface UploadedVideo {
   videoId: string;
   title: string;
@@ -73,6 +81,7 @@ export function DiffusionClient({
   video,
   releaseDate,
   snapshots,
+  related,
 }: {
   episodeId: string;
   connected: boolean;
@@ -81,12 +90,14 @@ export function DiffusionClient({
   video: { id: string; title: string } | null;
   releaseDate: string | null;
   snapshots: Snapshot[];
+  related: Related[];
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [searching, setSearching] = useState(connected && !video && apiConfigured);
   const [notFound, setNotFound] = useState(false);
-  const [picking, setPicking] = useState(false);
+  // Sélecteur de vidéos de la chaîne : pour la vidéo principale de l'épisode ou pour un contenu annexe.
+  const [picking, setPicking] = useState<"main" | "related" | null>(null);
   const [uploads, setUploads] = useState<UploadedVideo[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const matched = useRef(false);
@@ -125,8 +136,8 @@ export function DiffusionClient({
     if (res) router.refresh();
   }
 
-  async function openPicker() {
-    setPicking(true);
+  async function openPicker(mode: "main" | "related" = "main") {
+    setPicking(mode);
     if (uploads) return;
     setError(null);
     try {
@@ -135,21 +146,57 @@ export function DiffusionClient({
       setUploads((await res.json()) as UploadedVideo[]);
     } catch (e) {
       setError((e as Error).message);
-      setPicking(false);
+      setPicking(null);
     }
   }
 
   async function choose(videoId: string | null) {
     setBusy(true);
-    const res = await post({ action: "set", videoId });
+    const res = picking === "related" && videoId ? await post({ action: "addRelated", videoId }) : await post({ action: "set", videoId });
     setBusy(false);
     if (!res) return;
-    setPicking(false);
+    setPicking(null);
     setNotFound(false);
     router.refresh();
   }
 
+  async function removeRelated(id: string) {
+    setBusy(true);
+    const res = await post({ action: "removeRelated", id });
+    setBusy(false);
+    if (res) router.refresh();
+  }
+
   const latest = snapshots[snapshots.length - 1] ?? null;
+  const relatedViews = related.reduce((sum, r) => sum + r.views, 0);
+
+  // Liste des vidéos de la chaîne, partagée par le choix de la vidéo principale et l'ajout d'un contenu annexe
+  // (déjà reliés ou vidéo principale exclus pour ce dernier).
+  const choices = (uploads ?? []).filter(
+    (v) => picking !== "related" || (v.videoId !== video?.id && !related.some((r) => r.videoId === v.videoId))
+  );
+  const pickerList = picking && (
+    <div className="rounded-md border border-border">
+      {uploads === null ? (
+        <p className="p-3 text-sm text-text-muted">Chargement des vidéos...</p>
+      ) : choices.length === 0 ? (
+        <p className="p-3 text-sm text-text-muted">Aucune autre vidéo à relier.</p>
+      ) : (
+        <ul className="max-h-72 divide-y divide-border overflow-y-auto text-sm">
+          {choices.map((v) => (
+            <li key={v.videoId}>
+              <button type="button" onClick={() => choose(v.videoId)} disabled={busy} className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-[#FAFAF8]">
+                {/* eslint-disable-next-line @next/next/no-img-element -- miniature YouTube servie par i.ytimg.com */}
+                <img src={thumb(v.videoId, "mq")} alt="" className="aspect-video w-24 shrink-0 rounded border border-border object-cover" loading="lazy" />
+                <span className="min-w-0 flex-1 truncate text-ink">{v.title}</span>
+                <span className="shrink-0 text-xs text-text-muted">{v.publishedAt ? new Date(v.publishedAt).toLocaleDateString("fr-FR") : ""}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 
   return (
     <div className="space-y-6">
@@ -215,7 +262,7 @@ export function DiffusionClient({
                     {video.title}
                   </a>
                   <div className="flex flex-wrap gap-2">
-                    <button type="button" onClick={openPicker} disabled={busy} className={pillBtn}>
+                    <button type="button" onClick={() => openPicker("main")} disabled={busy} className={pillBtn}>
                       Choisir une autre vidéo
                     </button>
                     <button type="button" onClick={() => choose(null)} disabled={busy} className={pillBtn}>
@@ -228,33 +275,49 @@ export function DiffusionClient({
               !searching && (
                 <div className="space-y-2">
                   {notFound && <p className="text-sm text-text-muted">Aucune vidéo ne correspond au titre de cet épisode. Choisis-la dans ta chaîne.</p>}
-                  <button type="button" onClick={openPicker} disabled={busy} className={pillBtn}>
+                  <button type="button" onClick={() => openPicker("main")} disabled={busy} className={pillBtn}>
                     Choisir la vidéo
                   </button>
                 </div>
               )
             )}
 
-            {picking && (
-              <div className="rounded-md border border-border">
-                {uploads === null ? (
-                  <p className="p-3 text-sm text-text-muted">Chargement des vidéos...</p>
-                ) : (
-                  <ul className="max-h-72 divide-y divide-border overflow-y-auto text-sm">
-                    {uploads.map((v) => (
-                      <li key={v.videoId}>
-                        <button type="button" onClick={() => choose(v.videoId)} disabled={busy} className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-[#FAFAF8]">
-                          {/* eslint-disable-next-line @next/next/no-img-element -- miniature YouTube servie par i.ytimg.com */}
-                          <img src={thumb(v.videoId, "mq")} alt="" className="aspect-video w-24 shrink-0 rounded border border-border object-cover" loading="lazy" />
-                          <span className="min-w-0 flex-1 truncate text-ink">{v.title}</span>
-                          <span className="shrink-0 text-xs text-text-muted">{v.publishedAt ? new Date(v.publishedAt).toLocaleDateString("fr-FR") : ""}</span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
+            {picking === "main" && pickerList}
+          </section>
+
+          <section className="space-y-3 rounded-xl border border-border bg-white p-5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold text-ink">Contenus annexes</h2>
+              {related.length > 0 && <span className="text-xs text-text-muted">{nf.format(relatedViews)} vues au total</span>}
+            </div>
+            <p className="text-sm text-text-muted">Shorts extraits, extraits, autres vidéos tirées de cet épisode : relie-les pour suivre leurs vues.</p>
+            {related.length > 0 && (
+              <ul className="divide-y divide-border rounded-md border border-border text-sm">
+                {related.map((r) => (
+                  <li key={r.id} className="flex items-center gap-3 px-3 py-2">
+                    <a href={`https://www.youtube.com/watch?v=${r.videoId}`} target="_blank" rel="noreferrer" className="shrink-0" title="Ouvrir la vidéo sur YouTube">
+                      {/* eslint-disable-next-line @next/next/no-img-element -- miniature YouTube servie par i.ytimg.com */}
+                      <img src={thumb(r.videoId, "mq")} alt="" className="aspect-video w-24 rounded border border-border object-cover" loading="lazy" />
+                    </a>
+                    <div className="min-w-0 flex-1">
+                      <a href={`https://www.youtube.com/watch?v=${r.videoId}`} target="_blank" rel="noreferrer" className="block truncate font-medium text-ink underline">
+                        {r.title}
+                      </a>
+                      <p className="text-xs text-text-muted">
+                        {nf.format(r.views)} vues{r.likes != null ? ` · ${nf.format(r.likes)} likes` : ""}{r.comments != null ? ` · ${nf.format(r.comments)} commentaires` : ""}
+                      </p>
+                    </div>
+                    <button type="button" onClick={() => removeRelated(r.id)} disabled={busy} className={pillBtn}>
+                      Retirer
+                    </button>
+                  </li>
+                ))}
+              </ul>
             )}
+            <button type="button" onClick={() => openPicker("related")} disabled={busy} className={pillBtn}>
+              + Ajouter un contenu
+            </button>
+            {picking === "related" && pickerList}
           </section>
         </>
       )}

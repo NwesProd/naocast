@@ -18,6 +18,7 @@ export default async function DiffusionPage({ params }: { params: Promise<{ id: 
     include: {
       podcast: { select: { userId: true, youtubeUploadsPlaylist: true, youtubeChannelTitle: true } },
       statSnapshots: { where: { source: "YOUTUBE" }, orderBy: { day: "asc" } },
+      relatedContents: { orderBy: { createdAt: "asc" } },
     },
   });
   if (!episode || episode.podcast.userId !== session.user.id) redirect("/dashboard");
@@ -41,6 +42,7 @@ export default async function DiffusionPage({ params }: { params: Promise<{ id: 
         apiConfigured={!!process.env.YOUTUBE_API_KEY}
         video={episode.youtubeVideoId ? { id: episode.youtubeVideoId, title: episode.youtubeVideoTitle ?? "Vidéo YouTube" } : null}
         releaseDate={episode.releaseDate ? episode.releaseDate.toISOString().slice(0, 10) : null}
+        related={episode.relatedContents.map((r) => ({ id: r.id, videoId: r.videoId, title: r.title, views: r.views, likes: r.likes, comments: r.comments }))}
         snapshots={episode.statSnapshots.map((s) => ({ day: s.day.toISOString().slice(0, 10), views: s.views, likes: s.likes, comments: s.comments }))}
       />
     </main>

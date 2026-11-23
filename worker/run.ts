@@ -105,7 +105,7 @@ async function dailyStatsTick(): Promise<void> {
   lastStatsDay = today;
   if (!process.env.YOUTUBE_API_KEY) return;
   try {
-    const episodes = await prisma.episode.findMany({ where: { youtubeVideoId: { not: null } }, select: { id: true, youtubeVideoId: true } });
+    const episodes = await prisma.episode.findMany({ where: { OR: [{ youtubeVideoId: { not: null } }, { relatedContents: { some: {} } }] }, select: { id: true, youtubeVideoId: true } });
     const written = await snapshotYoutubeStats(episodes);
     console.log(`[worker] statistiques YouTube relevées pour ${written} épisode(s)`);
   } catch (err) {

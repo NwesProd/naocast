@@ -8,11 +8,14 @@ import { listUploads, matchVideo, fetchVideoStats, YouTubeError } from "@/lib/yo
 import { snapshotYoutubeStats } from "@/lib/diffusionStats";
 
 // Module Diffusion, par épisode : retrouver la vidéo YouTube par le titre (« match »), la choisir à la
-// main ou la retirer (« set »), ou relever les chiffres du jour (« refresh »).
+// main ou la retirer (« set »), relever les chiffres du jour (« refresh »), ou gérer ses contenus annexes.
 const bodySchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("match") }),
   z.object({ action: z.literal("set"), videoId: z.string().min(5).max(30).nullable() }),
   z.object({ action: z.literal("refresh") }),
+  // Contenus annexes : un short extrait, un extrait, etc., reliés à l'épisode.
+  z.object({ action: z.literal("addRelated"), videoId: z.string().min(5).max(30) }),
+  z.object({ action: z.literal("removeRelated"), id: z.string().min(1) }),
 ]);
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -55,6 +58,24 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       if (episode.youtubeVideoId !== videoId) await prisma.statSnapshot.deleteMany({ where: { episodeId, source: "YOUTUBE" } });
       await prisma.episode.update({ where: { id: episodeId }, data: { youtubeVideoId: videoId, youtubeVideoTitle: stats.title } });
       await snapshotYoutubeStats([{ id: episodeId, youtubeVideoId: videoId }]);
+      return jsonResponse({ ok: true });
+    }
+
+    if (parsed.data.action === "addRelated") {
+      const { videoId } = parsed.data;
+      if (videoId === episode.youtubeVideoId) return NextResponse.json({ error: "C'est déjà la vidéo principale de l'épisode." }, { status: 400 });
+      const stats = (await fetchVideoStats([videoId])).get(videoId);
+      if (!stats) return NextResponse.json({ error: "Vidéo introuvable." }, { status: 404 });
+      await prisma.relatedContent.upsert({
+        where: { episodeId_videoId: { episodeId, videoId } },
+        update: { title: stats.title, views: stats.views, likes: stats.likes, comments: stats.comments },
+        create: { episodeId, videoId, title: stats.title, views: stats.views, likes: stats.likes, comments: stats.comments },
+      });
+      return jsonResponse({ ok: true });
+    }
+
+    if (parsed.data.action === "removeRelated") {
+      await prisma.relatedContent.deleteMany({ where: { id: parsed.data.id, episodeId } });
       return jsonResponse({ ok: true });
     }
 

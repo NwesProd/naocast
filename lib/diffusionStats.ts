@@ -6,8 +6,14 @@ import { todayInParis } from "@/lib/moduleProgress";
 // Un relevé par épisode et par jour : le relancer le même jour met simplement à jour le chiffre.
 export async function snapshotYoutubeStats(episodes: { id: string; youtubeVideoId: string | null }[]): Promise<number> {
   const linked = episodes.filter((e): e is { id: string; youtubeVideoId: string } => !!e.youtubeVideoId);
-  if (linked.length === 0) return 0;
-  const stats = await fetchVideoStats([...new Set(linked.map((e) => e.youtubeVideoId))]);
+  // Les contenus annexes de ces épisodes (shorts extraits...) sont mis à jour en même temps.
+  const related = await prisma.relatedContent.findMany({ where: { episodeId: { in: episodes.map((e) => e.id) } }, select: { id: true, videoId: true } });
+  if (linked.length === 0 && related.length === 0) return 0;
+  const stats = await fetchVideoStats([...new Set([...linked.map((e) => e.youtubeVideoId), ...related.map((r) => r.videoId)])]);
+  for (const item of related) {
+    const s = stats.get(item.videoId);
+    if (s) await prisma.relatedContent.update({ where: { id: item.id }, data: { title: s.title, views: s.views, likes: s.likes, comments: s.comments } });
+  }
   const day = new Date(todayInParis());
   let written = 0;
   for (const episode of linked) {

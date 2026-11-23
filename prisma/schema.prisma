@@ -392,6 +392,7 @@ model Episode {
   youtubeVideoId    String?
   youtubeVideoTitle String?
   statSnapshots     StatSnapshot[]
+  relatedContents   RelatedContent[]
 
   // Module "Script" : idées d'angles/thèmes pour l'épisode, générées (API
   // Claude) à partir de la bible du podcast, s'ils existent déjà des invités
@@ -441,6 +442,24 @@ model EpisodeGuest {
   @@unique([episodeId, guestId])
   @@index([episodeId, order])
   @@index([guestId])
+}
+
+// Contenu annexe d'un épisode (module Diffusion) : par exemple un short extrait de l'épisode, relié à une
+// vidéo de la chaîne YouTube. On garde le dernier relevé de ses chiffres, sans historique.
+model RelatedContent {
+  id        String   @id @default(cuid())
+  episodeId String
+  episode   Episode  @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  videoId   String
+  title     String
+  views     Int      @default(0)
+  likes     Int?
+  comments  Int?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([episodeId, videoId])
+  @@index([episodeId])
 }
 
 // Relevé quotidien des statistiques d'un épisode (total cumulé à cette date) : sert à tracer
