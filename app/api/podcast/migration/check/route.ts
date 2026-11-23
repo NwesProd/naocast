@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireUserId } from "@/lib/authz";
 import { fetchFeed } from "@/lib/feedImport";
+import { assertPublicUrl } from "@/lib/safeFetch";
 import { feedUrl } from "@/lib/rss";
 
 const norm = (u: string | null | undefined) => (u ?? "").trim().replace(/\/+$/, "").toLowerCase();
@@ -24,10 +25,20 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   }
   try {
-    const old = await fetchFeed(podcast.migrationFeedUrl);
-    const redirected = norm(old.channel.newFeedUrl) === norm(feedUrl(podcast.rssSlug));
+    const target = norm(feedUrl(podcast.rssSlug));
+    // Redirection HTTP (301/302/307/308) de l'ancien flux vers celui de naocast : le cas le plus courant.
+    const first = await fetch(await assertPublicUrl(podcast.migrationFeedUrl), { redirect: "manual", headers: { "User-Agent": "naocast-import/1.0" } });
+    const location = first.status >= 300 && first.status < 400 ? first.headers.get("location") : null;
+    let redirected = !!location && norm(new URL(location, podcast.migrationFeedUrl).toString()) === target;
+    let current: string | null = location;
+    // Sinon, balise de redirection dans l'ancien flux (itunes:new-feed-url).
+    if (!redirected && first.ok) {
+      const old = await fetchFeed(podcast.migrationFeedUrl);
+      current = old.channel.newFeedUrl;
+      redirected = norm(old.channel.newFeedUrl) === target;
+    }
     if (redirected) await prisma.podcast.update({ where: { id: podcast.id }, data: { migrationStatus: "DONE" } });
-    return NextResponse.json({ redirected, current: old.channel.newFeedUrl });
+    return NextResponse.json({ redirected, current });
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 422 });
   }
