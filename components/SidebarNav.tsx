@@ -371,7 +371,7 @@ export function SidebarNav({
           (beaucoup de modules à terme) sans pousser le haut/bas hors écran. */}
       <div className="flex-1 min-h-0 overflow-y-auto space-y-1">
         {episode && (
-          <div className="px-3 py-1.5 text-sm text-peach-muted truncate cursor-default" title={episode.title || "Sans titre"}>
+          <div className="sticky top-0 z-10 bg-peach-sidebar px-3 py-1.5 text-sm text-peach-muted truncate cursor-default" title={episode.title || "Sans titre"}>
             {label ? `${label} · ${episode.title || "Sans titre"}` : episode.title || "Sans titre"}
           </div>
         )}

@@ -186,6 +186,20 @@ model Podcast {
   youtubeChannelId       String?
   youtubeChannelTitle    String?
   youtubeUploadsPlaylist String?
+
+  // Hébergement audio par naocast (flux RSS lu par Apple Podcasts, Spotify, Deezer...).
+  // hostingMode : "NAOCAST" (pas d'hébergeur avant) ou "MIGRATE" (migration d'un podcast existant).
+  hostingMode  String?
+  rssSlug      String?  @unique
+  author       String?
+  ownerEmail   String?
+  description  String?
+  language     String   @default("fr")
+  category     String?
+  explicit     Boolean  @default(false)
+  website      String?
+  // { apple|spotify|deezer: { url?: string, status: "none"|"pending"|"live" } }
+  platformLinks Json?
 }
 
 // Bibliothèque de médias du podcast : jingles, transitions, sons et musiques
@@ -297,6 +311,12 @@ model Episode {
   season        Int?
   episodeNumber Int?
   releaseDate   DateTime?
+
+  // Diffusion audio : description (HTML) affichée sur les plateformes, date de mise dans le flux RSS
+  // et identifiant stable de l'épisode dans le flux (repris de l'ancien flux lors d'une migration).
+  description      String?
+  audioPublishedAt DateTime?
+  rssGuid          String?
 
   status      EpisodeStatus @default(DRAFT)
   cameraSetup CameraSetup?

@@ -3,6 +3,7 @@ import {
   PutObjectCommand,
   GetObjectCommand,
   DeleteObjectCommand,
+  HeadObjectCommand,
   ListObjectsV2Command,
   CreateMultipartUploadCommand,
   UploadPartCommand,
@@ -137,6 +138,19 @@ export async function putObject(key: string, body: Buffer, contentType?: string)
   const p = localPath(key);
   await mkdir(path.dirname(p), { recursive: true });
   await writeFile(p, body);
+}
+
+// Taille d'un fichier en octets (null s'il est introuvable) : sert à l'enclosure du flux RSS.
+export async function getObjectSize(key: string): Promise<number | null> {
+  try {
+    if (s3 && bucket) {
+      const res = await s3.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
+      return res.ContentLength ?? null;
+    }
+    return (await stat(localPath(key))).size;
+  } catch {
+    return null;
+  }
 }
 
 export async function getObjectBuffer(key: string): Promise<Buffer> {

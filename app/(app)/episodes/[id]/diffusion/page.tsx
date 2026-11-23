@@ -5,6 +5,8 @@ import { getUserAccess } from "@/lib/entitlements";
 import { hasModuleAccess } from "@/lib/plan";
 import { PlanLockedNotice } from "@/components/PlanLockedNotice";
 import { DiffusionClient } from "./DiffusionClient";
+import { AudioHosting } from "./AudioHosting";
+import { feedUrl, missingHostingFields } from "@/lib/rss";
 
 // Module « Diffusion » (catégorie Distri) : statistiques de l'épisode (vues YouTube pour l'instant),
 // avec leur évolution depuis la sortie.
@@ -16,9 +18,10 @@ export default async function DiffusionPage({ params }: { params: Promise<{ id: 
   const episode = await prisma.episode.findUnique({
     where: { id },
     include: {
-      podcast: { select: { userId: true, youtubeUploadsPlaylist: true, youtubeChannelTitle: true } },
+      podcast: true,
       statSnapshots: { where: { source: "YOUTUBE" }, orderBy: { day: "asc" } },
       relatedContents: { orderBy: { createdAt: "asc" } },
+      exports: { where: { type: "AUDIO" }, select: { id: true }, take: 1 },
     },
   });
   if (!episode || episode.podcast.userId !== session.user.id) redirect("/dashboard");
@@ -33,8 +36,28 @@ export default async function DiffusionPage({ params }: { params: Promise<{ id: 
     );
   }
 
+  const p = episode.podcast;
   return (
-    <main className="p-8 w-full">
+    <main className="p-8 w-full space-y-10">
+      <AudioHosting
+        episodeId={id}
+        hostingMode={(p.hostingMode as "NAOCAST" | "MIGRATE" | null) ?? null}
+        hosting={{
+          author: p.author ?? "",
+          ownerEmail: p.ownerEmail ?? "",
+          description: p.description ?? "",
+          language: p.language,
+          category: p.category ?? "",
+          explicit: p.explicit,
+          website: p.website ?? "",
+        }}
+        missing={missingHostingFields(p)}
+        feedUrl={p.rssSlug ? feedUrl(p.rssSlug) : null}
+        platformLinks={(p.platformLinks as never) ?? {}}
+        audioReady={episode.exports.length > 0}
+        published={!!episode.audioPublishedAt}
+        description={episode.description ?? ""}
+      />
       <DiffusionClient
         episodeId={id}
         connected={!!episode.podcast.youtubeUploadsPlaylist}
