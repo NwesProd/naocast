@@ -107,6 +107,10 @@ export default async function PodcastDashboardPage() {
   });
   const monthViews = viewsGainedSince(youtubeSnapshots, new Map(episodes.map((e) => [e.id, publishDate(e)])), monthStart);
   const lastEpisodeViews = lastEpisode ? ([...youtubeSnapshots].reverse().find((s) => s.episodeId === lastEpisode.id)?.views ?? null) : null;
+  // Vues totales : dernier total connu de chaque épisode, additionnés.
+  const latestViewsByEpisode = new Map<string, number>();
+  for (const s of youtubeSnapshots) latestViewsByEpisode.set(s.episodeId, s.views);
+  const totalViews = latestViewsByEpisode.size > 0 ? [...latestViewsByEpisode.values()].reduce((sum, v) => sum + v, 0) : null;
   const fmt = (n: number | null) => (n === null ? "-" : n.toLocaleString("fr-FR"));
 
   const startOfToday = new Date();
@@ -239,10 +243,14 @@ export default async function PodcastDashboardPage() {
               </p>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4 mt-6 pt-4 border-t border-mint-ink/10">
+          <div className="grid grid-cols-1 gap-4 mt-6 pt-4 border-t border-mint-ink/10 sm:grid-cols-3">
             <div>
               <p className={`text-lg font-bold ${monthViews === null ? "text-mint-ink/40" : "text-mint-ink"}`}>{fmt(monthViews)}</p>
               <p className="text-xs text-mint-muted">Vues ce mois-ci (YouTube){monthViews === null ? " · Connecte ta chaîne dans Mon podcast" : ""}</p>
+            </div>
+            <div>
+              <p className={`text-lg font-bold ${totalViews === null ? "text-mint-ink/40" : "text-mint-ink"}`}>{fmt(totalViews)}</p>
+              <p className="text-xs text-mint-muted">Vues totales du podcast (YouTube)</p>
             </div>
             <div>
               <p className="text-lg font-bold text-mint-ink/40">-</p>
