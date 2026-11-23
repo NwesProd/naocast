@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { EPISODE_UPDATED_EVENT } from "@/components/SidebarNav";
+import { AddressInput } from "@/components/AddressInput";
 
 interface Part {
   title: string;
@@ -415,7 +416,11 @@ export function TournageClient({
         {mode && (
           <div>
             <label className="mb-1 block text-xs font-medium text-text-muted">{placeLabel}</label>
-            <input type="text" value={place} onChange={(e) => setPlace(e.target.value)} onBlur={() => saveShoot({ shootPlace: place.trim() || null })} className={inputClass} />
+            {mode === "REMOTE" ? (
+              <input type="text" value={place} onChange={(e) => setPlace(e.target.value)} onBlur={() => saveShoot({ shootPlace: place.trim() || null })} className={inputClass} />
+            ) : (
+              <AddressInput value={place} onChange={setPlace} onCommit={(v) => saveShoot({ shootPlace: v.trim() || null })} />
+            )}
           </div>
         )}
       </section>
