@@ -341,6 +341,11 @@ export function TranscriptModuleClient({
         </div>
       ) : (
         <div className="space-y-3">
+          {speakers.length === 0 && transcript.length > 0 && (
+            <p className="rounded-md bg-white border border-border p-3 text-xs text-text-muted">
+              Aucun locuteur détecté sur ce transcript. Clique sur « Régénérer le transcript » pour relancer la reconnaissance : les voix pourront alors être renommées ici.
+            </p>
+          )}
           {speakers.length > 0 && (
             <div className="rounded-md bg-white border border-border p-3 space-y-2">
               <p className="text-xs font-medium text-ink">
