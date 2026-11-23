@@ -135,7 +135,10 @@ async function buildFeedUncached(slug: string): Promise<string | null> {
 
   const base = appUrl();
   const coverExt = podcast.coverKey?.split(".").pop()?.toLowerCase() || "jpg";
-  const coverUrl = podcast.coverKey ? `${base}/api/rss/${slug}/cover/cover.${coverExt}` : null;
+  // Les applications gardent chaque pochette en mémoire d'après son adresse : un court identifiant de version dans
+  // l'adresse la fait relire dès qu'on remplace l'image.
+  const version = (key: string) => (key.split("/").pop() ?? "").slice(0, 8);
+  const coverUrl = podcast.coverKey ? `${base}/api/rss/${slug}/cover/cover-${version(podcast.coverKey)}.${coverExt}` : null;
   const explicit = podcast.explicit ? "true" : "false";
 
   const sizes = await Promise.all(episodes.map((e) => (e.exports[0] ? cachedSize(e.exports[0].storageKey) : Promise.resolve(0))));
@@ -160,7 +163,7 @@ async function buildFeedUncached(slug: string): Promise<string | null> {
       <itunes:episodeType>full</itunes:episodeType>
       ${e.episodeNumber != null ? `<itunes:episode>${e.episodeNumber}</itunes:episode>` : ""}
       ${e.season != null ? `<itunes:season>${e.season}</itunes:season>` : ""}
-      ${e.coverKey ? `<itunes:image href="${base}/api/rss/${slug}/episode-cover/${e.id}.${e.coverKey.split(".").pop()?.toLowerCase() || "jpg"}"/>` : coverUrl ? `<itunes:image href="${coverUrl}"/>` : ""}
+      ${e.coverKey ? `<itunes:image href="${base}/api/rss/${slug}/episode-cover/${e.id}-${version(e.coverKey)}.${e.coverKey.split(".").pop()?.toLowerCase() || "jpg"}"/>` : coverUrl ? `<itunes:image href="${coverUrl}"/>` : ""}
     </item>`);
   }
 
