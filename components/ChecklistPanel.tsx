@@ -98,7 +98,7 @@ export function ChecklistPanel({ initial }: { initial: Item[] }) {
               {hideDone ? "Afficher" : "Masquer"} {done > 1 ? `les ${done} tâches terminées` : "la tâche terminée"}
             </button>
           )}
-          <div className="shrink-0 border-t border-border p-3">
+          <div className="shrink-0 border-t border-border p-3 pb-20">
             <input
               value={text}
               onChange={(e) => setText(e.target.value)}
