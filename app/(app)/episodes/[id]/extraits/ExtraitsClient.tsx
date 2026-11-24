@@ -30,6 +30,8 @@ interface ClipItem {
   fileName: string | null;
   fileUrl: string | null;
   publishedUrl: string | null;
+  description: string;
+  publishDate: string;
 }
 interface Token {
   seg: number;
@@ -461,6 +463,8 @@ function ClipDetail({
   const [notes, setNotes] = useState("");
   const [email, setEmail] = useState(ownEditorEmail ?? "");
   const [link, setLink] = useState(clip.publishedUrl ?? "");
+  const [description, setDescription] = useState(clip.description);
+  const [publishDate, setPublishDate] = useState(clip.publishDate);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -579,6 +583,32 @@ function ClipDetail({
 
         <section className="space-y-2">
           <h3 className="text-sm font-semibold text-ink">Publication</h3>
+          <label className="block text-sm font-medium text-ink">Description pour la diffusion</label>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            onBlur={() => description.trim() !== clip.description.trim() && patch({ description })}
+            rows={4}
+            maxLength={5000}
+            placeholder="Le texte à coller sous le short (YouTube, Instagram...)"
+            className={inputClass}
+          />
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="text-sm font-medium text-ink" htmlFor={`pub-${clip.id}`}>
+              Date de publication <span className="font-normal text-text-muted">(facultatif)</span>
+            </label>
+            <input
+              id={`pub-${clip.id}`}
+              type="date"
+              value={publishDate}
+              onChange={(e) => {
+                setPublishDate(e.target.value);
+                patch({ publishDate: e.target.value });
+              }}
+              className="rounded-md border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-button/30"
+            />
+          </div>
+          <p className="text-xs text-text-muted">Ces deux champs sont là pour ton organisation : naocast ne publie rien sur YouTube à ta place.</p>
           <div className="flex flex-wrap items-center gap-2">
             <input type="text" value={link} onChange={(e) => setLink(e.target.value)} placeholder="Lien du short publié sur YouTube" className={`${inputClass} max-w-md`} />
             <button type="button" onClick={() => patch({ publishedUrl: link }, link.trim() ? "Short relié à l'épisode." : "Lien retiré.")} disabled={busy || link.trim() === (clip.publishedUrl ?? "")} className={pillBtn}>

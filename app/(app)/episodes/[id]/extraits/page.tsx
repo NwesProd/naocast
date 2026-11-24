@@ -61,6 +61,8 @@ export default async function ExtraitsPage({
             fileName: c.fileName,
             fileUrl: c.fileKey ? await getSignedDownloadUrl(c.fileKey) : null,
             publishedUrl: c.publishedUrl,
+            description: c.description ?? "",
+            publishDate: c.publishDate ? c.publishDate.toISOString().slice(0, 10) : "",
           }))
         )}
         transcript={episode.transcriptSegments.map((s) => ({

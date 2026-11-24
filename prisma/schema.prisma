@@ -497,6 +497,8 @@ model Clip {
   fileName       String?
   publishedUrl   String?
   youtubeVideoId String?
+  description    String? // description du short pour la diffusion (texte brut, à copier sur YouTube)
+  publishDate    DateTime? @db.Date // date de publication prévue, à titre d'information (n'agit pas sur YouTube)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
