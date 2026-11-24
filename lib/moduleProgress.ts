@@ -131,3 +131,28 @@ export function firstOpenModuleHref(
   // Tout est validé : on arrive sur Diffusion (statistiques de l'épisode) quand le forfait y donne accès.
   return modules.find((m) => !m.done)?.href ?? (opts.diffusionEnabled ? `/episodes/${episodeId}/diffusion` : montageHref);
 }
+
+// Avancement d'un épisode : modules validés (ceux qui affichent un tick vert dans la sidebar) sur modules du forfait.
+// Script, Invités et Tournage n'existent que pour les forfaits qui ont la phase Prod ; Extraits et Diffusion n'ont pas
+// de validation et ne comptent donc pas.
+export function episodeProgress(
+  ep: {
+    status: string;
+    montageValidatedExternally: boolean;
+    guestsCastingValidated: boolean;
+    scriptValidated: boolean;
+    shootDone: boolean;
+    coverKey: string | null;
+    thumbnailKey: string | null;
+  },
+  counts: EpisodeCounts,
+  prodEnabled: boolean
+): { done: number; total: number } {
+  const modules = [
+    ...(prodEnabled ? [ep.scriptValidated, ep.guestsCastingValidated, ep.shootDone] : []),
+    isMontageDone(ep),
+    counts.transcriptSegments > 0,
+    !!ep.coverKey || !!ep.thumbnailKey,
+  ];
+  return { done: modules.filter(Boolean).length, total: modules.length };
+}

@@ -29,6 +29,8 @@ interface EpisodeCardProps {
   // Statut affiché (badge, couleur) : peut être "Prêt à diffuser" / "Diffusé" une fois tout
   // validé (cf. displayStatus). `status` reste le statut réel, utilisé pour la logique.
   displayStatus: string;
+  // Modules validés sur modules du forfait (cf. episodeProgress).
+  progress: { done: number; total: number };
   season: number | null;
   episodeNumber: number | null;
   releaseDateLabel: string | null;
@@ -42,6 +44,7 @@ export function EpisodeCard({
   title,
   status,
   displayStatus,
+  progress,
   season,
   episodeNumber,
   releaseDateLabel,
@@ -65,7 +68,15 @@ export function EpisodeCard({
           <p className={`font-medium ${zone.text} line-clamp-2`}>{title || fallbackLabel}</p>
           {releaseDateLabel && <p className={`text-xs ${zone.muted} mt-1`}>Sortie le {releaseDateLabel}</p>}
         </div>
-        <StatusBadge status={displayStatus} />
+        <div className="space-y-2">
+          <div className={`flex items-center gap-2 text-xs ${zone.muted}`} title={`${progress.done} module${progress.done > 1 ? "s" : ""} validé${progress.done > 1 ? "s" : ""} sur ${progress.total}`}>
+            <span className="h-1.5 flex-1 overflow-hidden rounded-pill bg-black/10">
+              <span className={`block h-full rounded-pill bg-current ${zone.text}`} style={{ width: `${progress.total ? (progress.done / progress.total) * 100 : 0}%` }} />
+            </span>
+            <span className="tabular-nums">{progress.done}/{progress.total}</span>
+          </div>
+          <StatusBadge status={displayStatus} />
+        </div>
       </Link>
 
       <div className="absolute top-3 right-3">

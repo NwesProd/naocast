@@ -11,6 +11,7 @@ export interface EpisodeListItem {
   title: string | null;
   status: string;
   displayStatus: string;
+  progress: { done: number; total: number };
   season: number | null;
   episodeNumber: number | null;
   releaseDateLabel: string | null;
@@ -85,6 +86,7 @@ export function EpisodesView({
       title={ep.title}
       status={ep.status}
       displayStatus={ep.displayStatus}
+      progress={ep.progress}
       season={ep.season}
       episodeNumber={ep.episodeNumber}
       releaseDateLabel={ep.releaseDateLabel}
@@ -142,6 +144,7 @@ export function EpisodesView({
                 <th className="px-3 py-2 font-medium">Épisode</th>
                 <th className="px-3 py-2 font-medium">Titre</th>
                 <th className="px-3 py-2 font-medium">Statut</th>
+                <th className="px-3 py-2 font-medium">Avancement</th>
                 <th className="px-3 py-2 font-medium">Sortie</th>
                 <th className="px-3 py-2 font-medium text-right">Actions</th>
               </tr>
@@ -157,6 +160,14 @@ export function EpisodesView({
                   </td>
                   <td className="px-3 py-2">
                     <StatusBadge status={ep.displayStatus} />
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap text-text-muted">
+                    <span className="inline-flex items-center gap-2">
+                      <span className="h-1.5 w-20 overflow-hidden rounded-pill bg-border">
+                        <span className="block h-full rounded-pill bg-primary-button" style={{ width: `${ep.progress.total ? (ep.progress.done / ep.progress.total) * 100 : 0}%` }} />
+                      </span>
+                      <span className="text-xs">{ep.progress.done}/{ep.progress.total}</span>
+                    </span>
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap text-text-muted">{ep.releaseDateLabel ?? "-"}</td>
                   <td className="px-3 py-2">

@@ -6,7 +6,7 @@ import { NewEpisodeButton } from "./NewEpisodeButton";
 import { EpisodesView } from "./EpisodesView";
 import { PlanUsageBanner } from "./PlanUsageBanner";
 import { PLAN_LOCKS_VALIDATED_EPISODE_DELETION } from "@/lib/plan";
-import { episodeDisplayStatus, EPISODE_COUNTS_SELECT } from "@/lib/moduleProgress";
+import { episodeDisplayStatus, episodeProgress, EPISODE_COUNTS_SELECT } from "@/lib/moduleProgress";
 import { getUserAccess } from "@/lib/entitlements";
 import { hasModuleAccess } from "@/lib/plan";
 
@@ -57,6 +57,7 @@ export default async function DashboardPage() {
             title: ep.title,
             status: ep.status,
             displayStatus: episodeDisplayStatus(ep, ep._count, prodEnabled),
+            progress: episodeProgress(ep, ep._count, prodEnabled),
             season: ep.season,
             episodeNumber: ep.episodeNumber,
             releaseDateLabel: ep.releaseDate ? ep.releaseDate.toLocaleDateString("fr-FR") : null,
