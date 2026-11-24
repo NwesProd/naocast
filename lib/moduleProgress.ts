@@ -133,8 +133,8 @@ export function firstOpenModuleHref(
 }
 
 // Avancement d'un épisode : modules validés (ceux qui affichent un tick vert dans la sidebar) sur modules du forfait.
-// Script, Invités et Tournage n'existent que pour les forfaits qui ont la phase Prod ; Extraits et Diffusion n'ont pas
-// de validation et ne comptent donc pas.
+// Script, Invités et Tournage n'existent que pour les forfaits qui ont la phase Prod. Extraits et Diffusion se
+// valident à la main (bouton « Valider le module »).
 export function episodeProgress(
   ep: {
     status: string;
@@ -142,6 +142,9 @@ export function episodeProgress(
     guestsCastingValidated: boolean;
     scriptValidated: boolean;
     shootDone: boolean;
+    extraitsValidated: boolean;
+    diffusionValidated: boolean;
+    miniatureValidated: boolean;
     coverKey: string | null;
     thumbnailKey: string | null;
   },
@@ -152,7 +155,9 @@ export function episodeProgress(
     ...(prodEnabled ? [ep.scriptValidated, ep.guestsCastingValidated, ep.shootDone] : []),
     isMontageDone(ep),
     counts.transcriptSegments > 0,
-    !!ep.coverKey || !!ep.thumbnailKey,
+    (!!ep.coverKey && !!ep.thumbnailKey) || ep.miniatureValidated,
+    ep.extraitsValidated,
+    ep.diffusionValidated,
   ];
   return { done: modules.filter(Boolean).length, total: modules.length };
 }

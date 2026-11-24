@@ -59,6 +59,7 @@ export default async function DiffusionPage({ params }: { params: Promise<{ id: 
           />
         }
         episodeId={id}
+        validated={episode.diffusionValidated}
         connected={!!episode.podcast.youtubeUploadsPlaylist}
         channelTitle={episode.podcast.youtubeChannelTitle}
         apiConfigured={!!process.env.YOUTUBE_API_KEY}

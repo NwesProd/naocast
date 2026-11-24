@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { EPISODE_UPDATED_EVENT } from "@/components/SidebarNav";
+import { ModuleValidateButton } from "@/components/ModuleValidateButton";
 
 interface Img {
   url: string;
@@ -190,20 +191,27 @@ function Slot({ kind, episodeId, image, note }: { kind: Kind; episodeId: string;
 
 export function MiniatureClient({
   episodeId,
+  validated,
+  autoValidated,
   cover,
   thumbnail,
   podcastCoverUsed,
 }: {
   episodeId: string;
+  validated: boolean;
+  autoValidated: boolean;
   cover: Img | null;
   thumbnail: Img | null;
   podcastCoverUsed: boolean;
 }) {
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-lg font-bold text-ink">Miniature</h1>
-        <p className="mt-0.5 text-sm text-text-muted">La miniature de la vidéo et la pochette de l&apos;audio de cet épisode.</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-lg font-bold text-ink">Miniature</h1>
+          <p className="mt-0.5 text-sm text-text-muted">La miniature de la vidéo et la pochette de l&apos;audio de cet épisode.</p>
+        </div>
+        <ModuleValidateButton episodeId={episodeId} module="miniature" initialDone={validated} autoDone={autoValidated} />
       </div>
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Slot

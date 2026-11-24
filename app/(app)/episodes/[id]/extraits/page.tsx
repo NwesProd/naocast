@@ -46,6 +46,7 @@ export default async function ExtraitsPage({
     <main className="p-8 w-full">
       <ExtraitsClient
         episodeId={id}
+        validated={episode.extraitsValidated}
         paymentReturn={clip === "success" && sessionId ? sessionId : null}
         ownEditorEmail={episode.ownEditorEmail}
         clips={await Promise.all(

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { ModuleValidateButton } from "@/components/ModuleValidateButton";
 
 interface Snapshot {
   day: string;
@@ -75,6 +76,7 @@ function ViewsChart({ snapshots }: { snapshots: Snapshot[] }) {
 // évolution) ; les écoutes audio viendront avec les hébergeurs.
 export function DiffusionClient({
   episodeId,
+  validated,
   connected,
   channelTitle,
   apiConfigured,
@@ -86,6 +88,7 @@ export function DiffusionClient({
   plays,
 }: {
   episodeId: string;
+  validated: boolean;
   connected: boolean;
   channelTitle: string | null;
   apiConfigured: boolean;
@@ -209,14 +212,17 @@ export function DiffusionClient({
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-lg font-bold text-ink">Diffusion</h1>
-        {video && (
-          <div className="flex items-center gap-3">
-            {latest && <span className="text-xs text-text-muted">Dernier relevé : {formatDay(latest.day)}</span>}
-            <button type="button" onClick={refresh} disabled={busy} className={pillBtn}>
-              {busy ? "..." : "Actualiser"}
-            </button>
-          </div>
-        )}
+        <div className="flex flex-wrap items-start gap-3">
+          {video && (
+            <div className="flex items-center gap-3 pt-2">
+              {latest && <span className="text-xs text-text-muted">Dernier relevé : {formatDay(latest.day)}</span>}
+              <button type="button" onClick={refresh} disabled={busy} className={pillBtn}>
+                {busy ? "..." : "Actualiser"}
+              </button>
+            </div>
+          )}
+          <ModuleValidateButton episodeId={episodeId} module="diffusion" initialDone={validated} />
+        </div>
       </div>
 
       {error && <p className="text-sm text-[#8A2E1F]">{error}</p>}

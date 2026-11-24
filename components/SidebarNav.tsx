@@ -148,6 +148,9 @@ interface SelectedEpisode {
   montageValidatedExternally: boolean;
   guestsCastingValidated: boolean;
   shootDone: boolean;
+  extraitsValidated: boolean;
+  diffusionValidated: boolean;
+  miniatureValidated: boolean;
   transcriptSegments: unknown[];
   scriptValidated: boolean;
   coverKey: string | null;
@@ -289,7 +292,10 @@ export function SidebarNav({
   // considérer terminé.
   const transcriptDone = !!episode && episode.transcriptSegments.length > 0;
   const scriptDone = !!episode && episode.scriptValidated;
-  const miniatureDone = !!episode && (!!episode.coverKey || !!episode.thumbnailKey);
+  const extraitsDone = !!episode && episode.extraitsValidated;
+  const diffusionDone = !!episode && episode.diffusionValidated;
+  // Validé tout seul quand la pochette audio et la miniature vidéo sont importées, ou à la main (bouton du module).
+  const miniatureDone = !!episode && ((!!episode.coverKey && !!episode.thumbnailKey) || episode.miniatureValidated);
 
   // Modules du parcours épisode, groupés par phase de production. "Montage"
   // et "Transcript" sont construits (déverrouillés une fois un
@@ -309,14 +315,14 @@ export function SidebarNav({
       modules: [
         { label: "Montage", href: montageHref, done: montageDone },
         { label: "Transcript", href: transcriptHref, done: transcriptDone },
-        { label: "Extraits", href: extraitsHref },
+        { label: "Extraits", href: extraitsHref, done: extraitsDone },
         { label: "Miniature", href: miniatureHref, done: miniatureDone },
       ],
     },
     {
       label: "Distri",
       modules: [
-        { label: "Diffusion", href: diffusionHref },
+        { label: "Diffusion", href: diffusionHref, done: diffusionDone },
         { label: "Lead magnet", href: null },
         { label: "Sponsoring", href: null },
       ],

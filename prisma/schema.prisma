@@ -419,6 +419,10 @@ model Episode {
   shootEndedAt   DateTime?
   // Module marqué « Tournage terminé » (bouton en haut de la page, ou fin du chrono) : tick dans la sidebar.
   shootDone      Boolean       @default(false)
+  // Modules Extraits et Diffusion marqués « validés » à la main (tick dans la sidebar, compte dans l'avancement).
+  extraitsValidated  Boolean   @default(false)
+  diffusionValidated Boolean   @default(false)
+  miniatureValidated Boolean   @default(false) // validé à la main sans avoir importé les deux visuels
   shootPartIndex Int           @default(0)
   shootMarkers   ShootMarker[]
 

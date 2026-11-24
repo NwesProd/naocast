@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CLIP_PRICE_LABEL, CLIP_STATUSES } from "./constants";
 import { formatShootTime } from "@/lib/shootMarkers";
+import { ModuleValidateButton } from "@/components/ModuleValidateButton";
 
 interface Word {
   text: string;
@@ -107,6 +108,7 @@ const normalize = (text: string) => text.normalize("NFD").replace(/[̀-ͯ]/g, ""
 // Module « Extraits » : tableau par statut, création d'un extrait en sélectionnant dans le transcript, fiche d'un extrait.
 export function ExtraitsClient({
   episodeId,
+  validated,
   paymentReturn,
   ownEditorEmail,
   clips,
@@ -114,6 +116,7 @@ export function ExtraitsClient({
   markers,
 }: {
   episodeId: string;
+  validated: boolean;
   paymentReturn: string | null;
   ownEditorEmail: string | null;
   clips: ClipItem[];
@@ -158,9 +161,12 @@ export function ExtraitsClient({
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-lg font-bold text-ink">Extraits</h1>
-        <button type="button" onClick={() => setCreating(true)} className={primaryBtn}>
-          + Nouvel extrait
-        </button>
+        <div className="flex flex-wrap items-start gap-3">
+          <button type="button" onClick={() => setCreating(true)} className={validated ? pillBtn : primaryBtn}>
+            + Nouvel extrait
+          </button>
+          <ModuleValidateButton episodeId={episodeId} module="extraits" initialDone={validated} />
+        </div>
       </div>
       {error && <p className="text-sm text-[#8A2E1F]">{error}</p>}
       {transcript.length === 0 && (

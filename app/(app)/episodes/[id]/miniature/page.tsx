@@ -32,6 +32,8 @@ export default async function MiniaturePage({ params }: { params: Promise<{ id: 
     <main className="p-8 w-full">
       <MiniatureClient
         episodeId={id}
+        validated={episode.miniatureValidated}
+        autoValidated={!!episode.coverKey && !!episode.thumbnailKey}
         cover={episode.coverKey ? { url: await getSignedDownloadUrl(episode.coverKey), downloadUrl: await getSignedDownloadUrl(episode.coverKey, 3600, nameOf(episode.coverKey)) } : null}
         thumbnail={
           episode.thumbnailKey
