@@ -73,7 +73,7 @@ export function EpisodeCard({
             <span className="h-1.5 flex-1 overflow-hidden rounded-pill bg-black/10">
               <span className={`block h-full rounded-pill bg-current ${zone.text}`} style={{ width: `${progress.total ? (progress.done / progress.total) * 100 : 0}%` }} />
             </span>
-            <span className="tabular-nums">{progress.done}/{progress.total}</span>
+            <span className="tabular-nums">{progress.total ? Math.round((progress.done / progress.total) * 100) : 0} %</span>
           </div>
           <StatusBadge status={displayStatus} />
         </div>

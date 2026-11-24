@@ -166,7 +166,7 @@ export function EpisodesView({
                       <span className="h-1.5 w-20 overflow-hidden rounded-pill bg-border">
                         <span className="block h-full rounded-pill bg-primary-button" style={{ width: `${ep.progress.total ? (ep.progress.done / ep.progress.total) * 100 : 0}%` }} />
                       </span>
-                      <span className="text-xs">{ep.progress.done}/{ep.progress.total}</span>
+                      <span className="text-xs tabular-nums">{ep.progress.total ? Math.round((ep.progress.done / ep.progress.total) * 100) : 0} %</span>
                     </span>
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap text-text-muted">{ep.releaseDateLabel ?? "-"}</td>
