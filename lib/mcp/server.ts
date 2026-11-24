@@ -104,6 +104,8 @@ export function createNaocastMcpServer(user: McpUser): McpServer {
           episodeNumber: e.episodeNumber,
           status: episodeDisplayStatus(e, e._count, prodEnabled),
           releaseDate: e.releaseDate ? e.releaseDate.toISOString().slice(0, 10) : null,
+          shootDate: e.shootAt ? e.shootAt.toLocaleDateString("fr-FR", { timeZone: "Europe/Paris" }) : null,
+          shootPlace: e.shootPlace,
           hasTranscript: e._count.transcriptSegments > 0,
         }))
       );
@@ -114,7 +116,7 @@ export function createNaocastMcpServer(user: McpUser): McpServer {
     "get_episode",
     {
       title: "Détail d'un épisode",
-      description: "Détail d'un épisode : informations, script (brouillon et idées d'angles), invités, locuteurs et validations. Le transcript se lit avec get_transcript.",
+      description: "Détail d'un épisode : informations, date, mode et lieu du tournage, script (brouillon et idées d'angles), invités, locuteurs et validations. Le transcript se lit avec get_transcript.",
       inputSchema: { episodeId: z.string().describe("Identifiant de l'épisode (voir list_episodes)") },
       annotations: { readOnlyHint: true },
     },
@@ -143,6 +145,11 @@ export function createNaocastMcpServer(user: McpUser): McpServer {
         hasTranscript: count > 0,
         // Repères posés pendant le tournage (temps depuis le départ du chrono, pas forcément calé sur le début des rushs).
         shoot: {
+          // Préparation du tournage (module Tournage) : date et heure prévues (heure de Paris), mode et lieu (adresse ou lien de visio).
+          plannedAt: episode.shootAt ? episode.shootAt.toLocaleString("fr-FR", { timeZone: "Europe/Paris", dateStyle: "full", timeStyle: "short" }) : null,
+          plannedAtIso: episode.shootAt ? episode.shootAt.toISOString() : null,
+          mode: episode.shootMode === "STUDIO" ? "studio" : episode.shootMode === "HOME" ? "à domicile" : episode.shootMode === "REMOTE" ? "à distance" : null,
+          place: episode.shootPlace,
           startedAt: episode.shootStartedAt ? episode.shootStartedAt.toISOString() : null,
           endedAt: episode.shootEndedAt ? episode.shootEndedAt.toISOString() : null,
           markers: shootMarkers.map((m) => formatShootTime(m.atMs)),
