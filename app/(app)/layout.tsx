@@ -5,15 +5,19 @@ import { getSignedDownloadUrl } from "@/lib/storage";
 import { getEpisodeUsage } from "@/lib/entitlements";
 import { SidebarNav } from "@/components/SidebarNav";
 import { FeedbackWidget } from "@/components/FeedbackWidget";
+import { ChecklistPanel } from "@/components/ChecklistPanel";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
 
   const podcast = session?.user
-    ? await prisma.podcast.findUnique({ where: { userId: session.user.id }, select: { title: true, coverKey: true } })
+    ? await prisma.podcast.findUnique({ where: { userId: session.user.id }, select: { id: true, title: true, coverKey: true } })
     : null;
   const user = session?.user
     ? await prisma.user.findUnique({ where: { id: session.user.id }, select: { plan: true, extraModules: true } })
+    : null;
+  const checklist = podcast
+    ? await prisma.checklistItem.findMany({ where: { podcastId: podcast.id }, orderBy: { createdAt: "asc" }, select: { id: true, text: true, done: true } })
     : null;
   const usage = session?.user ? await getEpisodeUsage(session.user.id) : null;
   const podcastHeader = podcast
@@ -49,6 +53,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <div className="min-w-0 flex-1 bg-background">
         <div className="mx-auto w-full max-w-[1200px]">{children}</div>
       </div>
+      {checklist && <ChecklistPanel initial={checklist} />}
       {session?.user && <FeedbackWidget />}
     </div>
   );

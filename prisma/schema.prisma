@@ -178,6 +178,7 @@ model Podcast {
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
   episodes    Episode[]
+  checklistItems ChecklistItem[]
   guests      Guest[]
   mediaAssets MediaAsset[]
 
@@ -867,4 +868,16 @@ model AudioDownload {
 
   @@unique([episodeId, visitorHash, day])
   @@index([episodeId, day])
+}
+
+// Checklist commune à tous les modules (panneau à droite de l'écran, lisible et modifiable par Claude via le connecteur).
+model ChecklistItem {
+  id        String   @id @default(cuid())
+  podcastId String
+  podcast   Podcast  @relation(fields: [podcastId], references: [id], onDelete: Cascade)
+  text      String
+  done      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([podcastId, createdAt])
 }

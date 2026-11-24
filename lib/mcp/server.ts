@@ -529,5 +529,55 @@ export function createNaocastMcpServer(user: McpUser): McpServer {
     }
   );
 
+  const ownPodcastId = async () => (await prisma.podcast.findUnique({ where: { userId: user.userId }, select: { id: true } }))?.id ?? null;
+
+  server.registerTool(
+    "list_checklist",
+    {
+      title: "Checklist",
+      description: "Liste les tâches de la checklist de l'utilisateur (panneau à droite de naocast, commun à tous les modules), avec leur identifiant et si elles sont cochées.",
+      annotations: { readOnlyHint: true },
+    },
+    async () => {
+      const podcastId = await ownPodcastId();
+      if (!podcastId) return fail("Aucun podcast configuré sur ce compte.");
+      const items = await prisma.checklistItem.findMany({ where: { podcastId }, orderBy: { createdAt: "asc" } });
+      return json(items.map((i) => ({ id: i.id, text: i.text, done: i.done })));
+    }
+  );
+
+  server.registerTool(
+    "add_checklist_item",
+    {
+      title: "Ajouter une tâche",
+      description: "Ajoute une tâche à cocher à la checklist de l'utilisateur.",
+      inputSchema: { text: z.string().trim().min(1).max(300).describe("Texte de la tâche") },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    },
+    async ({ text }) => {
+      const podcastId = await ownPodcastId();
+      if (!podcastId) return fail("Aucun podcast configuré sur ce compte.");
+      const item = await prisma.checklistItem.create({ data: { podcastId, text } });
+      return ok(`Tâche ajoutée (id ${item.id}).`);
+    }
+  );
+
+  server.registerTool(
+    "set_checklist_item_done",
+    {
+      title: "Cocher une tâche",
+      description: "Coche ou décoche une tâche de la checklist (identifiant lu avec list_checklist).",
+      inputSchema: { itemId: z.string(), done: z.boolean().describe("true pour cocher, false pour décocher") },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+    },
+    async ({ itemId, done }) => {
+      const podcastId = await ownPodcastId();
+      const item = podcastId ? await prisma.checklistItem.findFirst({ where: { id: itemId, podcastId } }) : null;
+      if (!item) return fail("Tâche introuvable.");
+      await prisma.checklistItem.update({ where: { id: itemId }, data: { done } });
+      return ok(done ? "Tâche cochée." : "Tâche décochée.");
+    }
+  );
+
   return server;
 }
