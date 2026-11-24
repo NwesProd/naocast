@@ -489,7 +489,7 @@ export function createNaocastMcpServer(user: McpUser): McpServer {
       if (!episode) return fail("Épisode introuvable.");
       const clips = await prisma.clip.findMany({ where: { episodeId }, orderBy: { createdAt: "asc" } });
       return json(
-        clips.map((c) => ({ id: c.id, title: c.title, start: formatTime(c.startMs), end: formatTime(c.endMs), status: c.status, source: c.source, excerpt: c.excerpt }))
+        clips.map((c) => ({ id: c.id, title: c.title, start: c.endMs > c.startMs ? formatTime(c.startMs) : null, end: c.endMs > c.startMs ? formatTime(c.endMs) : null, status: c.status, source: c.source, excerpt: c.excerpt }))
       );
     }
   );

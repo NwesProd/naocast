@@ -44,6 +44,62 @@ const primaryBtn =
   "text-sm font-semibold rounded-[10px] bg-primary-button text-white px-4 py-2 hover:brightness-110 transition disabled:opacity-50 disabled:cursor-not-allowed";
 const inputClass = "w-full rounded-md border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-button/30";
 
+const END_PUNCT = /[.!?…]["'»”)\]]*$/;
+// Mots qui ouvrent couramment une phrase en français : une majuscule sur l'un d'eux marque un début de phrase,
+// alors qu'une majuscule sur un autre mot est plutôt un nom propre ("Jérôme").
+const STARTERS = new Set(
+  "et mais ou donc or ni car non oui ouais ah oh ben bon bah alors après avant puis ensuite sinon si quand comme parce pourquoi comment que qui quoi où le la les un une des du de ce cet cette ces je tu il elle on nous vous ils elles me te se ça ca ce c' j' t' l' d' n' m' s' qu' voilà voila franchement en y à au aux dans pour sur avec sans mon ma mes ton ta tes son sa ses notre votre leur moi toi lui eux ok d'accord exactement effectivement bref enfin déjà aussi tout toute tous peut-être peut vraiment juste surtout là".split(" ")
+);
+const MAX_WORDS = 26;
+const SOFT_MIN_WORDS = 12;
+// Une phrase déjà longue se coupe volontiers avant une de ces conjonctions.
+const CONJUNCTIONS = new Set("et mais donc alors parce puisque sinon quand comme sauf du coup".split(" "));
+const PAUSE_MS = 700;
+
+function startsSentence(word: string): boolean {
+  const w = word.trim();
+  if (!/^[A-ZÀ-ÖØ-Ý]/.test(w)) return false;
+  const base = w.toLowerCase().replace(/^([a-zà-öø-ÿ]+['’]).*/, "$1").replace(/[.,;:!?…]+$/, "");
+  return STARTERS.has(base) || STARTERS.has(base.replace(/['’]$/, "'"));
+}
+
+// Découpe chaque passage du transcript en phrases horodatées. Sans mots horodatés, les bornes sont estimées au prorata.
+function splitSentences(transcript: Segment[]): Token[] {
+  return transcript.flatMap((s, seg) => {
+    let words: Word[];
+    if (s.words && s.words.length > 0) {
+      words = s.words;
+    } else {
+      const parts = s.text.split(/\s+/).filter(Boolean);
+      const total = parts.reduce((n, t) => n + t.length + 1, 0) || 1;
+      let cursor = s.startMs;
+      words = parts.map((text) => {
+        const end = cursor + Math.round(((s.endMs - s.startMs) * (text.length + 1)) / total);
+        const w = { text, startMs: cursor, endMs: end };
+        cursor = end;
+        return w;
+      });
+    }
+    const out: Token[] = [];
+    let buf: Word[] = [];
+    const flush = () => {
+      if (!buf.length) return;
+      out.push({ seg, text: buf.map((b) => b.text).join(" "), startMs: buf[0].startMs, endMs: buf[buf.length - 1].endMs });
+      buf = [];
+    };
+    words.forEach((w, i) => {
+      const prev = buf[buf.length - 1];
+      const pause = prev && w.startMs - prev.endMs >= PAUSE_MS && buf.length >= 3;
+      const capital = prev && !END_PUNCT.test(prev.text.trim()) && buf.length >= 2 && startsSentence(w.text);
+      const soft = prev && buf.length >= SOFT_MIN_WORDS && CONJUNCTIONS.has(w.text.trim().toLowerCase().replace(/[.,;:!?…]+$/, ""));
+      if (prev && (pause || capital || soft || buf.length >= MAX_WORDS)) flush();
+      buf.push(w);
+      if (END_PUNCT.test(w.text.trim()) || i === words.length - 1) flush();
+    });
+    return out.length ? out : [{ seg, text: s.text, startMs: s.startMs, endMs: s.endMs }];
+  });
+}
+
 const normalize = (text: string) => text.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
 // Module « Extraits » : tableau par statut, création d'un extrait en sélectionnant dans le transcript, fiche d'un extrait.
@@ -134,9 +190,7 @@ export function ExtraitsClient({
                     className="block w-full rounded-lg border border-border bg-white p-3 text-left text-sm transition hover:bg-[#FAFAF8]"
                   >
                     <p className="font-semibold text-ink">{c.title}</p>
-                    <p className="mt-0.5 text-xs text-text-muted">
-                      {formatShootTime(c.startMs)} à {formatShootTime(c.endMs)}
-                    </p>
+                    <p className="mt-0.5 text-xs text-text-muted">{c.endMs > c.startMs ? `${formatShootTime(c.startMs)} à ${formatShootTime(c.endMs)}` : "Sans passage"}</p>
                     <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
                       {c.source === "CLAUDE" && <span className="rounded-pill bg-sky px-2 py-0.5 text-sky-ink">Proposé par Claude</span>}
                       {c.editor === "OWN" && <span className="rounded-pill bg-butter px-2 py-0.5 text-butter-ink">Chez mon monteur</span>}
@@ -189,35 +243,10 @@ function NewClip({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Phrases à plat (une phrase = un jeton cliquable) : on coupe chaque passage du transcript à la ponctuation
-  // de fin de phrase. Avec les mots horodatés, les bornes sont exactes ; sinon elles sont estimées au prorata.
-  const tokens = useMemo<Token[]>(() => {
-    const END = /[.!?…]["'»”)\]]*$/;
-    return transcript.flatMap((s, seg) => {
-      const out: Token[] = [];
-      if (s.words && s.words.length > 0) {
-        let buf: typeof s.words = [];
-        for (const w of s.words) {
-          buf.push(w);
-          if (END.test(w.text.trim())) {
-            out.push({ seg, text: buf.map((b) => b.text).join(" "), startMs: buf[0].startMs, endMs: w.endMs });
-            buf = [];
-          }
-        }
-        if (buf.length) out.push({ seg, text: buf.map((b) => b.text).join(" "), startMs: buf[0].startMs, endMs: buf[buf.length - 1].endMs });
-      } else {
-        const parts = s.text.split(/(?<=[.!?…])\s+/).filter(Boolean);
-        const total = parts.reduce((n, t) => n + t.length, 0) || 1;
-        let cursor = s.startMs;
-        for (const part of parts) {
-          const end = cursor + Math.round(((s.endMs - s.startMs) * part.length) / total);
-          out.push({ seg, text: part, startMs: cursor, endMs: end });
-          cursor = end;
-        }
-      }
-      return out.length ? out : [{ seg, text: s.text, startMs: s.startMs, endMs: s.endMs }];
-    });
-  }, [transcript]);
+  // Phrases à plat (une phrase = un jeton cliquable). Le transcript n'a pas toujours de points : on coupe à la
+  // ponctuation de fin de phrase quand elle existe, sinon à une majuscule qui commence un mot de liaison courant
+  // ("Et", "Non", "Je"...), à une pause, ou à défaut quand la phrase devient trop longue.
+  const tokens = useMemo<Token[]>(() => splitSentences(transcript), [transcript]);
   const firstTokenOfSegment = useMemo(() => {
     const map = new Map<number, number>();
     tokens.forEach((t, i) => {
@@ -264,14 +293,14 @@ function NewClip({
   const excerpt = selected.map((t) => t.text).join(" ");
 
   async function submit() {
-    if (startMs === null || endMs === null || !title.trim()) return;
+    if (!title.trim()) return;
     setBusy(true);
     setError(null);
     try {
       const res = await fetch(`/api/episodes/${episodeId}/clips`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: title.trim(), startMs, endMs, excerpt }),
+        body: JSON.stringify({ title: title.trim(), ...(startMs !== null && endMs !== null ? { startMs, endMs, excerpt } : {}) }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => null))?.error || "Création impossible.");
       onCreated();
@@ -298,7 +327,7 @@ function NewClip({
           Annuler
         </button>
       </div>
-      <p className="text-sm text-text-muted">Clique sur la première phrase du passage, puis sur la dernière. Un troisième clic recommence.</p>
+      <p className="text-sm text-text-muted">Clique sur la première phrase du passage, puis sur la dernière (une seule phrase : un seul clic). Un troisième clic recommence. Le passage est facultatif : un titre suffit.</p>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <div className="space-y-3 rounded-xl border border-border bg-white p-4">
@@ -386,9 +415,10 @@ function NewClip({
           {excerpt && <p className="max-h-32 overflow-y-auto rounded-md bg-[#FAFAF8] p-2.5 text-sm text-text-muted">{excerpt}</p>}
           <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Titre de l'extrait" maxLength={200} className={inputClass} />
           {error && <p className="text-sm text-[#8A2E1F]">{error}</p>}
-          <button type="button" onClick={submit} disabled={busy || startMs === null || !title.trim()} className={`${primaryBtn} w-full`}>
+          <button type="button" onClick={submit} disabled={busy || !title.trim()} className={`${primaryBtn} w-full`}>
             {busy ? "..." : "Ajouter aux extraits"}
           </button>
+          {startMs === null && <p className="text-xs text-text-muted">Le passage est facultatif : sans sélection, l&apos;extrait est ajouté avec son titre seul.</p>}
           {markers.length > 0 && (
             <div className="space-y-1.5 border-t border-border pt-3">
               <p className="text-xs font-medium text-text-muted">Repères du tournage</p>
@@ -495,10 +525,16 @@ function ClipDetail({
         <section className="space-y-2">
           <h3 className="text-sm font-semibold text-ink">Brief de montage</h3>
           <div className="rounded-md bg-[#FAFAF8] p-3 text-sm">
-            <p className="text-text-muted">
-              Passage : <span className="font-semibold text-ink">{formatShootTime(clip.startMs)} à {formatShootTime(clip.endMs)}</span>
-            </p>
-            <p className="mt-2 whitespace-pre-wrap text-text-muted">{clip.excerpt}</p>
+            {clip.endMs > clip.startMs ? (
+              <>
+                <p className="text-text-muted">
+                  Passage : <span className="font-semibold text-ink">{formatShootTime(clip.startMs)} à {formatShootTime(clip.endMs)}</span>
+                </p>
+                <p className="mt-2 whitespace-pre-wrap text-text-muted">{clip.excerpt}</p>
+              </>
+            ) : (
+              <p className="text-text-muted">Aucun passage choisi : précise-le dans tes consignes.</p>
+            )}
           </div>
           <label className="block text-sm font-medium text-ink">Tes consignes pour le monteur</label>
           <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} maxLength={5000} placeholder="Le ton, l'accroche, ce qu'il faut garder..." className={inputClass} />

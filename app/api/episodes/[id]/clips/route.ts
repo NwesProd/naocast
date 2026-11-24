@@ -8,9 +8,10 @@ import { assertModuleAccess, ModuleLockedError } from "@/lib/entitlements";
 // Module Extraits : crée un extrait (un passage du transcript) au statut « Idée ».
 const bodySchema = z.object({
   title: z.string().trim().min(1).max(200),
-  startMs: z.number().int().min(0),
-  endMs: z.number().int().min(1),
-  excerpt: z.string().max(5000),
+  // Passage facultatif : sans passage choisi, start et end valent 0 (extrait à retrouver plus tard dans l'épisode).
+  startMs: z.number().int().min(0).default(0),
+  endMs: z.number().int().min(0).default(0),
+  excerpt: z.string().max(5000).default(""),
 });
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -24,7 +25,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     throw err;
   }
   const parsed = bodySchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success || parsed.data.endMs <= parsed.data.startMs) return NextResponse.json({ error: "Passage invalide." }, { status: 400 });
+  if (!parsed.success || (parsed.data.endMs > 0 && parsed.data.endMs <= parsed.data.startMs)) return NextResponse.json({ error: "Passage invalide." }, { status: 400 });
 
   const clip = await prisma.clip.create({ data: { episodeId, ...parsed.data } });
   return jsonResponse(clip, { status: 201 });

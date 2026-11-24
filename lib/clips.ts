@@ -80,8 +80,12 @@ export async function renderClipBrief(clipId: string, notes: string | null, from
     <h1>Extrait à monter : ${escapeHtml(clip.title)}</h1>
     <p>${escapeHtml(podcast.title)} : ${escapeHtml(clip.episode.title ?? "Sans titre")}</p>
     <h3>Passage</h3>
-    <p><strong>${formatShootTime(clip.startMs)} à ${formatShootTime(clip.endMs)}</strong> dans la vidéo de l'épisode.</p>
-    <p style="white-space:pre-wrap;color:#444">${escapeHtml(clip.excerpt)}</p>
+    ${
+      clip.endMs > clip.startMs
+        ? `<p><strong>${formatShootTime(clip.startMs)} à ${formatShootTime(clip.endMs)}</strong> dans la vidéo de l'épisode.</p>
+    <p style="white-space:pre-wrap;color:#444">${escapeHtml(clip.excerpt)}</p>`
+        : `<p>Passage non précisé : voir les consignes ci-dessous.</p>`
+    }
     ${notes?.trim() ? `<h3>Consignes</h3><p style="white-space:pre-wrap">${escapeHtml(notes.trim())}</p>` : ""}
     <h3>Fichiers</h3>
     <ul>${sources || "<li>Aucun</li>"}</ul>
