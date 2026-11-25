@@ -127,8 +127,24 @@ export function ExtraitsClient({
   const [creating, setCreating] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const [pickingId, setPickingId] = useState<string | null>(null);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [overCol, setOverCol] = useState<string | null>(null);
+  const [moved, setMoved] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const confirmedPayment = useRef(false);
+  // Glisser-déposer d'une carte vers une autre colonne : mise à jour immédiate, puis enregistrement.
+  async function moveClip(id: string, status: string) {
+    const clip = clips.find((c) => c.id === id);
+    if (!clip || (moved[id] ?? clip.status) === status) return;
+    setMoved((m) => ({ ...m, [id]: status }));
+    const res = await fetch(`/api/episodes/${episodeId}/clips/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) });
+    if (!res.ok) setError((await res.json().catch(() => null))?.error || "Déplacement impossible.");
+    router.refresh();
+    setMoved((m) => {
+      const { [id]: _drop, ...rest } = m;
+      return rest;
+    });
+  }
   const openClip = clips.find((c) => c.id === openId) ?? null;
 
   // Retour de Stripe Checkout (montage d'un extrait par un monteur naocast).
@@ -187,9 +203,25 @@ export function ExtraitsClient({
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
         {CLIP_STATUSES.map((col) => {
-          const items = clips.filter((c) => c.status === col.key);
+          const items = clips.filter((c) => (moved[c.id] ?? c.status) === col.key);
           return (
-            <section key={col.key} className="space-y-2 rounded-xl bg-[#FAFAF8] p-3">
+            <section
+              key={col.key}
+              onDragOver={(e) => {
+                if (!dragId) return;
+                e.preventDefault();
+                setOverCol(col.key);
+              }}
+              onDragLeave={() => setOverCol((o) => (o === col.key ? null : o))}
+              onDrop={(e) => {
+                e.preventDefault();
+                const id = dragId;
+                setDragId(null);
+                setOverCol(null);
+                if (id) moveClip(id, col.key);
+              }}
+              className={`space-y-2 rounded-xl bg-[#FAFAF8] p-3 transition ${overCol === col.key ? "ring-2 ring-primary-button/40" : ""}`}
+            >
               <h2 className="flex items-center justify-between px-1 text-sm font-semibold text-ink">
                 {col.label}
                 <span className="text-xs font-medium text-text-muted">{items.length}</span>
@@ -201,8 +233,18 @@ export function ExtraitsClient({
                   <button
                     key={c.id}
                     type="button"
+                    draggable
+                    onDragStart={(e) => {
+                      setDragId(c.id);
+                      e.dataTransfer.effectAllowed = "move";
+                      e.dataTransfer.setData("text/plain", c.id);
+                    }}
+                    onDragEnd={() => {
+                      setDragId(null);
+                      setOverCol(null);
+                    }}
                     onClick={() => setOpenId(c.id)}
-                    className="block w-full rounded-lg border border-border bg-white p-3 text-left text-sm transition hover:bg-[#FAFAF8]"
+                    className={`block w-full cursor-grab rounded-lg border border-border bg-white p-3 text-left text-sm transition hover:bg-[#FAFAF8] ${dragId === c.id ? "opacity-50" : ""}`}
                   >
                     <p className="font-semibold text-ink">{c.title}</p>
                     <p className="mt-0.5 text-xs text-text-muted">{c.endMs > c.startMs ? `${formatShootTime(c.startMs)} à ${formatShootTime(c.endMs)}` : "Sans passage"}</p>
@@ -298,7 +340,8 @@ function NewClip({
   }
 
   function pickToken(i: number) {
-    if (from === null || (from !== null && to !== null)) {
+    // Le premier clic pose le début ; chaque clic suivant déplace la fin (on peut ajuster autant de fois qu'on veut).
+    if (from === null) {
       setFrom(i);
       setTo(null);
     } else {
@@ -354,7 +397,7 @@ function NewClip({
           Annuler
         </button>
       </div>
-      <p className="text-sm text-text-muted">Clique sur la première phrase du passage, puis sur la dernière (une seule phrase : un seul clic). Un troisième clic recommence. Le passage est facultatif : un titre suffit.</p>
+      <p className="text-sm text-text-muted">Clique sur la première phrase du passage, puis sur la dernière (une seule phrase : un seul clic). Chaque nouveau clic déplace la fin ; « Effacer la sélection » recommence. Le passage est facultatif : un titre suffit.</p>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <div className="space-y-3 rounded-xl border border-border bg-white p-4">
@@ -439,6 +482,11 @@ function NewClip({
               <p className="text-base font-bold text-ink">{endMs === null ? "-" : formatShootTime(endMs)}</p>
             </div>
           </div>
+          {from !== null && (
+            <button type="button" onClick={() => { setFrom(null); setTo(null); }} className={pillBtn}>
+              Effacer la sélection
+            </button>
+          )}
           {excerpt && <p className="max-h-32 overflow-y-auto rounded-md bg-[#FAFAF8] p-2.5 text-sm text-text-muted">{excerpt}</p>}
           {!editClip && <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Titre de l'extrait" maxLength={200} className={inputClass} />}
           {error && <p className="text-sm text-[#8A2E1F]">{error}</p>}
