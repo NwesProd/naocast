@@ -19,6 +19,10 @@ const patchSchema = z.object({
   // Description pour la diffusion et date de publication prévue (AAAA-MM-JJ), vides pour effacer : informatives, sans effet sur YouTube.
   description: z.string().max(5000).optional(),
   publishDate: z.string().regex(/^(\d{4}-\d{2}-\d{2})?$/).optional(),
+  // Passage du transcript (re-sélection depuis la fiche).
+  startMs: z.number().int().min(0).optional(),
+  endMs: z.number().int().min(0).optional(),
+  excerpt: z.string().max(20000).optional(),
 });
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string; clipId: string }> }) {
@@ -29,7 +33,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const parsed = patchSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Requête invalide." }, { status: 400 });
 
-  const data: { title?: string; status?: string; publishedUrl?: string | null; youtubeVideoId?: string | null; description?: string | null; publishDate?: Date | null } = {};
+  const data: { title?: string; status?: string; publishedUrl?: string | null; youtubeVideoId?: string | null; description?: string | null; publishDate?: Date | null; startMs?: number; endMs?: number; excerpt?: string } = {};
+  if (parsed.data.startMs !== undefined && parsed.data.endMs !== undefined) {
+    if (parsed.data.endMs <= parsed.data.startMs) return NextResponse.json({ error: "Passage invalide." }, { status: 400 });
+    Object.assign(data, { startMs: parsed.data.startMs, endMs: parsed.data.endMs, excerpt: parsed.data.excerpt ?? "" });
+  }
   if (parsed.data.description !== undefined) data.description = parsed.data.description.trim() || null;
   if (parsed.data.publishDate !== undefined) data.publishDate = parsed.data.publishDate ? new Date(`${parsed.data.publishDate}T00:00:00.000Z`) : null;
   if (parsed.data.title) data.title = parsed.data.title;

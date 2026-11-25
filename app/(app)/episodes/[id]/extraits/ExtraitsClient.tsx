@@ -126,6 +126,7 @@ export function ExtraitsClient({
   const router = useRouter();
   const [creating, setCreating] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [pickingId, setPickingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const confirmedPayment = useRef(false);
   const openClip = clips.find((c) => c.id === openId) ?? null;
@@ -142,15 +143,21 @@ export function ExtraitsClient({
       });
   }, [paymentReturn, episodeId, router]);
 
-  if (creating) {
+  const pickingClip = clips.find((c) => c.id === pickingId) ?? null;
+  if (creating || pickingClip) {
     return (
       <NewClip
         episodeId={episodeId}
+        editClip={pickingClip}
         transcript={transcript}
         markers={markers}
-        onCancel={() => setCreating(false)}
+        onCancel={() => {
+          setCreating(false);
+          setPickingId(null);
+        }}
         onCreated={() => {
           setCreating(false);
+          setPickingId(null);
           router.refresh();
         }}
       />
@@ -221,6 +228,10 @@ export function ExtraitsClient({
           clip={openClip}
           ownEditorEmail={ownEditorEmail}
           onClose={() => setOpenId(null)}
+          onPickPassage={() => {
+            setPickingId(openClip.id);
+            setOpenId(null);
+          }}
           onError={setError}
         />
       )}
@@ -232,18 +243,20 @@ export function ExtraitsClient({
 
 function NewClip({
   episodeId,
+  editClip,
   transcript,
   markers,
   onCancel,
   onCreated,
 }: {
   episodeId: string;
+  editClip: ClipItem | null;
   transcript: Segment[];
   markers: number[];
   onCancel: () => void;
   onCreated: () => void;
 }) {
-  const [title, setTitle] = useState("");
+  const [title, setTitle] = useState(editClip?.title ?? "");
   const [from, setFrom] = useState<number | null>(null);
   const [to, setTo] = useState<number | null>(null);
   const [query, setQuery] = useState("");
@@ -305,11 +318,17 @@ function NewClip({
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(`/api/episodes/${episodeId}/clips`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: title.trim(), ...(startMs !== null && endMs !== null ? { startMs, endMs, excerpt } : {}) }),
-      });
+      const res = editClip
+        ? await fetch(`/api/episodes/${episodeId}/clips/${editClip.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ startMs, endMs, excerpt }),
+          })
+        : await fetch(`/api/episodes/${episodeId}/clips`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ title: title.trim(), ...(startMs !== null && endMs !== null ? { startMs, endMs, excerpt } : {}) }),
+          });
       if (!res.ok) throw new Error((await res.json().catch(() => null))?.error || "Création impossible.");
       onCreated();
     } catch (e) {
@@ -330,7 +349,7 @@ function NewClip({
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
-        <h1 className="text-lg font-bold text-ink">Nouvel extrait</h1>
+        <h1 className="text-lg font-bold text-ink">{editClip ? `Passage de « ${editClip.title} »` : "Nouvel extrait"}</h1>
         <button type="button" onClick={onCancel} className={pillBtn}>
           Annuler
         </button>
@@ -421,12 +440,12 @@ function NewClip({
             </div>
           </div>
           {excerpt && <p className="max-h-32 overflow-y-auto rounded-md bg-[#FAFAF8] p-2.5 text-sm text-text-muted">{excerpt}</p>}
-          <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Titre de l'extrait" maxLength={200} className={inputClass} />
+          {!editClip && <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Titre de l'extrait" maxLength={200} className={inputClass} />}
           {error && <p className="text-sm text-[#8A2E1F]">{error}</p>}
-          <button type="button" onClick={submit} disabled={busy || !title.trim()} className={`${primaryBtn} w-full`}>
-            {busy ? "..." : "Ajouter aux extraits"}
+          <button type="button" onClick={submit} disabled={busy || !title.trim() || (!!editClip && startMs === null)} className={`${primaryBtn} w-full`}>
+            {busy ? "..." : editClip ? "Enregistrer le passage" : "Ajouter aux extraits"}
           </button>
-          {startMs === null && <p className="text-xs text-text-muted">Le passage est facultatif : sans sélection, l&apos;extrait est ajouté avec son titre seul.</p>}
+          {startMs === null && !editClip && <p className="text-xs text-text-muted">Le passage est facultatif : sans sélection, l&apos;extrait est ajouté avec son titre seul.</p>}
           {markers.length > 0 && (
             <div className="space-y-1.5 border-t border-border pt-3">
               <p className="text-xs font-medium text-text-muted">Repères du tournage</p>
@@ -456,12 +475,14 @@ function ClipDetail({
   clip,
   ownEditorEmail,
   onClose,
+  onPickPassage,
   onError,
 }: {
   episodeId: string;
   clip: ClipItem;
   ownEditorEmail: string | null;
   onClose: () => void;
+  onPickPassage: () => void;
   onError: (message: string | null) => void;
 }) {
   const router = useRouter();
@@ -545,6 +566,9 @@ function ClipDetail({
             ) : (
               <p className="text-text-muted">Aucun passage choisi : précise-le dans tes consignes.</p>
             )}
+            <button type="button" onClick={onPickPassage} className={`${pillBtn} mt-3`}>
+              {clip.endMs > clip.startMs ? "Changer le passage dans le transcript" : "Chercher le passage dans le transcript"}
+            </button>
           </div>
           <label className="block text-sm font-medium text-ink">Tes consignes pour le monteur</label>
           <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} maxLength={5000} placeholder="Le ton, l'accroche, ce qu'il faut garder..." className={inputClass} />
