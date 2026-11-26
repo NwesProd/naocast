@@ -536,6 +536,40 @@ export function createNaocastMcpServer(user: McpUser): McpServer {
     }
   );
 
+  server.registerTool(
+    "update_clip",
+    {
+      title: "Modifier un extrait",
+      description:
+        "Met à jour un extrait existant : titre, description pour la diffusion (la légende sous le short), date de publication prévue (AAAA-MM-JJ, informative) et statut (IDEA = Idées, TO_EDIT = À monter, READY = Prêt, PUBLISHED = Publié). Ne donne que les champs à changer ; description ou publishDate vides les effacent. Utilise list_clips pour récupérer l'id.",
+      inputSchema: {
+        episodeId: z.string(),
+        clipId: z.string(),
+        title: z.string().trim().min(1).max(200).optional(),
+        description: z.string().max(5000).optional(),
+        publishDate: z.string().regex(/^(\d{4}-\d{2}-\d{2})?$/).optional().describe("AAAA-MM-JJ, ou chaîne vide pour effacer"),
+        status: z.enum(["IDEA", "TO_EDIT", "READY", "PUBLISHED"]).optional(),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+    },
+    async ({ episodeId, clipId, title, description, publishDate, status }) => {
+      const lock = locked("extraits", "Extraits");
+      if (lock) return lock;
+      const episode = await ownedEpisode(user.userId, episodeId);
+      if (!episode) return fail("Épisode introuvable.");
+      const clip = await prisma.clip.findFirst({ where: { id: clipId, episodeId } });
+      if (!clip) return fail("Extrait introuvable.");
+      const data: { title?: string; description?: string | null; publishDate?: Date | null; status?: string } = {};
+      if (title !== undefined) data.title = title;
+      if (description !== undefined) data.description = description.trim() || null;
+      if (publishDate !== undefined) data.publishDate = publishDate ? new Date(`${publishDate}T00:00:00.000Z`) : null;
+      if (status !== undefined) data.status = status;
+      if (Object.keys(data).length === 0) return fail("Rien à modifier : donne au moins un champ.");
+      await prisma.clip.update({ where: { id: clipId }, data });
+      return ok("Extrait mis à jour.");
+    }
+  );
+
   const ownPodcastId = async () => (await prisma.podcast.findUnique({ where: { userId: user.userId }, select: { id: true } }))?.id ?? null;
 
   server.registerTool(
