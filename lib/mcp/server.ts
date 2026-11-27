@@ -144,6 +144,12 @@ export function createNaocastMcpServer(user: McpUser): McpServer {
         guests: guests.map((g) => ({ id: g.guest.id, name: g.guest.name, media: g.guest.mediaName, tags: g.guest.tags, socialLinks: g.guest.socialLinks })),
         speakers: [...names.values()],
         hasTranscript: count > 0,
+        // Onglet Audio de la Diffusion : titre et description affichés sur les plateformes d'écoute (null : pas encore rédigée).
+        diffusion: {
+          audioTitle: episode.audioTitle,
+          description: episode.description ? scriptToPlainText(episode.description) : null,
+          audioPublishedAt: episode.audioPublishedAt ? episode.audioPublishedAt.toISOString() : null,
+        },
         // Repères posés pendant le tournage (temps depuis le départ du chrono, pas forcément calé sur le début des rushs).
         shoot: {
           // Préparation du tournage (module Tournage) : date et heure prévues (heure de Paris), mode et lieu (adresse ou lien de visio).
@@ -514,6 +520,26 @@ export function createNaocastMcpServer(user: McpUser): McpServer {
       if (!(await listAllObjects(key)).some((o) => o.key === key)) return fail("Fichier introuvable : envoie-le d'abord avec l'URL fournie.");
       await registerFinalVideo(episodeId, key);
       return ok("Vidéo déposée. naocast en extrait l'audio, puis l'utilisateur pourra relire et valider le montage.");
+    }
+  );
+
+  server.registerTool(
+    "update_episode_description",
+    {
+      title: "Modifier la description de l'épisode",
+      description:
+        "Remplace la description de l'épisode (onglet Audio de la Diffusion : texte affiché sur les plateformes d'écoute). Mise en forme en Markdown, comme save_script : # titre, **gras**, *italique*, lignes vides entre les paragraphes. Enregistre seulement le texte : ne publie ni ne planifie rien. Lis d'abord la description actuelle dans get_episode (diffusion.description) pour ne pas écraser un texte existant sans le dire à l'utilisateur. Une chaîne vide efface la description.",
+      inputSchema: { episodeId: z.string(), description: z.string().max(20000) },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
+    },
+    async ({ episodeId, description }) => {
+      const lock = locked("diffusion", "Diffusion");
+      if (lock) return lock;
+      const episode = await ownedEpisode(user.userId, episodeId);
+      if (!episode) return fail("Épisode introuvable.");
+      const html = description.trim() ? scriptToHtml(description) : "";
+      await prisma.episode.update({ where: { id: episodeId }, data: { description: html || null } });
+      return ok(html ? "Description enregistrée (elle n'est pas publiée : la publication se fait dans naocast)." : "Description effacée.");
     }
   );
 
