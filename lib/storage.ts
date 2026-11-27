@@ -204,15 +204,15 @@ export async function deleteObject(key: string): Promise<void> {
 // statistiques de stockage du back office et au balayage des fichiers d'un
 // épisode. Paginé côté S3/R2 (1000 objets par appel) ; en stockage local
 // (dev), parcourt le dossier .data/storage.
-export async function listAllObjects(prefix = ""): Promise<{ key: string; size: number }[]> {
-  const result: { key: string; size: number }[] = [];
+export async function listAllObjects(prefix = ""): Promise<{ key: string; size: number; lastModified?: Date }[]> {
+  const result: { key: string; size: number; lastModified?: Date }[] = [];
 
   if (s3 && bucket) {
     let token: string | undefined;
     do {
       const page = await s3.send(new ListObjectsV2Command({ Bucket: bucket, Prefix: prefix || undefined, ContinuationToken: token }));
       for (const obj of page.Contents ?? []) {
-        if (obj.Key) result.push({ key: obj.Key, size: obj.Size ?? 0 });
+        if (obj.Key) result.push({ key: obj.Key, size: obj.Size ?? 0, lastModified: obj.LastModified });
       }
       token = page.IsTruncated ? page.NextContinuationToken : undefined;
     } while (token);
@@ -225,7 +225,10 @@ export async function listAllObjects(prefix = ""): Promise<{ key: string; size: 
       const full = path.join(dir, entry.name);
       const key = prefix ? `${prefix}/${entry.name}` : entry.name;
       if (entry.isDirectory()) await walk(full, key);
-      else result.push({ key, size: (await stat(full)).size });
+      else {
+        const st = await stat(full);
+        result.push({ key, size: st.size, lastModified: st.mtime });
+      }
     }
   }
   await walk(localRoot, "");

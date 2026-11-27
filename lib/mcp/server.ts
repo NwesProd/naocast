@@ -4,9 +4,10 @@ import { prisma } from "@/lib/db";
 import { groupBySpeaker } from "@/lib/transcriptGrouping";
 import { episodeDisplayStatus, EPISODE_COUNTS_SELECT } from "@/lib/moduleProgress";
 import { normalizeTags } from "@/lib/guestRelevance";
-import { getObjectBuffer, getSignedDownloadUrl, getSignedUploadUrl, listAllObjects, storageMode } from "@/lib/storage";
+import { deleteObject, getObjectBuffer, getSignedDownloadUrl, getSignedUploadUrl, listAllObjects, putObject, storageMode } from "@/lib/storage";
 import { randomUUID } from "crypto";
 import { registerFinalVideo } from "@/lib/finalDelivery";
+import { optimizeCover } from "@/lib/image";
 import { formatShootTime } from "@/lib/shootMarkers";
 import { scriptToHtml, scriptToPlainText } from "@/lib/scriptText";
 import { extractDocumentText } from "@/lib/documentText";
@@ -513,6 +514,97 @@ export function createNaocastMcpServer(user: McpUser): McpServer {
       if (!(await listAllObjects(key)).some((o) => o.key === key)) return fail("Fichier introuvable : envoie-le d'abord avec l'URL fournie.");
       await registerFinalVideo(episodeId, key);
       return ok("Vidéo déposée. naocast en extrait l'audio, puis l'utilisateur pourra relire et valider le montage.");
+    }
+  );
+
+  // Module Miniature : miniature vidéo 16/9 (lecture) et pochette audio carrée (dépôt, mêmes règles que l'écran naocast).
+  async function modifiedAt(key: string | null | undefined): Promise<string | null> {
+    if (!key) return null;
+    const found = (await listAllObjects(key)).find((o) => o.key === key);
+    return found?.lastModified ? found.lastModified.toISOString() : null;
+  }
+
+  server.registerTool(
+    "get_episode_thumbnail",
+    {
+      title: "Miniature d'un épisode",
+      description:
+        "Renvoie la miniature vidéo 16/9 de l'épisode (lien de téléchargement valable 1 heure et date de dernière modification), ou null si elle n'existe pas. Renvoie aussi la date de la pochette audio de l'épisode si elle existe (sans lien : pour la pochette, utilise upload_episode_cover).",
+      inputSchema: { episodeId: z.string() },
+      annotations: { readOnlyHint: true },
+    },
+    async ({ episodeId }) => {
+      const lock = locked("miniature", "Miniature");
+      if (lock) return lock;
+      const episode = await ownedEpisode(user.userId, episodeId);
+      if (!episode) return fail("Épisode introuvable.");
+      const [thumbUpdatedAt, coverUpdatedAt] = await Promise.all([modifiedAt(episode.thumbnailKey), modifiedAt(episode.coverKey)]);
+      return json({
+        thumbnail: episode.thumbnailKey ? { url: await getSignedDownloadUrl(episode.thumbnailKey, 3600), updatedAt: thumbUpdatedAt, expiresInSeconds: 3600 } : null,
+        cover: episode.coverKey ? { updatedAt: coverUpdatedAt } : null,
+      });
+    }
+  );
+
+  const COVER_TYPES = ["image/jpeg", "image/png", "image/webp"];
+
+  server.registerTool(
+    "upload_episode_cover",
+    {
+      title: "Préparer le dépôt de la pochette audio",
+      description:
+        "Étape 1 du dépôt de la pochette audio de l'épisode (image carrée affichée par les applications d'écoute) : renvoie une URL d'envoi (méthode PUT, corps = le fichier image JPG, PNG ou WebP, en-tête Content-Type identique à contentType) et une clé. Envoie le fichier (par exemple curl -T fichier -H 'Content-Type: …' URL), puis appelle complete_episode_cover avec la clé. Remplace la pochette actuelle.",
+      inputSchema: {
+        episodeId: z.string(),
+        filename: z.string().min(1).max(300),
+        contentType: z.enum(["image/jpeg", "image/png", "image/webp"]),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    },
+    async ({ episodeId, filename, contentType }) => {
+      const lock = locked("miniature", "Miniature");
+      if (lock) return lock;
+      const episode = await ownedEpisode(user.userId, episodeId);
+      if (!episode) return fail("Épisode introuvable.");
+      if (storageMode !== "s3") return fail("Le dépôt par le connecteur n'est pas disponible dans cet environnement.");
+      if (!COVER_TYPES.includes(contentType)) return fail("Format non pris en charge : image JPG, PNG ou WebP.");
+      const key = `episodes/${episodeId}/miniature/upload-${randomUUID()}-${filename.replace(/[^\w.\-]+/g, "_")}`;
+      return json({ key, uploadUrl: await getSignedUploadUrl(key, contentType), method: "PUT", contentType, expiresInSeconds: 3600 });
+    }
+  );
+
+  server.registerTool(
+    "complete_episode_cover",
+    {
+      title: "Terminer le dépôt de la pochette audio",
+      description:
+        "Étape 2 : à appeler une fois l'image envoyée avec l'URL de upload_episode_cover. Enregistre le fichier comme pochette audio de l'épisode (ramenée à environ 1 Mo si elle est plus lourde) et remplace la précédente.",
+      inputSchema: { episodeId: z.string(), key: z.string() },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
+    },
+    async ({ episodeId, key }) => {
+      const lock = locked("miniature", "Miniature");
+      if (lock) return lock;
+      const episode = await ownedEpisode(user.userId, episodeId);
+      if (!episode) return fail("Épisode introuvable.");
+      if (!key.startsWith(`episodes/${episodeId}/miniature/upload-`)) return fail("Clé de fichier invalide.");
+      if (!(await listAllObjects(key)).some((o) => o.key === key)) return fail("Fichier introuvable : envoie-le d'abord avec l'URL fournie.");
+      const raw = await getObjectBuffer(key);
+      const ext = key.toLowerCase().endsWith(".png") ? "image/png" : key.toLowerCase().endsWith(".webp") ? "image/webp" : "image/jpeg";
+      let img;
+      try {
+        img = await optimizeCover(raw, ext);
+      } catch {
+        await deleteObject(key).catch(() => {});
+        return fail("Image illisible : envoie un fichier JPG, PNG ou WebP valide.");
+      }
+      const finalKey = `episodes/${episodeId}/miniature/${randomUUID()}-cover.${img.ext}`;
+      await putObject(finalKey, img.buffer, img.mimeType);
+      const previous = episode.coverKey;
+      await prisma.episode.update({ where: { id: episodeId }, data: { coverKey: finalKey } });
+      await deleteObject(key).catch(() => {});
+      if (previous) await deleteObject(previous).catch(() => {});
+      return ok("Pochette audio enregistrée.");
     }
   );
 
