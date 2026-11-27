@@ -163,18 +163,55 @@ export function createNaocastMcpServer(user: McpUser): McpServer {
     {
       title: "Transcript d'un épisode",
       description:
-        "Texte complet du transcript, par prises de parole avec le nom des locuteurs et, au choix, les horodatages [mm:ss]. Les longs transcripts sont découpés : si `hasMore` est vrai, relance avec `offset` = `nextOffset`.",
+        "Texte complet du transcript, par prises de parole avec le nom des locuteurs et, au choix, les horodatages [mm:ss]. Les longs transcripts sont découpés : si `hasMore` est vrai, relance avec `offset` = `nextOffset`. Avec `wordTimestamps`, chaque mot est suivi de son horodatage précis en secondes, mot(12.34) : à utiliser sur une fenêtre `fromSec`/`toSec` (un extrait) pour caler une coupe ou des sous-titres au mot près, sans avoir à retranscrire l'audio.",
       inputSchema: {
         episodeId: z.string(),
         withTimestamps: z.boolean().optional().describe("Ajouter l'horodatage de chaque prise de parole (défaut : oui)"),
+        wordTimestamps: z.boolean().optional().describe("Horodatage de chaque mot, en secondes (défaut : non). Réserve-le à une fenêtre fromSec/toSec, c'est volumineux."),
+        fromSec: z.number().min(0).optional().describe("Début de la fenêtre en secondes (surtout avec wordTimestamps)"),
+        toSec: z.number().min(0).optional().describe("Fin de la fenêtre en secondes (surtout avec wordTimestamps)"),
         offset: z.number().int().min(0).optional().describe("Position de départ en caractères (défaut : 0)"),
         limit: z.number().int().min(1000).max(100000).optional().describe("Nombre maximum de caractères renvoyés (défaut : 60000)"),
       },
       annotations: { readOnlyHint: true },
     },
-    async ({ episodeId, withTimestamps = true, offset = 0, limit = 60000 }) => {
+    async ({ episodeId, withTimestamps = true, wordTimestamps = false, fromSec, toSec, offset = 0, limit = 60000 }) => {
       const episode = await ownedEpisode(user.userId, episodeId);
       if (!episode) return fail("Épisode introuvable.");
+      if (wordTimestamps || fromSec !== undefined || toSec !== undefined) {
+        const fromMs = fromSec !== undefined ? Math.round(fromSec * 1000) : 0;
+        const toMs = toSec !== undefined ? Math.round(toSec * 1000) : Number.MAX_SAFE_INTEGER;
+        if (toMs <= fromMs) return fail("Fenêtre invalide : toSec doit être supérieur à fromSec.");
+        const rows = await prisma.transcriptSegment.findMany({
+          where: { episodeId, startMs: { lt: Math.min(toMs, 2147483647) }, endMs: { gt: fromMs } },
+          orderBy: { startMs: "asc" },
+          select: { startMs: true, endMs: true, text: true, speaker: true, words: true },
+        });
+        if (rows.length === 0) return fail("Aucun transcript dans cette fenêtre.");
+        const names = await speakerNames(episodeId);
+        let missing = false;
+        let lastSpeaker: string | null | undefined;
+        const lines = rows.map((r) => {
+          const who = r.speaker ? names.get(r.speaker) ?? r.speaker : null;
+          const head = r.speaker !== lastSpeaker ? `${who ? `${who} : ` : ""}` : "";
+          lastSpeaker = r.speaker;
+          const words = Array.isArray(r.words) ? (r.words as { text?: string; startMs?: number }[]) : null;
+          let body = r.text.trim();
+          if (wordTimestamps) {
+            if (words && words.length > 0) body = words.map((w) => `${String(w.text ?? "").trim()}(${((w.startMs ?? 0) / 1000).toFixed(2)})`).join(" ");
+            else missing = true;
+          }
+          return `[${(r.startMs / 1000).toFixed(2)}-${(r.endMs / 1000).toFixed(2)}s] ${head}${body}`;
+        });
+        const out = lines.join("\n");
+        const chunk = out.slice(offset, offset + limit);
+        const more = offset + limit < out.length;
+        return ok(
+          `${chunk}${more ? `\n\n[Suite disponible : hasMore=true, nextOffset=${offset + limit}, total=${out.length} caractères]` : ""}${
+            missing ? "\n\n[Attention : certaines phrases n'ont pas de timing par mot (transcript ancien), seul le début et la fin de la phrase sont fiables. Dis-le à l'utilisateur plutôt que d'inventer des timings.]" : ""
+          }`
+        );
+      }
       const segments = await prisma.transcriptSegment.findMany({ where: { episodeId }, orderBy: { startMs: "asc" }, select: { startMs: true, text: true, speaker: true } });
       if (segments.length === 0) return fail("Cet épisode n'a pas encore de transcript.");
       const names = await speakerNames(episodeId);
